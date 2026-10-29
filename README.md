@@ -23,7 +23,27 @@ An AI-driven promotional poster generation agent built with strict deterministic
 ## Quick Start & Running Tests
 
 ```bash
-# Run complete test suite
-pytest tests/ -v
+# Run complete test suite (42 tests covering all modules)
+ComfyUI/venv/Scripts/python -m pytest tests/ -v
+
+# Run Vision Reviewer Bake-Off Benchmark
+ComfyUI/venv/Scripts/python scripts/bakeoff/run_bakeoff.py
+
+# Generate a promotional poster end-to-end (Mock generator)
+ComfyUI/venv/Scripts/python scripts/generate_poster.py --mock --brief "Apex AI Hackathon 2026\nDate: November 12-14, 2026\nVenue: Auditorium Hall, Apex Institute"
+
+# Generate a promotional poster with Ideogram 4.0 in ComfyUI (GPU)
+ComfyUI/venv/Scripts/python scripts/generate_poster.py --brief-file scripts/bakeoff/briefs/brief_1_tech.txt
 ```
+
+## Vision Reviewer & 3-Second Test
+
+The reviewer module (`poster_agent/reviewer`) evaluates candidate posters using an OpenAI-compatible endpoint (targeting `LFM3-VL-2B` from Liquid AI) with a configurable reasoning/thinking mode toggle (`thinking: True/False`).
+It generates a 360px downscaled thumbnail for the **3-second test** to guarantee that the event title, date, and venue are instantly recognizable at a glance.
+A comprehensive bake-off script (`scripts/bakeoff/run_bakeoff.py`) runs fixed briefs across configurations and generates markdown tables reporting:
+- Visual polish, hierarchy, balance, readability (1-5 scale)
+- 3-Second glance test pass rate
+- Consistency score across runs
+- Latency (seconds)
+
 
