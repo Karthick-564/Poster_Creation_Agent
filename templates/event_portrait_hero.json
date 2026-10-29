@@ -1,0 +1,79 @@
+{
+  "id": "event_portrait_hero",
+  "name": "Portrait Hero Layout",
+  "orientation": "portrait",
+  "canvas_width_px": 2480,
+  "canvas_height_px": 3508,
+  "description": "Full-bleed or centered art hero with prominent headline, subheadline, and structured info zone below.",
+  "text_safe_zones": [
+    {"y_min": 60, "x_min": 60, "y_max": 340, "x_max": 940},
+    {"y_min": 650, "x_min": 60, "y_max": 940, "x_max": 940}
+  ],
+  "slots": [
+    {
+      "slot_id": "logo_top",
+      "role": "logo",
+      "box": {"y_min": 40, "x_min": 60, "y_max": 100, "x_max": 300},
+      "char_budget": 0,
+      "prominence": 4,
+      "default_font_size_pt": 0
+    },
+    {
+      "slot_id": "headline_slot",
+      "role": "headline",
+      "box": {"y_min": 120, "x_min": 60, "y_max": 240, "x_max": 940},
+      "char_budget": 45,
+      "prominence": 5,
+      "default_font_size_pt": 54
+    },
+    {
+      "slot_id": "subhead_slot",
+      "role": "subheadline",
+      "box": {"y_min": 250, "x_min": 60, "y_max": 320, "x_max": 940},
+      "char_budget": 80,
+      "prominence": 4,
+      "default_font_size_pt": 26
+    },
+    {
+      "slot_id": "art_hero_slot",
+      "role": "art",
+      "box": {"y_min": 330, "x_min": 60, "y_max": 680, "x_max": 940},
+      "char_budget": 0,
+      "prominence": 5,
+      "default_font_size_pt": 0
+    },
+    {
+      "slot_id": "date_slot",
+      "role": "date",
+      "box": {"y_min": 700, "x_min": 60, "y_max": 760, "x_max": 500},
+      "char_budget": 30,
+      "prominence": 3,
+      "default_font_size_pt": 22
+    },
+    {
+      "slot_id": "venue_slot",
+      "role": "venue",
+      "box": {"y_min": 770, "x_min": 60, "y_max": 830, "x_max": 600},
+      "char_budget": 60,
+      "prominence": 3,
+      "default_font_size_pt": 20
+    },
+    {
+      "slot_id": "body_slot",
+      "role": "body",
+      "box": {"y_min": 840, "x_min": 60, "y_max": 920, "x_max": 750},
+      "char_budget": 160,
+      "prominence": 2,
+      "default_font_size_pt": 16
+    },
+    {
+      "slot_id": "qr_slot",
+      "role": "qr_code",
+      "box": {"y_min": 820, "x_min": 820, "y_max": 940, "x_max": 940},
+      "char_budget": 0,
+      "prominence": 3,
+      "default_font_size_pt": 0
+    }
+  ]
+}
+

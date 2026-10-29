@@ -1,0 +1,20 @@
+{
+  "college_logo": {
+    "file": "college_logo.png",
+    "svg_file": "college_logo.svg",
+    "name": "Apex Institute of Technology",
+    "min_width_px": 120,
+    "min_height_px": 40,
+    "clear_space_px": 20,
+    "required": true
+  },
+  "club_logo": {
+    "file": "club_logo.png",
+    "svg_file": "club_logo.svg",
+    "name": "AI & Robotics Club",
+    "min_width_px": 90,
+    "min_height_px": 30,
+    "clear_space_px": 15,
+    "required": false
+  }
+}

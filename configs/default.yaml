@@ -1,0 +1,33 @@
+groq:
+  model: "llama-3.3-70b-versatile"
+  alt_model: "qwen/qwen3-8b-27b"
+  temperature: 0.2
+  max_tokens: 4096
+  timeout_seconds: 60
+
+ideogram:
+  strategy: "B"  # A = model renders text, B = renderer places text
+  transport: "comfyui"  # comfyui | http | diffusers
+  endpoint: "http://127.0.0.1:8188"
+  candidates_per_round: 2
+
+repair:
+  max_iterations: 4
+  candidates: 2
+
+renderer:
+  dpi: 300
+  default_width: 2480
+  default_height: 3508
+
+reviewer:
+  endpoint: "http://127.0.0.1:8080/v1"
+  model: "LFM3-VL-2B"
+  thinking_mode: true
+
+checks:
+  ocr_engine: "paddleocr"
+  min_contrast_ratio: 4.5
+  min_font_pt: 14
+  min_margin_px: 40
+  max_allowed_overlap_px: 5

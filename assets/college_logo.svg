@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 100" width="300" height="100">
+  <rect width="300" height="100" fill="none"/>
+  <path d="M25 75 L50 20 L75 75 L60 75 L50 48 L40 75 Z" fill="#00F5D4"/>
+  <circle cx="50" cy="58" r="5" fill="#F72585"/>
+  <text x="88" y="48" font-family="sans-serif" font-weight="900" font-size="28" fill="#FFFFFF">APEX</text>
+  <text x="88" y="74" font-family="sans-serif" font-weight="600" font-size="14" fill="#00BBF9" letter-spacing="3">INSTITUTE OF TECH</text>
+</svg>

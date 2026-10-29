@@ -1,0 +1,78 @@
+{
+  "id": "event_landscape_2col",
+  "name": "Landscape 2-Column Split",
+  "orientation": "landscape",
+  "canvas_width_px": 3508,
+  "canvas_height_px": 2480,
+  "description": "Landscape orientation with left half dedicated to bold thematic artwork and right half for structured event typography.",
+  "text_safe_zones": [
+    {"y_min": 60, "x_min": 520, "y_max": 940, "x_max": 940}
+  ],
+  "slots": [
+    {
+      "slot_id": "art_hero_left",
+      "role": "art",
+      "box": {"y_min": 60, "x_min": 60, "y_max": 940, "x_max": 480},
+      "char_budget": 0,
+      "prominence": 5,
+      "default_font_size_pt": 0
+    },
+    {
+      "slot_id": "logo_top_right",
+      "role": "logo",
+      "box": {"y_min": 60, "x_min": 520, "y_max": 140, "x_max": 720},
+      "char_budget": 0,
+      "prominence": 4,
+      "default_font_size_pt": 0
+    },
+    {
+      "slot_id": "headline_slot",
+      "role": "headline",
+      "box": {"y_min": 160, "x_min": 520, "y_max": 320, "x_max": 940},
+      "char_budget": 45,
+      "prominence": 5,
+      "default_font_size_pt": 56
+    },
+    {
+      "slot_id": "subhead_slot",
+      "role": "subheadline",
+      "box": {"y_min": 330, "x_min": 520, "y_max": 420, "x_max": 940},
+      "char_budget": 80,
+      "prominence": 4,
+      "default_font_size_pt": 26
+    },
+    {
+      "slot_id": "date_slot",
+      "role": "date",
+      "box": {"y_min": 450, "x_min": 520, "y_max": 530, "x_max": 800},
+      "char_budget": 35,
+      "prominence": 3,
+      "default_font_size_pt": 22
+    },
+    {
+      "slot_id": "venue_slot",
+      "role": "venue",
+      "box": {"y_min": 540, "x_min": 520, "y_max": 620, "x_max": 850},
+      "char_budget": 60,
+      "prominence": 3,
+      "default_font_size_pt": 20
+    },
+    {
+      "slot_id": "body_slot",
+      "role": "body",
+      "box": {"y_min": 640, "x_min": 520, "y_max": 820, "x_max": 800},
+      "char_budget": 160,
+      "prominence": 2,
+      "default_font_size_pt": 16
+    },
+    {
+      "slot_id": "qr_slot",
+      "role": "qr_code",
+      "box": {"y_min": 780, "x_min": 820, "y_max": 940, "x_max": 940},
+      "char_budget": 0,
+      "prominence": 3,
+      "default_font_size_pt": 0
+    }
+  ]
+}
+

@@ -1,0 +1,86 @@
+{
+  "id": "event_minimal",
+  "name": "Minimalist Typographic Layout",
+  "orientation": "portrait",
+  "canvas_width_px": 2480,
+  "canvas_height_px": 3508,
+  "description": "Bold modern Swiss-style layout focusing on dominant typography, high whitespace, clean lines, and subtle graphic accents.",
+  "text_safe_zones": [
+    {"y_min": 60, "x_min": 80, "y_max": 940, "x_max": 920}
+  ],
+  "slots": [
+    {
+      "slot_id": "logo_top",
+      "role": "logo",
+      "box": {"y_min": 60, "x_min": 80, "y_max": 120, "x_max": 320},
+      "char_budget": 0,
+      "prominence": 4,
+      "default_font_size_pt": 0
+    },
+    {
+      "slot_id": "label_slot",
+      "role": "label",
+      "box": {"y_min": 160, "x_min": 80, "y_max": 200, "x_max": 500},
+      "char_budget": 30,
+      "prominence": 3,
+      "default_font_size_pt": 18
+    },
+    {
+      "slot_id": "headline_slot",
+      "role": "headline",
+      "box": {"y_min": 220, "x_min": 80, "y_max": 480, "x_max": 920},
+      "char_budget": 40,
+      "prominence": 5,
+      "default_font_size_pt": 68
+    },
+    {
+      "slot_id": "subhead_slot",
+      "role": "subheadline",
+      "box": {"y_min": 500, "x_min": 80, "y_max": 580, "x_max": 920},
+      "char_budget": 75,
+      "prominence": 4,
+      "default_font_size_pt": 26
+    },
+    {
+      "slot_id": "art_minimal_slot",
+      "role": "art",
+      "box": {"y_min": 600, "x_min": 550, "y_max": 850, "x_max": 920},
+      "char_budget": 0,
+      "prominence": 3,
+      "default_font_size_pt": 0
+    },
+    {
+      "slot_id": "date_slot",
+      "role": "date",
+      "box": {"y_min": 620, "x_min": 80, "y_max": 680, "x_max": 500},
+      "char_budget": 30,
+      "prominence": 3,
+      "default_font_size_pt": 22
+    },
+    {
+      "slot_id": "venue_slot",
+      "role": "venue",
+      "box": {"y_min": 700, "x_min": 80, "y_max": 760, "x_max": 500},
+      "char_budget": 60,
+      "prominence": 3,
+      "default_font_size_pt": 20
+    },
+    {
+      "slot_id": "footer_slot",
+      "role": "footer",
+      "box": {"y_min": 880, "x_min": 80, "y_max": 930, "x_max": 750},
+      "char_budget": 100,
+      "prominence": 2,
+      "default_font_size_pt": 14
+    },
+    {
+      "slot_id": "qr_slot",
+      "role": "qr_code",
+      "box": {"y_min": 820, "x_min": 800, "y_max": 930, "x_max": 920},
+      "char_budget": 0,
+      "prominence": 3,
+      "default_font_size_pt": 0
+    }
+  ]
+}
+

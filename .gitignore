@@ -1,0 +1,29 @@
+# Environments & ComfyUI (large models & venv)
+ComfyUI/
+venv/
+.venv/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Run logs & artifacts (large generated images & PDFs)
+runs/
+*.log
+
+# Environment variables & secrets
+.env
+*.key
+*.token
+
+# Playwright browsers & caches
+.playwright/

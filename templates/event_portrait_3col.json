@@ -1,0 +1,95 @@
+{
+  "id": "event_portrait_3col",
+  "name": "Portrait 3-Column Layout",
+  "orientation": "portrait",
+  "canvas_width_px": 2480,
+  "canvas_height_px": 3508,
+  "description": "Art banner at header strip with three distinct vertical content columns below for speakers, tracks, and details.",
+  "text_safe_zones": [
+    {"y_min": 40, "x_min": 50, "y_max": 280, "x_max": 950},
+    {"y_min": 300, "x_min": 50, "y_max": 950, "x_max": 950}
+  ],
+  "slots": [
+    {
+      "slot_id": "art_banner_slot",
+      "role": "art",
+      "box": {"y_min": 40, "x_min": 50, "y_max": 240, "x_max": 950},
+      "char_budget": 0,
+      "prominence": 4,
+      "default_font_size_pt": 0
+    },
+    {
+      "slot_id": "headline_slot",
+      "role": "headline",
+      "box": {"y_min": 260, "x_min": 50, "y_max": 360, "x_max": 950},
+      "char_budget": 50,
+      "prominence": 5,
+      "default_font_size_pt": 48
+    },
+    {
+      "slot_id": "subhead_slot",
+      "role": "subheadline",
+      "box": {"y_min": 370, "x_min": 50, "y_max": 430, "x_max": 950},
+      "char_budget": 90,
+      "prominence": 4,
+      "default_font_size_pt": 24
+    },
+    {
+      "slot_id": "col1_slot",
+      "role": "body",
+      "box": {"y_min": 460, "x_min": 50, "y_max": 780, "x_max": 330},
+      "char_budget": 120,
+      "prominence": 3,
+      "default_font_size_pt": 16
+    },
+    {
+      "slot_id": "col2_slot",
+      "role": "body",
+      "box": {"y_min": 460, "x_min": 360, "y_max": 780, "x_max": 640},
+      "char_budget": 120,
+      "prominence": 3,
+      "default_font_size_pt": 16
+    },
+    {
+      "slot_id": "col3_slot",
+      "role": "body",
+      "box": {"y_min": 460, "x_min": 670, "y_max": 780, "x_max": 950},
+      "char_budget": 120,
+      "prominence": 3,
+      "default_font_size_pt": 16
+    },
+    {
+      "slot_id": "date_slot",
+      "role": "date",
+      "box": {"y_min": 820, "x_min": 50, "y_max": 880, "x_max": 450},
+      "char_budget": 30,
+      "prominence": 3,
+      "default_font_size_pt": 20
+    },
+    {
+      "slot_id": "venue_slot",
+      "role": "venue",
+      "box": {"y_min": 890, "x_min": 50, "y_max": 940, "x_max": 550},
+      "char_budget": 60,
+      "prominence": 3,
+      "default_font_size_pt": 18
+    },
+    {
+      "slot_id": "logo_bottom",
+      "role": "logo",
+      "box": {"y_min": 830, "x_min": 650, "y_max": 930, "x_max": 830},
+      "char_budget": 0,
+      "prominence": 3,
+      "default_font_size_pt": 0
+    },
+    {
+      "slot_id": "qr_slot",
+      "role": "qr_code",
+      "box": {"y_min": 830, "x_min": 850, "y_max": 930, "x_max": 950},
+      "char_budget": 0,
+      "prominence": 3,
+      "default_font_size_pt": 0
+    }
+  ]
+}
+
