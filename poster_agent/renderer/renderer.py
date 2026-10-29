@@ -173,9 +173,10 @@ class PosterRenderer:
                 box_w = r_px - l_px
                 box_h = b_px - t_px
 
-                # Convert pt to approx px at spec.dpi (default 300)
-                # 1 pt = dpi / 72 px
-                font_px = int(round(elem.size * spec.dpi / 72.0))
+                # Fit font size to bounding box and canvas width
+                # 1 pt scaled proportionally to canvas width, capped by box height
+                ideal_px = int(round(elem.size * (w / 800.0)))
+                font_px = max(14, min(ideal_px, int(box_h * 0.65)))
 
                 # Role specific typography enhancements
                 text_transform = "none"
@@ -191,7 +192,7 @@ class PosterRenderer:
                 text_elements_html.append(
                     f'<div id="{elem.id}" data-role="{elem.role}" class="poster-element poster-text" style="'
                     f'position: absolute; left: {l_px}px; top: {t_px}px; width: {box_w}px; height: {box_h}px; '
-                    f'font-family: \'{elem.font}\', "Segoe UI", Arial, sans-serif; '
+                    f'font-family: \'{elem.font}\', \'Segoe UI\', Arial, sans-serif; '
                     f'font-size: {font_px}px; font-weight: {elem.weight}; color: {elem.color}; '
                     f'text-transform: {text_transform}; letter-spacing: {letter_spacing}; '
                     f'line-height: 1.15; overflow: hidden; display: flex; align-items: center; '
@@ -407,7 +408,8 @@ class PosterRenderer:
                 l_px, t_px, r_px, b_px = elem.box.to_pixels(w, h)
                 bw = r_px - l_px
                 bh = b_px - t_px
-                font_px = int(round(elem.size * spec.dpi / 72.0))
+                ideal_px = int(round(elem.size * (w / 800.0)))
+                font_px = max(14, min(ideal_px, int(bh * 0.65)))
                 color_hex = elem.color.lstrip("#")
                 color_rgb = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
 

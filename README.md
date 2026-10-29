@@ -26,3 +26,4 @@ An AI-driven promotional poster generation agent built with strict deterministic
 # Run complete test suite
 pytest tests/ -v
 ```
+
