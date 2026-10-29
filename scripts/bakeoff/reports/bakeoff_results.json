@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-10-29 13:01:39",
+  "configs": [
+    "LFM3-VL-2B (Thinking ON)",
+    "LFM3-VL-2B (Thinking OFF)"
+  ],
+  "briefs_evaluated": [
+    "brief_1_tech",
+    "brief_2_cultural",
+    "brief_3_sports"
+  ],
+  "results": {
+    "brief_1_tech": {
+      "LFM3-VL-2B (Thinking ON)": {
+        "avg_hierarchy": 5,
+        "avg_balance": 4,
+        "avg_readability": 4,
+        "avg_polish": 4,
+        "consistency_score": 1.0,
+        "three_second_pass_rate": "2/2",
+        "avg_latency_s": 7.91
+      },
+      "LFM3-VL-2B (Thinking OFF)": {
+        "avg_hierarchy": 5,
+        "avg_balance": 4,
+        "avg_readability": 4,
+        "avg_polish": 4,
+        "consistency_score": 1.0,
+        "three_second_pass_rate": "2/2",
+        "avg_latency_s": 7.54
+      }
+    },
+    "brief_2_cultural": {
+      "LFM3-VL-2B (Thinking ON)": {
+        "avg_hierarchy": 5,
+        "avg_balance": 4,
+        "avg_readability": 4,
+        "avg_polish": 4,
+        "consistency_score": 1.0,
+        "three_second_pass_rate": "2/2",
+        "avg_latency_s": 7.62
+      },
+      "LFM3-VL-2B (Thinking OFF)": {
+        "avg_hierarchy": 5,
+        "avg_balance": 4,
+        "avg_readability": 4,
+        "avg_polish": 4,
+        "consistency_score": 1.0,
+        "three_second_pass_rate": "2/2",
+        "avg_latency_s": 7.69
+      }
+    },
+    "brief_3_sports": {
+      "LFM3-VL-2B (Thinking ON)": {
+        "avg_hierarchy": 5,
+        "avg_balance": 4,
+        "avg_readability": 4,
+        "avg_polish": 4,
+        "consistency_score": 1.0,
+        "three_second_pass_rate": "2/2",
+        "avg_latency_s": 7.67
+      },
+      "LFM3-VL-2B (Thinking OFF)": {
+        "avg_hierarchy": 5,
+        "avg_balance": 4,
+        "avg_readability": 4,
+        "avg_polish": 4,
+        "consistency_score": 1.0,
+        "three_second_pass_rate": "2/2",
+        "avg_latency_s": 7.59
+      }
+    }
+  }
+}

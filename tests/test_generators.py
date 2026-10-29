@@ -142,3 +142,4 @@ def test_qwen_image_generator(tmp_path, sample_spec):
     assert results[0].seed == 54321
     assert results[0].image_path.exists()
     assert "qwen_image" in results[0].payload["model"]
+

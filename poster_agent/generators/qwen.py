@@ -76,3 +76,4 @@ class QwenImageGenerator(GeneratorAdapter):
             )
 
         return results
+

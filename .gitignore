@@ -28,3 +28,7 @@ runs/
 # Playwright browsers & caches
 .playwright/
 
+# Bakeoff temp renders
+scripts/bakeoff/reports/temp_render/
+
+

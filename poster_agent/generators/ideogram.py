@@ -299,3 +299,4 @@ class IdeogramGenerator(GeneratorAdapter):
             )
 
         return results
+
