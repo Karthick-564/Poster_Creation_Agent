@@ -36,7 +36,10 @@ class IdeogramPromptBuilder:
         hero_desc = spec.art_slots[0].prompt if spec.art_slots else "Promotional event poster centerpiece"
         style_hint = spec.assumptions[0] if spec.assumptions else "Modern high-impact graphic design"
         
-        words = f"A professional promotional event poster featuring {hero_desc}. {style_hint}.".split()
+        if strategy == "B":
+            words = f"A clean non-text visual illustration artwork featuring {hero_desc}. Pure art with no typography or words.".split()
+        else:
+            words = f"A professional promotional event poster featuring {hero_desc}. {style_hint}.".split()
         high_level_description = " ".join(words[:48])
         prompt_dict["high_level_description"] = high_level_description
 
@@ -47,19 +50,26 @@ class IdeogramPromptBuilder:
         style_desc["aesthetics"] = "Clean modern graphic design, sharp vector edges, bold visual hierarchy"
         style_desc["lighting"] = "Dynamic high-contrast ambient studio lighting"
         style_desc["medium"] = "digital_illustration"
-        style_desc["art_style"] = "contemporary poster art with balanced composition and clean negative space"
+        if strategy == "B":
+            style_desc["art_style"] = "contemporary graphic art with clean negative space. Pure visual artwork with ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS."
+        else:
+            style_desc["art_style"] = "contemporary poster art with balanced composition and clean negative space"
         style_desc["color_palette"] = palette
         prompt_dict["style_description"] = style_desc
 
         # 3. Compositional deconstruction
         comp_decomp = collections.OrderedDict()
 
-        # Background description with text-safe calm zones noted for Strategy B
+        # Background description with text-safe calm zones
         safe_zones_note = ""
-        if strategy == "B" and spec.text_safe_zones:
+        if strategy == "B":
             safe_zones_note = (
-                " Keep designated header and footer safe zones calm, clean, "
-                "and free of cluttered high-contrast textures so text overlays remain legible."
+                " Pure abstract atmospheric background with ABSOLUTELY NO EMBEDDED TEXT, NO LETTERS. "
+                "Keep designated header and footer safe zones completely flat and calm so typography overlays remain legible."
+            )
+        else:
+            safe_zones_note = (
+                " Keep the very top institutional banner zone (y: 0 to 140) clean with calm dark negative space for official logo placement."
             )
 
         bg_color = palette[0] if palette else "#0B132B"
@@ -74,7 +84,10 @@ class IdeogramPromptBuilder:
             elem = collections.OrderedDict()
             elem["type"] = "obj"
             elem["bbox"] = slot.box.to_list()  # [y_min, x_min, y_max, x_max]
-            elem["desc"] = slot.prompt
+            slot_desc = slot.prompt
+            if strategy == "B":
+                slot_desc = f"{slot.prompt}. Pure non-text visual illustration with strictly NO text, NO letters, NO words."
+            elem["desc"] = slot_desc
             elem["color_palette"] = palette[:4]
             elements_list.append(elem)
 
@@ -89,7 +102,16 @@ class IdeogramPromptBuilder:
                 elem["type"] = "text"
                 elem["bbox"] = te.box.to_list()
                 elem["text"] = te.text
-                elem["desc"] = f"Renders the exact text '{te.text}' in bold legible {te.role} lettering"
+                if te.role == "headline":
+                    elem["desc"] = f"Renders the massive primary headline '{te.text}' in bold clean display typography with crisp contrast."
+                elif te.role == "subheadline":
+                    elem["desc"] = f"Renders the subtitle '{te.text}' in elegant clean medium lettering."
+                elif te.role == "date":
+                    elem["desc"] = f"Renders the date '{te.text}' in vibrant legible sans-serif lettering."
+                elif te.role == "venue":
+                    elem["desc"] = f"Renders the venue '{te.text}' in crisp legible typography."
+                else:
+                    elem["desc"] = f"Renders the exact text '{te.text}' in clean legible {te.role} lettering."
                 elem["color_palette"] = [te.color.upper()]
                 elements_list.append(elem)
 
@@ -166,6 +188,7 @@ class ComfyUITransport(IdeogramTransport):
     def __init__(self, endpoint: str = "http://127.0.0.1:8188", comfy_output_dir: Path | str = "ComfyUI/output"):
         self.endpoint = endpoint.rstrip("/")
         self.comfy_output_dir = Path(comfy_output_dir)
+        self.workflow_template_path = Path(__file__).resolve().parent / "ideogram_workflow_api.json"
 
     def execute(
         self,
@@ -180,31 +203,63 @@ class ComfyUITransport(IdeogramTransport):
 
         # Format prompt string as structured JSON string (no code fences)
         prompt_str = json.dumps(prompt_json, indent=2)
+        (output_dir / f"ideogram_prompt_{seed}.json").write_text(prompt_str, encoding="utf-8")
 
-        # Build ComfyUI workflow prompt payload based on PROJECT_IMAGE_IDEOGRAM.json
-        client_id = f"poster_agent_{seed}"
-        
-        # Load template workflow if present
-        wf_path = Path("ComfyUI/user/default/workflows/PROJECT_IMAGE_IDEOGRAM.json")
-        
-        # Attempt direct API queue to ComfyUI if reachable
-        try:
-            # Check ComfyUI server health
-            req = urllib.request.Request(f"{self.endpoint}/system_stats")
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                stats = json.loads(resp.read().decode())
+        # If workflow template exists and ComfyUI is reachable, execute live generation
+        if self.workflow_template_path.exists():
+            try:
+                # 1. Check health
+                req = urllib.request.Request(f"{self.endpoint}/system_stats")
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    pass
 
-            # Server is reachable
-            # Note: For automated pipeline flow, if ComfyUI queue is ready, submit job:
-            # If workflow execution is synchronous or stub fallback:
-            # We save prompt payload for auditing
-            (output_dir / f"ideogram_prompt_{seed}.json").write_text(prompt_str, encoding="utf-8")
+                # 2. Prepare workflow payload
+                wf = json.loads(self.workflow_template_path.read_text(encoding="utf-8"))
+                if "98:24" in wf and "inputs" in wf["98:24"]:
+                    wf["98:24"]["inputs"]["text"] = prompt_str
+                if "98:18" in wf and "inputs" in wf["98:18"]:
+                    wf["98:18"]["inputs"]["noise_seed"] = seed
+                if "158" in wf and "inputs" in wf["158"]:
+                    wf["158"]["inputs"]["filename_prefix"] = f"Ideogram_Agent_{seed}"
 
-        except Exception as e:
-            # Fall back to stub transport if ComfyUI server is offline/paused
-            pass
+                # 3. Post to /prompt
+                client_id = f"poster_agent_{seed}"
+                p_payload = json.dumps({"prompt": wf, "client_id": client_id}).encode("utf-8")
+                post_req = urllib.request.Request(
+                    f"{self.endpoint}/prompt",
+                    data=p_payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(post_req, timeout=10) as resp:
+                    prompt_res = json.loads(resp.read().decode())
+                    prompt_id = prompt_res.get("prompt_id")
 
-        # Use stub generator fallback to ensure deterministic execution when offline
+                # 4. Wait for execution
+                if prompt_id:
+                    import time
+                    start_t = time.time()
+                    while time.time() - start_t < 180:
+                        try:
+                            h_req = urllib.request.Request(f"{self.endpoint}/history/{prompt_id}")
+                            with urllib.request.urlopen(h_req, timeout=5) as h_resp:
+                                hist = json.loads(h_resp.read().decode())
+                                if prompt_id in hist:
+                                    outputs = hist[prompt_id].get("outputs", {})
+                                    if "158" in outputs and "images" in outputs["158"]:
+                                        filename = outputs["158"]["images"][0]["filename"]
+                                        src_img = self.comfy_output_dir / filename
+                                        if src_img.exists():
+                                            import shutil
+                                            shutil.copy2(src_img, dest_path)
+                                            return dest_path
+                        except Exception:
+                            pass
+                        time.sleep(2)
+            except Exception as e:
+                # Fall back to stub transport if ComfyUI fails
+                pass
+
+        # Use stub generator fallback when ComfyUI is offline or fails
         stub = StubTransport()
         return stub.execute(
             prompt_json=prompt_json,
@@ -263,12 +318,15 @@ class IdeogramGenerator(GeneratorAdapter):
         count: int = 1,
         base_seed: int | None = None,
         output_dir: Path | str | None = None,
+        strategy: Literal["A", "B"] | None = None,
     ) -> list[GeneratedArt]:
         out_dir = Path(output_dir) if output_dir else Path("runs/temp_art")
         out_dir.mkdir(parents=True, exist_ok=True)
 
+        active_strategy = strategy or self.strategy
+
         # Build prompt JSON
-        prompt_json = IdeogramPromptBuilder.build_prompt(spec=spec, strategy=self.strategy)
+        prompt_json = IdeogramPromptBuilder.build_prompt(spec=spec, strategy=active_strategy)
 
         results: list[GeneratedArt] = []
         start_seed = base_seed if base_seed is not None else random.randint(100000, 999999)

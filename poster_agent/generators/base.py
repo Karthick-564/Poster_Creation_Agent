@@ -26,6 +26,7 @@ class GeneratorAdapter(ABC):
         count: int = 1,
         base_seed: int | None = None,
         output_dir: Path | str | None = None,
+        strategy: str | None = None,
     ) -> list[GeneratedArt]:
         """Generate art image(s) from a PosterSpec.
         Returns a list of GeneratedArt items (one per candidate).

@@ -1,6 +1,6 @@
 groq:
-  model: "llama-3.3-70b-versatile"
-  alt_model: "qwen/qwen3-8b-27b"
+  model: "openai/gpt-oss-120b"
+  alt_model: "qwen/qwen3.8-27b"
   temperature: 0.2
   max_tokens: 4096
   timeout_seconds: 60

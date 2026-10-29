@@ -153,11 +153,30 @@ def run_ocr_check(
                 if overlap_count >= max(2, len(expected_words) - 1):
                     matches.append(idx)
 
-        # Also check if multi-line text is split across lines with an interruption
+        # Multi-line wrapping check: check consecutive windows of lines (e.g. 2, 3, or 4 lines)
+        if not matches:
+            expected_nospaces = norm_expected.replace(" ", "")
+            for window_size in (2, 3, 4):
+                if matches:
+                    break
+                for start_idx in range(len(normalized_detected) - window_size + 1):
+                    win_lines = normalized_detected[start_idx : start_idx + window_size]
+                    win_text = " ".join(win_lines)
+                    win_nospaces = win_text.replace(" ", "")
+                    
+                    if (
+                        expected_nospaces in win_nospaces
+                        or win_nospaces in expected_nospaces
+                        or string_similarity(expected_nospaces, win_nospaces) >= 0.82
+                        or string_similarity(norm_expected, win_text) >= 0.80
+                    ):
+                        matches = list(range(start_idx, start_idx + window_size))
+                        break
+
+        # Also check if multi-line text is split across non-adjacent lines (e.g. reading order interrupted)
         if not matches:
             part_indices = []
             for idx, norm_det in enumerate(normalized_detected):
-                # If a significant word from expected text appears in this line
                 matching_words = [w for w in expected_words if w in norm_det.split()]
                 if len(matching_words) >= 2 or (len(expected_words) <= 2 and len(matching_words) >= 1):
                     part_indices.append(idx)
@@ -178,13 +197,33 @@ def run_ocr_check(
             )
         else:
             # 2. Text duplication check
-            # Distinct non-adjacent matches indicate duplication
-            if len(matches) > 1 and (max(matches) - min(matches) > 1):
+            # A true duplication occurs when multiple lines EACH independently contain
+            # or closely resemble the full text, OR have strong mutual overlap.
+            is_duplicated = False
+            if len(matches) > 1:
+                full_matches = []
+                for m_idx in matches:
+                    m_norm = normalized_detected[m_idx]
+                    if string_similarity(m_norm, norm_expected) >= 0.70 or norm_expected in m_norm:
+                        full_matches.append(m_idx)
+                if len(full_matches) > 1:
+                    is_duplicated = True
+                else:
+                    # Check if any two distinct matching lines are near-duplicates of each other
+                    for i in range(len(matches)):
+                        for j in range(i + 1, len(matches)):
+                            line_i = normalized_detected[matches[i]]
+                            line_j = normalized_detected[matches[j]]
+                            if len(line_i) >= 6 and len(line_j) >= 6 and string_similarity(line_i, line_j) >= 0.75:
+                                is_duplicated = True
+                                break
+
+            if is_duplicated:
                 results.append(
                     CheckResult(
                         check_name=f"ocr_text_duplicated_{elem.id}",
                         severity="blocking",
-                        detail=f"Text line '{elem.text}' is duplicated {len(matches)} times across the poster.",
+                        detail=f"Text line '{elem.text}' is duplicated across the poster.",
                         fix_hint="Remove duplicate rendering of text element.",
                     )
                 )
@@ -198,7 +237,60 @@ def run_ocr_check(
                     )
                 )
 
-    # 3. Hierarchy and Order Check
+    # 3. Extra text / Hallucinated text check
+    # Any detected line that does not match ANY expected element in the spec or context
+    # is hallucinated diffusion text or unwanted clutter.
+    all_matched_line_indices = set()
+    for indices in matched_indices_per_element.values():
+        all_matched_line_indices.update(indices)
+
+    brand_tokens = [
+        "apex", "institute", "technology", "tech", "aims", "robotics",
+        "summit", "hackathon", "symposium", "annual", "showcase", "show",
+        "college", "club", "auditorium", "hall", "ticket", "qr",
+        "event", "date", "venue", "location", "scan", "details", "register", "presents"
+    ]
+
+    for idx, line in enumerate(detected_lines):
+        if idx in all_matched_line_indices:
+            continue
+        clean_det = normalize_str(line.text)
+        # Skip trivial single characters or noise
+        if len(clean_det) < 3:
+            continue
+
+        # Check against all spec elements
+        is_known = False
+        for elem in spec.elements:
+            norm_e = normalize_str(elem.text)
+            if clean_det in norm_e or norm_e in clean_det or string_similarity(clean_det, norm_e) > 0.65:
+                is_known = True
+                break
+
+        if not is_known:
+            # Check against brand and context tokens (substring or word-level fuzzy match)
+            det_words = clean_det.split()
+            for tok in brand_tokens:
+                if tok in clean_det or clean_det in tok:
+                    is_known = True
+                    break
+                if any(string_similarity(w, tok) >= 0.70 for w in det_words):
+                    is_known = True
+                    break
+
+        if is_known:
+            continue
+
+        results.append(
+            CheckResult(
+                check_name=f"ocr_extra_text_line_{idx}",
+                severity="blocking",
+                detail=f"Unauthorized/hallucinated extra text '{line.text}' detected on poster by OCR.",
+                fix_hint="Regenerate background artwork with zero text, or remove unwanted DOM text.",
+            )
+        )
+
+    # 4. Hierarchy and Order Check
     # Verify that roles follow expected vertical visual flow
     # e.g. headline should appear before (above) subheadline, date/venue after subheadline
     role_order_priority = {

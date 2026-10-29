@@ -127,11 +127,20 @@ class PosterRenderer:
                 art_layer_html = (
                     f'<div class="art-layer" style="'
                     f'position: absolute; left: 0; top: 0; width: {w}px; height: {h}px; '
-                    f'background-image: url(\'{art_data_uri}\'); background-size: cover; '
-                    f'background-position: center; z-index: 1;"></div>'
+                    f'background-image: url(\'{art_data_uri}\'); background-size: 100% 100%; '
+                    f'background-position: top center; background-repeat: no-repeat; z-index: 1;"></div>'
                 )
 
-        # Logos layer (always placed by code)
+        # Atmospheric vignette overlay for cinematic depth & superior text contrast
+        vignette_html = (
+            '<div class="poster-ambient-vignette" style="'
+            'position: absolute; left: 0; top: 0; width: 100%; height: 100%; '
+            'background: radial-gradient(circle at 50% 50%, rgba(11, 19, 43, 0) 30%, rgba(11, 19, 43, 0.65) 85%, rgba(11, 19, 43, 0.95) 100%), '
+            'linear-gradient(180deg, rgba(11, 19, 43, 0.88) 0%, rgba(11, 19, 43, 0.15) 24%, rgba(11, 19, 43, 0.1) 70%, rgba(11, 19, 43, 0.94) 100%); '
+            'z-index: 2; pointer-events: none;"></div>'
+        )
+
+        # Logos layer (always placed by code with sleek glass card backing)
         logos_html = []
         for i, logo in enumerate(spec.logos):
             l_px, t_px, r_px, b_px = logo.box.to_pixels(w, h)
@@ -143,25 +152,30 @@ class PosterRenderer:
                 logos_html.append(
                     f'<div id="logo_{i}" data-role="logo" class="poster-element poster-logo" style="'
                     f'position: absolute; left: {l_px}px; top: {t_px}px; width: {lw}px; height: {lh}px; '
-                    f'padding: {pad}px; box-sizing: border-box; z-index: 20; display: flex; '
+                    f'background: rgba(11, 19, 43, 0.65); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); '
+                    f'border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; '
+                    f'box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); padding: {pad}px; box-sizing: border-box; z-index: 20; display: flex; '
                     f'align-items: center; justify-content: center;">'
                     f'<img src="{logo_uri}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />'
                     f'</div>'
                 )
 
-        # QR code
+        # QR code with styled scan card
         qr_html = ""
         if spec.qr_code:
             qr_uri = _generate_qr_base64(spec.qr_code)
-            # Default QR box in bottom right if not specified
-            qr_size = min(int(w * 0.12), 250)
+            qr_size = min(int(w * 0.12), 240)
             qr_left = w - qr_size - int(w * 0.05)
-            qr_top = h - qr_size - int(h * 0.04)
+            qr_top = h - qr_size - int(h * 0.045)
             qr_html = (
                 f'<div id="qr_code" data-role="qr_code" class="poster-element poster-qr" style="'
-                f'position: absolute; left: {qr_left}px; top: {qr_top}px; width: {qr_size}px; height: {qr_size}px; '
-                f'background: #ffffff; padding: 8px; border-radius: 8px; box-sizing: border-box; z-index: 20;">'
-                f'<img src="{qr_uri}" style="width: 100%; height: 100%; object-fit: contain;" />'
+                f'position: absolute; left: {qr_left}px; top: {qr_top}px; width: {qr_size}px; '
+                f'background: #FFFFFF; padding: 10px; border-radius: 12px; box-sizing: border-box; z-index: 20; '
+                f'box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65), 0 0 25px rgba(0, 245, 212, 0.25); '
+                f'display: flex; flex-direction: column; align-items: center; justify-content: center;">'
+                f'<img src="{qr_uri}" style="width: 100%; aspect-ratio: 1; object-fit: contain;" />'
+                f'<span style="font-family: \'JetBrains Mono\', monospace; font-size: {max(9, int(qr_size * 0.06))}px; '
+                f'font-weight: 800; color: #0B132B; letter-spacing: 1.5px; margin-top: 6px; text-transform: uppercase;">SCAN FOR DETAILS</span>'
                 f'</div>'
             )
 
@@ -173,33 +187,84 @@ class PosterRenderer:
                 box_w = r_px - l_px
                 box_h = b_px - t_px
 
-                # Fit font size to bounding box and canvas width
-                # 1 pt scaled proportionally to canvas width, capped by box height
                 ideal_px = int(round(elem.size * (w / 800.0)))
                 font_px = max(14, min(ideal_px, int(box_h * 0.65)))
 
-                # Role specific typography enhancements
-                text_transform = "none"
-                letter_spacing = "normal"
-                if elem.role in ("headline", "label"):
-                    text_transform = "uppercase"
-                    letter_spacing = "1px"
-                elif elem.role == "subheadline":
-                    letter_spacing = "0.5px"
-
                 escaped_text = html.escape(elem.text)
 
-                text_elements_html.append(
-                    f'<div id="{elem.id}" data-role="{elem.role}" class="poster-element poster-text" style="'
-                    f'position: absolute; left: {l_px}px; top: {t_px}px; width: {box_w}px; height: {box_h}px; '
-                    f'font-family: \'{elem.font}\', \'Segoe UI\', Arial, sans-serif; '
-                    f'font-size: {font_px}px; font-weight: {elem.weight}; color: {elem.color}; '
-                    f'text-transform: {text_transform}; letter-spacing: {letter_spacing}; '
-                    f'line-height: 1.15; overflow: hidden; display: flex; align-items: center; '
-                    f'word-break: break-word; z-index: 10; box-sizing: border-box;">'
-                    f'<span>{escaped_text}</span>'
-                    f'</div>'
-                )
+                if elem.role == "headline":
+                    # Display typography: dimensional multi-layer shadow, bold uppercase tracking
+                    text_elements_html.append(
+                        f'<div id="{elem.id}" data-role="{elem.role}" class="poster-element poster-headline" style="'
+                        f'position: absolute; left: {l_px}px; top: {t_px}px; width: {box_w}px; height: {box_h}px; '
+                        f'font-family: \'Outfit\', \'Montserrat\', sans-serif; font-size: {font_px}px; font-weight: 900; '
+                        f'letter-spacing: -0.02em; line-height: 1.05; text-transform: uppercase; '
+                        f'color: #FFFFFF; '
+                        f'text-shadow: 0 4px 20px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 245, 212, 0.3); '
+                        f'overflow: hidden; display: flex; align-items: center; word-break: break-word; z-index: 10; box-sizing: border-box;">'
+                        f'<span>{escaped_text}</span>'
+                        f'</div>'
+                    )
+                elif elem.role == "subheadline":
+                    # Editorial subhead with accent border & high contrast
+                    text_elements_html.append(
+                        f'<div id="{elem.id}" data-role="{elem.role}" class="poster-element poster-subheadline" style="'
+                        f'position: absolute; left: {l_px}px; top: {t_px}px; width: {box_w}px; height: {box_h}px; '
+                        f'font-family: \'Inter\', sans-serif; font-size: {font_px}px; font-weight: 600; '
+                        f'color: #F1F5F9; letter-spacing: 0.02em; line-height: 1.25; '
+                        f'border-left: 4px solid #00F5D4; padding-left: 16px; '
+                        f'text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85); '
+                        f'overflow: hidden; display: flex; align-items: center; word-break: break-word; z-index: 10; box-sizing: border-box;">'
+                        f'<span>{escaped_text}</span>'
+                        f'</div>'
+                    )
+                elif elem.role in ("date", "venue"):
+                    # Glassmorphism metadata pill card with micro-label
+                    accent_col = "#00F5D4" if elem.role == "date" else "#F72585"
+                    role_tag = "EVENT DATE" if elem.role == "date" else "LOCATION"
+                    meta_font = max(11, int(font_px * 0.42))
+                    val_font_px = max(14, int(font_px * 0.75)) if len(escaped_text) > 32 else font_px
+                    text_elements_html.append(
+                        f'<div id="{elem.id}" data-role="{elem.role}" class="poster-element poster-meta-card" style="'
+                        f'position: absolute; left: {l_px}px; top: {t_px}px; width: {box_w}px; height: {box_h}px; '
+                        f'background: rgba(11, 19, 43, 0.78); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); '
+                        f'border: 1px solid rgba(255, 255, 255, 0.14); border-left: 4px solid {accent_col}; '
+                        f'border-radius: 12px; padding: 10px 18px; box-sizing: border-box; '
+                        f'box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1); '
+                        f'display: flex; flex-direction: column; justify-content: center; z-index: 10;">'
+                        f'<span style="font-family: \'Inter\', sans-serif; font-size: {meta_font}px; font-weight: 800; '
+                        f'text-transform: uppercase; letter-spacing: 2px; color: {accent_col}; margin-bottom: 2px;">{role_tag}</span>'
+                        f'<span style="font-family: \'Inter\', sans-serif; font-size: {val_font_px}px; font-weight: 700; color: #FFFFFF; '
+                        f'text-shadow: 0 1px 4px rgba(0,0,0,0.6); line-height: 1.2; word-break: break-word; overflow: hidden;">{escaped_text}</span>'
+                        f'</div>'
+                    )
+                elif elem.role == "label":
+                    # Neon badge CTA
+                    text_elements_html.append(
+                        f'<div id="{elem.id}" data-role="{elem.role}" class="poster-element poster-badge" style="'
+                        f'position: absolute; left: {l_px}px; top: {t_px}px; width: {box_w}px; height: {box_h}px; '
+                        f'background: linear-gradient(135deg, rgba(0, 245, 212, 0.22) 0%, rgba(247, 37, 133, 0.22) 100%); '
+                        f'border: 1.5px solid #00F5D4; border-radius: 9999px; padding: 6px 18px; '
+                        f'font-family: \'Outfit\', sans-serif; font-size: {font_px}px; font-weight: 800; '
+                        f'text-transform: uppercase; letter-spacing: 2px; color: #00F5D4; '
+                        f'box-shadow: 0 0 20px rgba(0, 245, 212, 0.35); '
+                        f'overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 10; box-sizing: border-box;">'
+                        f'<span>{escaped_text}</span>'
+                        f'</div>'
+                    )
+                else:
+                    # Body text or general element with glass backdrop
+                    text_elements_html.append(
+                        f'<div id="{elem.id}" data-role="{elem.role}" class="poster-element poster-body" style="'
+                        f'position: absolute; left: {l_px}px; top: {t_px}px; width: {box_w}px; height: {box_h}px; '
+                        f'background: rgba(11, 19, 43, 0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); '
+                        f'border: 1px solid rgba(0, 245, 212, 0.25); border-radius: 10px; padding: 10px 18px; '
+                        f'font-family: \'{elem.font}\', \'Inter\', sans-serif; font-size: {font_px}px; font-weight: {elem.weight}; '
+                        f'color: {elem.color}; letter-spacing: 0.02em; line-height: 1.3; '
+                        f'overflow: hidden; display: flex; align-items: center; word-break: break-word; z-index: 10; box-sizing: border-box;">'
+                        f'<span>{escaped_text}</span>'
+                        f'</div>'
+                    )
 
         html_template = f"""<!DOCTYPE html>
 <html lang="en">
@@ -207,7 +272,7 @@ class PosterRenderer:
   <meta charset="UTF-8">
   <title>Poster</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@600;700;800;900&family=Outfit:wght@600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@600;700;800;900&family=Outfit:wght@600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap');
     
     * {{
       margin: 0;
@@ -217,7 +282,7 @@ class PosterRenderer:
     }}
     
     body {{
-      background: #111111;
+      background: #0B132B;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -237,6 +302,7 @@ class PosterRenderer:
 <body>
   <div id="canvas">
     {art_layer_html}
+    {vignette_html if strategy == "B" else ""}
     {''.join(text_elements_html)}
     {''.join(logos_html)}
     {qr_html}

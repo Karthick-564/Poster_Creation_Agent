@@ -156,12 +156,18 @@ def test_context_loader():
 
 def test_config_loader():
     cfg = load_config()
-    assert cfg.groq.model == "llama-3.3-70b-versatile"
+    assert cfg.groq.model in ("openai/gpt-oss-120b", "llama-3.3-70b-versatile")
     assert cfg.ideogram.strategy == "B"
     assert cfg.ideogram.transport == "comfyui"
     assert cfg.repair.max_iterations == 4
 
     # Test environment variable for secret
-    os.environ["GROQ_API_KEY"] = "test-secret-key-12345"
-    assert cfg.groq.api_key == "test-secret-key-12345"
-    del os.environ["GROQ_API_KEY"]
+    orig_key = os.environ.get("GROQ_API_KEY")
+    try:
+        os.environ["GROQ_API_KEY"] = "test-secret-key-12345"
+        assert cfg.groq.api_key == "test-secret-key-12345"
+    finally:
+        if orig_key is not None:
+            os.environ["GROQ_API_KEY"] = orig_key
+        elif "GROQ_API_KEY" in os.environ:
+            del os.environ["GROQ_API_KEY"]

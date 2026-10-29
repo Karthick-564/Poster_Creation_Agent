@@ -96,6 +96,7 @@ class RepairLoop:
                     count=k_candidates,
                     base_seed=current_seed,
                     output_dir=it_dir,
+                    strategy=current_strategy,
                 )
             else:
                 art_candidates = cached_art_candidates

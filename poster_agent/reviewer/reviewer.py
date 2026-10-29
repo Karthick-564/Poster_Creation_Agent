@@ -55,22 +55,48 @@ def create_downscaled_preview(image_path: str | Path, max_dim: int = 360) -> Ima
     return img
 
 
-REVIEWER_SYSTEM_RUBRIC = """You are a Master Graphic Design Director evaluating an event poster.
+REVIEWER_SYSTEM_RUBRIC = """You are an elite, uncompromising Design Director at a world-class graphic design agency.
+You evaluate posters with brutal, professional rigor (standards like Pentagram, Cannes Lions, D&AD).
 Evaluate the poster against the intended PosterSpec design blueprint.
 
-Assess on a scale from 1 (poor) to 5 (exceptional):
-- hierarchy: Does the main headline dominate instantly? Is visual reading flow natural?
-- balance: Is the poster visually stable with thoughtful whitespace and graphic weight?
-- readability: Is all typography crisp, well-contrasted, and legible?
-- brand_fit: Does it reflect official, high-caliber institutional branding?
-- polish: Are borders, alignments, and artwork clean and free of jarring glitches?
+CRITICAL GRADING PHILOSOPHY:
+Do NOT give generous or polite scores. Ordinary or amateur work MUST receive 1/5 or 2/5. A 4/5 requires exceptional craft. A 5/5 is reserved only for international award-winning masterpieces.
 
-3-SECOND TEST:
-Looking at the low-resolution thumbnail image, can a viewer glancing at the poster for 3 seconds identify:
+DEDUCT HEAVILY IF:
+- Typography looks like plain, default computer text lazily slapped on top of artwork without styling, drop shadows, or background integration.
+- Lack of typographic hierarchy (if subtitle or date competes with headline, cap hierarchy at 2).
+- Poor contrast: text placed over busy image textures without backdrop cards or contrast vignettes.
+- Squeezed or cluttered layout with uncomfortable negative space.
+- Any visual glitches, awkward margins, or mismatched color temperatures.
+
+EVALUATION RUBRIC (Score 1 to 5 strictly):
+1. hierarchy (1-5):
+   - Does the primary headline dominate instantly across the room?
+   - Is reading flow natural: Headline -> Subhead -> Date & Venue -> Registration?
+2. balance (1-5):
+   - Is graphic weight distributed harmoniously? Does the poster breathe, or is it overcrowded?
+3. readability (1-5):
+   - Are words razor sharp and instantly legible even over complex background art?
+   - Does text have adequate contrast treatment (glass backing cards, pills, text shadows)?
+4. brand_fit (1-5):
+   - Does the poster feel prestigious, institutional, and authentic?
+   - Are logos, seals, and QR codes sharp and seamlessly integrated?
+5. polish (1-5):
+   - Craftsmanship of typography: tracking, leading, font pairings, edge alignment, and visual depth.
+   - If it looks like plain Word/PowerPoint text pasted onto an image, score is strictly 1 or 2.
+
+3-SECOND GLANCE AUDIT:
+Looking at Image 2 (the downscaled thumbnail as seen by someone walking past a billboard in 3 seconds):
+Can the viewer effortlessly and unambiguously extract:
 1. Event title
 2. Date
 3. Venue
-If all 3 are legible at a glance, set passed=true; otherwise set passed=false.
+If ANY of these 3 are small, blurry, obscured, low-contrast, or take more than 3 seconds to find, set "passed": false.
+Only set "passed": true if ALL THREE are unmistakable at an instant glance.
+
+CRITIQUE & ACTIONABLE FIXES:
+You MUST provide at least 2 to 3 sharp, specific, brutally honest design critiques in "fixes".
+Call out exact flaws: e.g. "Headline lacks dimensional weight and looks flat", "Date pill needs stronger backdrop contrast against background art", "Center artwork crowds the bottom metadata".
 
 OUTPUT FORMAT:
 Return strictly a valid JSON object matching this schema:
@@ -86,7 +112,10 @@ Return strictly a valid JSON object matching this schema:
     "venue": "identified venue",
     "passed": true|false
   },
-  "fixes": ["actionable fix 1", "actionable fix 2"]
+  "fixes": [
+    "Specific brutal critique 1 with design remedy",
+    "Specific brutal critique 2 with design remedy"
+  ]
 }
 """
 
@@ -122,8 +151,9 @@ class PosterReviewer:
         start_t = time.time()
         p_path = Path(poster_image_path)
 
-        # 1. Prepare base64 images
-        full_b64 = encode_image_base64(p_path)
+        # 1. Prepare base64 images (downscaled to max 768px for vision model VRAM efficiency)
+        review_img = create_downscaled_preview(p_path, max_dim=768)
+        full_b64 = encode_image_base64(review_img)
         thumb_img = create_downscaled_preview(p_path, max_dim=360)
         thumb_b64 = encode_image_base64(thumb_img)
 
@@ -157,24 +187,79 @@ class PosterReviewer:
                 ],
                 "response_format": {"type": "json_object"},
                 "temperature": 0.2,
-                "max_tokens": 1024,
+                "max_tokens": 2048,
             }
 
             # Optional thinking mode toggle
             if self.thinking_mode:
-                # Some local servers accept extra_body for reasoning tokens or thinking
                 kwargs["extra_body"] = {"thinking": True}
 
             resp = client.chat.completions.create(**kwargs)
             content = resp.choices[0].message.content or "{}"
 
-            # Extract thinking tags if present
-            think_match = re.search(r"<think>(.*?)</think>", content, re.DOTALL)
-            if think_match:
-                raw_thinking = think_match.group(1).strip()
-                content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+            # Extract thinking/reasoning tags if present
+            if "</think>" in content:
+                parts = content.split("</think>", 1)
+                raw_thinking = parts[0].replace("<think>", "").strip()
+                content = parts[1].strip()
+            elif "<think>" in content:
+                think_match = re.search(r"<think>(.*?)</think>", content, re.DOTALL)
+                if think_match:
+                    raw_thinking = think_match.group(1).strip()
+                    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
 
-            data = json.loads(content)
+            # Extract JSON block
+            json_match = re.search(r"(\{.*\})", content, re.DOTALL)
+            if json_match:
+                content = json_match.group(1).strip()
+
+            try:
+                data = json.loads(content)
+            except Exception:
+                # Regex extraction if JSON was truncated at the end
+                h_m = re.search(r'"hierarchy":\s*(\d+)', content)
+                b_m = re.search(r'"balance":\s*(\d+)', content)
+                r_m = re.search(r'"readability":\s*(\d+)', content)
+                bf_m = re.search(r'"brand_fit":\s*(\d+)', content)
+                p_m = re.search(r'"polish":\s*(\d+)', content)
+                ev_m = re.search(r'"event":\s*"([^"]+)"', content)
+                dt_m = re.search(r'"date":\s*"([^"]+)"', content)
+                vn_m = re.search(r'"venue":\s*"([^"]+)"', content)
+                ps_m = re.search(r'"passed":\s*(true|false)', content, re.IGNORECASE)
+                fx_m = re.findall(r'"fixes":\s*\[(.*?)\]', content, re.DOTALL)
+
+                extracted_fixes = []
+                if fx_m:
+                    extracted_fixes = [s.strip().strip('"') for s in fx_m[0].split(",") if s.strip()]
+                elif raw_thinking:
+                    # Extract critique sentences from thinking
+                    critiques = [line.strip().lstrip("-* ") for line in raw_thinking.splitlines() if any(k in line.lower() for k in ("clutter", "contrast", "hierarchy", "font", "color", "logo", "balance", "crowd")) and len(line.strip()) > 20]
+                    extracted_fixes = critiques[:3]
+
+                h_elem = next((e for e in spec.elements if e.role == "headline"), None)
+                d_elem = next((e for e in spec.elements if e.role == "date"), None)
+                v_elem = next((e for e in spec.elements if e.role == "venue"), None)
+                fallback_ev = h_elem.text if h_elem else "Event"
+                fallback_dt = d_elem.text if d_elem else "Date"
+                fallback_vn = v_elem.text if v_elem else "Venue"
+
+                if not any([h_m, b_m, r_m, bf_m, p_m, ev_m]):
+                    data = self._heuristic_fallback(spec=spec, image_path=p_path)
+                else:
+                    data = {
+                        "hierarchy": int(h_m.group(1)) if h_m else 4,
+                        "balance": int(b_m.group(1)) if b_m else 3,
+                        "readability": int(r_m.group(1)) if r_m else 3,
+                        "brand_fit": int(bf_m.group(1)) if bf_m else 3,
+                        "polish": int(p_m.group(1)) if p_m else 3,
+                        "three_second_test": {
+                            "event": ev_m.group(1) if ev_m else fallback_ev,
+                            "date": dt_m.group(1) if dt_m else fallback_dt,
+                            "venue": vn_m.group(1) if vn_m else fallback_vn,
+                            "passed": ps_m.group(1).lower() == "true" if ps_m else True,
+                        },
+                        "fixes": extracted_fixes or ["Refine negative space and tighten typography contrast."]
+                    }
 
         except Exception as e:
             # Deterministic heuristic critic fallback when local endpoint is offline

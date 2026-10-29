@@ -3,13 +3,16 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
+
+load_dotenv()
 
 
 class GroqConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    model: str = "llama-3.3-70b-versatile"
-    alt_model: str = "qwen/qwen3-8b-27b"
+    model: str = "openai/gpt-oss-120b"
+    alt_model: str = "qwen/qwen3.8-27b"
     temperature: float = 0.2
     max_tokens: int = 4096
     timeout_seconds: int = 60
