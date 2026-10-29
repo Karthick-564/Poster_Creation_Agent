@@ -310,3 +310,4 @@ class RepairLoop:
             cached_art = None
 
         return new_spec, new_strategy, new_seed, cached_art
+

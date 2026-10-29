@@ -73,3 +73,4 @@ class MockGenerator(GeneratorAdapter):
             )
 
         return results
+

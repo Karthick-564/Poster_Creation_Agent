@@ -31,3 +31,4 @@ class GeneratorAdapter(ABC):
         Returns a list of GeneratedArt items (one per candidate).
         """
         pass
+

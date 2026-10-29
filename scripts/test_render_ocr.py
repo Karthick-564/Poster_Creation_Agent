@@ -27,3 +27,4 @@ with sync_playwright() as p:
 engine = RapidOCR()
 res, _ = engine("temp_test_render/pw_test_54.png")
 print("OCR result:", res)
+
