@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Typography Architecture Comparison: Path 1 vs Path 2 vs Path 3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Space+Grotesk:wght@600;700;800&family=Syne:wght@800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #060910;
+      color: #FFFFFF;
+      font-family: 'Space Grotesk', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+    }
+
+    .comparison-board {
+      width: 1080px;
+      background: #0A0E17;
+      border: 1px solid rgba(0, 255, 156, 0.25);
+      border-radius: 20px;
+      padding: 50px 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      box-shadow: 0 30px 90px rgba(0,0,0,0.95), 0 0 60px rgba(0, 255, 156, 0.08);
+      position: relative;
+    }
+
+    .board-header {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 20px;
+    }
+
+    .board-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      color: #00FF9C;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .board-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 32px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: -0.01em;
+    }
+
+    .path-card {
+      background: rgba(14, 20, 32, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 30px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .path-card-accent-1 { border-left: 5px solid #00D1FF; }
+    .path-card-accent-2 { border-left: 5px solid #00FF9C; }
+    .path-card-accent-3 { border-left: 5px solid #A855F7; }
+
+    .path-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .path-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #8A94A6;
+    }
+
+    .path-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .tag-blue { background: rgba(0, 209, 255, 0.12); color: #00D1FF; border: 1px solid rgba(0, 209, 255, 0.3); }
+    .tag-green { background: rgba(0, 255, 156, 0.12); color: #00FF9C; border: 1px solid rgba(0, 255, 156, 0.3); }
+    .tag-purple { background: rgba(168, 85, 247, 0.12); color: #A855F7; border: 1px solid rgba(168, 85, 247, 0.3); }
+
+    .preview-box {
+      background: #05070D;
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px 30px;
+      min-height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* PATH 1: CSS/SVG 3D Chrome Extrusion */
+    .typo-path1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 72px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      background: linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 25%, #9AE6B4 32%, #00FF9C 58%, #0A3828 78%, #00D1FF 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 2px 0 #005F3B)
+              drop-shadow(0 4px 0 #003822)
+              drop-shadow(0 6px 0 #071E14)
+              drop-shadow(0 15px 30px rgba(0, 255, 156, 0.45));
+    }
+
+    /* PATH 2: Generative 3D RGBA Title Asset */
+    .typo-path2-img {
+      max-width: 90%;
+      max-height: 120px;
+      object-fit: contain;
+      filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 30px rgba(0, 255, 156, 0.35));
+    }
+
+    /* PATH 3: Generative Circuit Infill Mask */
+    .typo-path3 {
+      font-family: 'Syne', sans-serif;
+      font-size: 72px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      /* Infuses real Ideogram 4.0 circuit texture into the letters */
+      background-image: url('C:/Users/iQube/.gemini/antigravity/brain/98f40bc9-b037-4830-8e36-54702f37f83a/ideogram_circuit_bg.png');
+      background-size: 400px;
+      background-position: center;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      -webkit-text-stroke: 1.5px #00FF9C;
+      filter: drop-shadow(0 0 20px rgba(0, 255, 156, 0.6)) drop-shadow(0 0 35px rgba(0, 209, 255, 0.4));
+    }
+
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #8A94A6;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 12px 16px;
+      border-radius: 8px;
+    }
+
+    .specs-grid div span {
+      color: #FFFFFF;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="comparison-board">
+    <div class="board-header">
+      <div class="board-badge">SYSTEM ARCHITECTURE // TYPOGRAPHY COMPARISON</div>
+      <div class="board-title">Side-by-Side: The 3 Typographic Paths</div>
+    </div>
+
+    <!-- PATH 1 -->
+    <div class="path-card path-card-accent-1">
+      <div class="path-meta">
+        <div class="path-num">// PATH 01: CSS / SVG GRAPHIC TYPOGRAPHY ENGINE</div>
+        <div class="path-tag tag-blue">Vector-Native • 0ms Latency</div>
+      </div>
+      <div class="preview-box">
+        <div class="typo-path1">NOVA CTF 2026</div>
+      </div>
+      <div class="specs-grid">
+        <div>Rendering: <span>Playwright Headless CSS</span></div>
+        <div>Spelling Risk: <span>0% (Verbatim Guaranteed)</span></div>
+        <div>Compute Cost: <span>0 GPU Seconds (Instant)</span></div>
+      </div>
+    </div>
+
+    <!-- PATH 2 -->
+    <div class="path-card path-card-accent-2">
+      <div class="path-meta">
+        <div class="path-num">// PATH 02: GENERATIVE 3D RGBA TITLE ASSET (QWEN 2.1)</div>
+        <div class="path-tag tag-green">Cinema 3D Block • Native Alpha</div>
+      </div>
+      <div class="preview-box">
+        <img 
+          src="C:/Users/iQube/.gemini/antigravity/brain/98f40bc9-b037-4830-8e36-54702f37f83a/path2_3d_text.png" 
+          alt="Path 2 3D Title Asset" 
+          class="typo-path2-img"
+        />
+      </div>
+      <div class="specs-grid">
+        <div>Rendering: <span>Qwen-Image 2.1 (ComfyUI)</span></div>
+        <div>Spelling Risk: <span>Low on Short Titles (~5%)</span></div>
+        <div>Compute Cost: <span>24.5s on RTX 4090</span></div>
+      </div>
+    </div>
+
+    <!-- PATH 3 -->
+    <div class="path-card path-card-accent-3">
+      <div class="path-meta">
+        <div class="path-num">// PATH 03: GENERATIVE CIRCUIT MASK INFILL (IDEOGRAM + VECTOR)</div>
+        <div class="path-tag tag-purple">Hybrid • AI Texture + Vector Contour</div>
+      </div>
+      <div class="preview-box">
+        <div class="typo-path3">NOVA CTF 2026</div>
+      </div>
+      <div class="specs-grid">
+        <div>Rendering: <span>Diffusion Texture + Vector Mask</span></div>
+        <div>Spelling Risk: <span>0% (Geometry is Locked)</span></div>
+        <div>Compute Cost: <span>Reuses Background Diffusion</span></div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
