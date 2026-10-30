@@ -1,25 +1,15 @@
-"""Generators module for poster_agent."""
+"""Generator adapters module."""
 from .base import GeneratorAdapter, GeneratedArt
+from .ideogram import IdeogramGenerator
 from .mock import MockGenerator
-from .ideogram import (
-    IdeogramGenerator,
-    IdeogramPromptBuilder,
-    IdeogramTransport,
-    ComfyUITransport,
-    HTTPTransport,
-    StubTransport,
-)
 from .qwen import QwenImageGenerator
+from .comfyui_client import ComfyUIClient
 
 __all__ = [
     "GeneratorAdapter",
     "GeneratedArt",
-    "MockGenerator",
     "IdeogramGenerator",
-    "IdeogramPromptBuilder",
-    "IdeogramTransport",
-    "ComfyUITransport",
-    "HTTPTransport",
-    "StubTransport",
+    "MockGenerator",
     "QwenImageGenerator",
+    "ComfyUIClient",
 ]

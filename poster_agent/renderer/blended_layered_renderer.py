@@ -596,3 +596,4 @@ class BlendedLayeredRenderer:
             browser.close()
 
         return out_p
+
