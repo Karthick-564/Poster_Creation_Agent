@@ -10,6 +10,8 @@ from poster_agent.vision.art_measurer import ArtMeasurer, MeasuredArtBundle
 from poster_agent.renderer.theme_renderer import ThemePackRenderer, ThemeRenderResult
 from poster_agent.checks.pixel_verifier import PixelVerifier, VerificationReport
 from poster_agent.reviewer.probes import VisualInspector, VisualAuditReport
+from poster_agent.planner.gemini_planner import GeminiPlanner
+from poster_agent.reviewer.gemini_probes import GeminiVisualInspector
 from poster_agent.loop.typed_patcher import TypedLayoutPatcher, LoopSummary
 from poster_agent.reporting.audit_logger import AuditLogger
 from poster_agent.renderer.print_engine import PrintEngine
@@ -32,8 +34,9 @@ class PosterPipeline:
         hero_image_path: str | Path = "",
         title_3d_path: str | Path = "",
         accent_image_path: str | Path = "",
-        theme_name: str = "cyber_aurora",
+        theme_name: str = "cyber_ctf",
         format_name: str = "A2",
+        use_gemini: bool = True,
     ) -> tuple[Path, Path, Path, Path]:
         """Execute all 8 stages and return (master_pdf, bleed_png, audit_md, audit_json)."""
 
@@ -61,7 +64,7 @@ class PosterPipeline:
             raise ValueError(f"Stage 1 Halt: Missing required brief fields: {brief.missing_fields}")
 
         # -------------------------------------------------------------
-        # STAGE 2: DRAFT SPATIAL PLANNING
+        # STAGE 2: DRAFT SPATIAL PLANNING (GEMINI PLANNER)
         # -------------------------------------------------------------
         canvas_w = 1258
         canvas_h = 1772
@@ -69,18 +72,30 @@ class PosterPipeline:
         slug_title = re.sub(r"[^\w\s-]", "", title_text).strip().lower().replace(" ", "_")
         if not slug_title:
             slug_title = "poster_design"
+
+        layout_plan = None
+        if use_gemini:
+            try:
+                gemini_planner = GeminiPlanner()
+                layout_plan = gemini_planner.plan(brief=brief, context_text=context_text)
+                canvas_w = layout_plan.canvas_w
+                canvas_h = layout_plan.canvas_h
+                theme_name = layout_plan.archetype
+                s2_summary = f"Gemini planned '{layout_plan.archetype}' layout: Title {layout_plan.headline_pt}pt, hero {layout_plan.hero_target_size_px}px, tracks belt: {layout_plan.tracks_belt_visible}."
+                s2_details = layout_plan.model_dump()
+            except Exception as e:
+                s2_summary = f"Selected '{theme_name}' archetype (Gemini planner fallback: {e})."
+                s2_details = {"canvas_w": canvas_w, "canvas_h": canvas_h, "theme": theme_name, "error": str(e)}
+        else:
+            s2_summary = f"Selected '{theme_name}' archetype with vertical modular typographic scale."
+            s2_details = {"canvas_w": canvas_w, "canvas_h": canvas_h, "theme": theme_name, "headline_target_pt": 96, "date_target_pt": 38}
+
         self.logger.record_stage(
             stage_number=2,
-            stage_name="Draft Spatial Planning",
+            stage_name="Draft Spatial Planning (Gemini Planner)" if use_gemini and layout_plan else "Draft Spatial Planning",
             status="PASSED",
-            summary=f"Selected '{theme_name}' archetype with vertical modular typographic scale.",
-            details={
-                "canvas_w": canvas_w,
-                "canvas_h": canvas_h,
-                "theme": theme_name,
-                "headline_target_pt": 96,
-                "date_target_pt": 38,
-            },
+            summary=s2_summary,
+            details=s2_details,
         )
 
         # -------------------------------------------------------------
@@ -180,16 +195,22 @@ class PosterPipeline:
         )
 
         # -------------------------------------------------------------
-        # STAGE 6: GROUNDED VISUAL INSPECTION (LFM3-VL-2B PROBES)
+        # STAGE 6: GROUNDED VISUAL INSPECTION (GEMINI MULTIMODAL CRITIC)
         # -------------------------------------------------------------
-        inspector = VisualInspector()
+        if use_gemini:
+            inspector = GeminiVisualInspector()
+            inspector_name = "Gemini Multimodal Vision"
+        else:
+            inspector = VisualInspector()
+            inspector_name = "LFM3-VL-2B"
+
         vlm_report = inspector.audit_poster(render_res.full_png_path, brief=brief)
 
         s6_status = "PASSED" if vlm_report.overall_passed else "WARNING"
-        s6_summary = f"LFM3-VL-2B (3 samples): 3-Sec Glance {'PASSED' if vlm_report.probes[0].passed else 'FAILED'} | Dominance {'PASSED' if len(vlm_report.probes) > 1 and vlm_report.probes[1].passed else 'FAILED'} | Void {'PASSED' if len(vlm_report.probes) > 2 and vlm_report.probes[2].passed else 'FAILED'} | Color {'PASSED' if len(vlm_report.probes) > 3 and vlm_report.probes[3].passed else 'FAILED'}"
+        s6_summary = f"{inspector_name}: 3-Sec Glance {'PASSED' if vlm_report.probes[0].passed else 'FAILED'} | Dominance {'PASSED' if len(vlm_report.probes) > 1 and vlm_report.probes[1].passed else 'FAILED'} | Void {'PASSED' if len(vlm_report.probes) > 2 and vlm_report.probes[2].passed else 'FAILED'} | Color {'PASSED' if len(vlm_report.probes) > 3 and vlm_report.probes[3].passed else 'FAILED'}"
         self.logger.record_stage(
             stage_number=6,
-            stage_name="Grounded Visual Inspection (LFM3-VL-2B)",
+            stage_name=f"Grounded Visual Inspection ({inspector_name})",
             status=s6_status,
             summary=s6_summary,
             details={
@@ -197,6 +218,7 @@ class PosterPipeline:
                 "negative_control_passed": vlm_report.negative_control_passed,
                 "probes": [p.model_dump() for p in vlm_report.probes],
                 "detected_issues": [i.model_dump() for i in vlm_report.detected_issues],
+                "critique_summary": vlm_report.raw_inspector_responses,
                 "latency_seconds": vlm_report.latency_seconds,
             },
         )
