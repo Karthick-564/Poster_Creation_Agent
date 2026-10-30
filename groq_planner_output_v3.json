@@ -1,0 +1,226 @@
+{
+  "canvas_width_px": 2048,
+  "canvas_height_px": 3072,
+  "dpi": 300,
+  "template_id": "event_portrait_hero",
+  "palette": [
+    "#0A0E17",
+    "#00FF9C",
+    "#00D1FF",
+    "#FFFFFF",
+    "#8A94A6"
+  ],
+  "text_safe_zones": [
+    {
+      "y_min": 60,
+      "x_min": 60,
+      "y_max": 200,
+      "x_max": 940
+    },
+    {
+      "y_min": 550,
+      "x_min": 60,
+      "y_max": 940,
+      "x_max": 940
+    }
+  ],
+  "elements": [
+    {
+      "id": "title",
+      "role": "headline",
+      "text": "NOVA CTF 2026",
+      "source": "brief",
+      "font": "Outfit, \"Montserrat\", sans-serif",
+      "size": 84,
+      "weight": 900,
+      "color": "#FFFFFF",
+      "box": {
+        "y_min": 60,
+        "x_min": 60,
+        "y_max": 180,
+        "x_max": 940
+      }
+    },
+    {
+      "id": "tagline",
+      "role": "label",
+      "text": "Capture the flag. Break it. Fix it.",
+      "source": "brief",
+      "font": "Inter, \"Segoe UI\", sans-serif",
+      "size": 22,
+      "weight": 600,
+      "color": "#00FF9C",
+      "box": {
+        "y_min": 190,
+        "x_min": 60,
+        "y_max": 200,
+        "x_max": 940
+      }
+    },
+    {
+      "id": "date",
+      "role": "date",
+      "text": "15-16 NOVEMBER 2026",
+      "source": "brief",
+      "font": "Inter, \"Segoe UI\", sans-serif",
+      "size": 32,
+      "weight": 700,
+      "color": "#00D1FF",
+      "box": {
+        "y_min": 550,
+        "x_min": 60,
+        "y_max": 590,
+        "x_max": 480
+      }
+    },
+    {
+      "id": "venue",
+      "role": "venue",
+      "text": "INNOVATION HALL, TECH PARK, BENGALURU",
+      "source": "brief",
+      "font": "Inter, \"Segoe UI\", sans-serif",
+      "size": 28,
+      "weight": 700,
+      "color": "#FFFFFF",
+      "box": {
+        "y_min": 550,
+        "x_min": 510,
+        "y_max": 590,
+        "x_max": 940
+      }
+    },
+    {
+      "id": "subtitle",
+      "role": "subheadline",
+      "text": "24-HOUR CYBERSECURITY COMPETITION",
+      "source": "brief",
+      "font": "Inter, \"Segoe UI\", sans-serif",
+      "size": 26,
+      "weight": 600,
+      "color": "#FFFFFF",
+      "box": {
+        "y_min": 610,
+        "x_min": 60,
+        "y_max": 640,
+        "x_max": 940
+      }
+    },
+    {
+      "id": "prize",
+      "role": "label",
+      "text": "PRIZE POOL ₹50,000",
+      "source": "brief",
+      "font": "Inter, \"Segoe UI\", sans-serif",
+      "size": 26,
+      "weight": 700,
+      "color": "#00FF9C",
+      "box": {
+        "y_min": 660,
+        "x_min": 60,
+        "y_max": 690,
+        "x_max": 940
+      }
+    },
+    {
+      "id": "tracks",
+      "role": "body",
+      "text": "WEB | CRYPTO | FORENSICS | REVERSING",
+      "source": "brief",
+      "font": "JetBrains Mono, monospace",
+      "size": 20,
+      "weight": 500,
+      "color": "#00D1FF",
+      "box": {
+        "y_min": 710,
+        "x_min": 60,
+        "y_max": 740,
+        "x_max": 940
+      }
+    },
+    {
+      "id": "team_size",
+      "role": "body",
+      "text": "TEAMS OF 2-4",
+      "source": "brief",
+      "font": "JetBrains Mono, monospace",
+      "size": 20,
+      "weight": 500,
+      "color": "#8A94A6",
+      "box": {
+        "y_min": 760,
+        "x_min": 60,
+        "y_max": 790,
+        "x_max": 480
+      }
+    },
+    {
+      "id": "time",
+      "role": "body",
+      "text": "9:00 AM ONWARDS",
+      "source": "brief",
+      "font": "JetBrains Mono, monospace",
+      "size": 20,
+      "weight": 500,
+      "color": "#8A94A6",
+      "box": {
+        "y_min": 760,
+        "x_min": 510,
+        "y_max": 790,
+        "x_max": 940
+      }
+    },
+    {
+      "id": "cta",
+      "role": "footer",
+      "text": "REGISTER FREE AT nova-ctf.example",
+      "source": "brief",
+      "font": "Inter, \"Segoe UI\", sans-serif",
+      "size": 22,
+      "weight": 700,
+      "color": "#00FF9C",
+      "box": {
+        "y_min": 820,
+        "x_min": 60,
+        "y_max": 850,
+        "x_max": 940
+      }
+    },
+    {
+      "id": "organizer",
+      "role": "footer",
+      "text": "Presented by NOVA Security Club",
+      "source": "brief",
+      "font": "Inter, \"Segoe UI\", sans-serif",
+      "size": 18,
+      "weight": 500,
+      "color": "#8A94A6",
+      "box": {
+        "y_min": 870,
+        "x_min": 60,
+        "y_max": 900,
+        "x_max": 940
+      }
+    }
+  ],
+  "logos": [],
+  "art_slots": [
+    {
+      "id": "art_hero",
+      "prompt": "Abstract glowing 3D shield motif with circuit grid patterns and faint binary code rain, iridescent glass and obsidian materials, cyan and green rim lights, dark atmospheric background.",
+      "box": {
+        "y_min": 210,
+        "x_min": 60,
+        "y_max": 540,
+        "x_max": 940
+      },
+      "transparent": false
+    }
+  ],
+  "assumptions": [
+    "Canvas dimensions set to 2048 x 3072 px to match the 1024 x 1536 px 2x render requirement.",
+    "No logos included as explicitly requested in the brief.",
+    "No QR code included as no URL or payload was provided."
+  ],
+  "missing_fields": [],
+  "qr_code": null
+}

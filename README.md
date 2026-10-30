@@ -30,7 +30,7 @@ ComfyUI/venv/Scripts/python -m pytest tests/ -v
 ComfyUI/venv/Scripts/python scripts/bakeoff/run_bakeoff.py
 
 # Generate a promotional poster end-to-end (Mock generator)
-ComfyUI/venv/Scripts/python scripts/generate_poster.py --mock --brief "Apex AI Hackathon 2026\nDate: November 12-14, 2026\nVenue: Auditorium Hall, Apex Institute"
+ComfyUI/venv/Scripts/python scripts/generate_poster.py --mock --brief " AI Hackathon 2026\nDate: November 12-14, 2026\nVenue: Auditorium Hall, Apex Institute"
 
 # Generate a promotional poster with Ideogram 4.0 in ComfyUI (GPU)
 ComfyUI/venv/Scripts/python scripts/generate_poster.py --brief-file scripts/bakeoff/briefs/brief_1_tech.txt

@@ -156,7 +156,7 @@ def test_context_loader():
 
 def test_config_loader():
     cfg = load_config()
-    assert cfg.groq.model in ("openai/gpt-oss-120b", "llama-3.3-70b-versatile")
+    assert cfg.groq.model in ("qwen/qwen3.8-27b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile")
     assert cfg.ideogram.strategy == "B"
     assert cfg.ideogram.transport == "comfyui"
     assert cfg.repair.max_iterations == 4

@@ -1,11 +1,11 @@
 # Institutional Brand & Event Context
 
 ## Institution Profile
-- **Institution Name**: Apex Institute of Technology
-- **Abbreviation**: AIT
-- **Motto / Tagline**: Empowering Tomorrow Through Innovation Today
-- **Location**: Tech Campus, Grand Avenue, Sector 5, Innovation City
-- **Official Website**: www.apextech.edu
+- **Institution Name**: Kumaraguru college of technology 
+- **Abbreviation**: KCT
+- **Motto / Tagline**: Character Is Life 
+- **Location**: Saravampatti road, Coimbatore 
+- **Official Website**: kct.ac.in
 
 ## Associated Clubs & Societies
 - **Design & Creative Guild**: The premier digital arts and visual media society of AIT. Tagline: "Crafting Vision into Reality".

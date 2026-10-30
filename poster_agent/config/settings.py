@@ -11,10 +11,10 @@ load_dotenv()
 
 class GroqConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    model: str = "openai/gpt-oss-120b"
-    alt_model: str = "qwen/qwen3.8-27b"
+    model: str = "qwen/qwen3.8-27b"
+    alt_model: str = "openai/gpt-oss-120b"
     temperature: float = 0.2
-    max_tokens: int = 4096
+    max_tokens: int = 2048
     timeout_seconds: int = 60
 
     @property
