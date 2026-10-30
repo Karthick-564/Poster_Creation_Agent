@@ -102,3 +102,4 @@ class SaliencyAnalyzer:
             elem_area = (ex2 - ex1) * (ey2 - ey1)
             return float(overlap_area / (elem_area + 1e-6))
         return 0.0
+

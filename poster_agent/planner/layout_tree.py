@@ -99,3 +99,4 @@ def build_semantic_layout_tree(canvas_w: int = 1080, canvas_h: int = 1350) -> La
         grid=BaseGridRhythm(),
         clusters=clusters,
     )
+
