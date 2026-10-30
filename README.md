@@ -1,49 +1,180 @@
 # Poster Agent (`poster-agent`)
 
-An AI-driven promotional poster generation agent built with strict deterministic quality gates, verifiable text integrity, and layout planning.
+An autonomous, multi-layered promotional poster generation agent built with generative diffusion models, intelligent LLM planning, vision-assisted layout synthesis, deterministic quality gates, and iterative repair loops.
 
-## Features & Architecture
+---
 
-1. **Config (`poster_agent/config`)**: Type-safe YAML configuration with environment variable secret injection (`GROQ_API_KEY`).
-2. **Context (`poster_agent/context`)**: Loads institutional brand profiles (`context.md`), club metadata, typography rules, color palettes, and logo assets with usage constraints.
-3. **Spec (`poster_agent/spec`)**: Pydantic `PosterSpec` with coordinates in a normalized 0–1000 scale, strict JSON schema output matching Groq structured output specifications.
-4. **Planner (`poster_agent/planner`)**: Calls Groq (`llama-3.3-70b-versatile`) with strict structured output. Enforces a **Verbatim String Guard** (text must appear verbatim in source brief or context without hallucination) and stops on missing dates/venues.
-5. **Renderer (`poster_agent/renderer`)**: HTML/CSS layout renderer producing pixel-exact PNG and PDF exports via Playwright headless Chromium. Exports DOM bounding boxes for geometry validation.
-6. **Checks (`poster_agent/checks`)**:
-   - **OCR Check**: PaddleOCR / RapidOCR verification to detect missing text, duplicate lines, or reading order violations.
-   - **Geometry**: Detects element overflow and collisions (`> 5px` overlap).
-   - **Contrast**: WCAG 2.1 AA relative luminance and contrast ratio checks (`>= 4.5:1`), minimum readable font size check (`>= 14pt`).
-   - **Logo**: Verifies required brand logos and enforces minimum dimension constraints.
-7. **Template Library (`templates/`)**: Pre-engineered layout templates with named slots:
-   - `event_portrait_hero`
-   - `event_portrait_3col`
-   - `event_landscape_2col`
-   - `event_minimal`
+## 1. System Architecture & Design Philosophy
 
-## Quick Start & Running Tests
+Traditional automated poster pipelines decide layout templates *before* art exists—placing text blindly into predefined boxes and segregating artwork and typography into stiff, disconnected rectangles (e.g. image at the top, opaque text card at the bottom).
 
-```bash
-# Run complete test suite (42 tests covering all modules)
-ComfyUI/venv/Scripts/python -m pytest tests/ -v
+`poster-agent` reverses this paradigm using an **"Art-First, Layout-Second"** architecture:
 
-# Run Vision Reviewer Bake-Off Benchmark
-ComfyUI/venv/Scripts/python scripts/bakeoff/run_bakeoff.py
-
-# Generate a promotional poster end-to-end (Mock generator)
-ComfyUI/venv/Scripts/python scripts/generate_poster.py --mock --brief " AI Hackathon 2026\nDate: November 12-14, 2026\nVenue: Auditorium Hall, Apex Institute"
-
-# Generate a promotional poster with Ideogram 4.0 in ComfyUI (GPU)
-ComfyUI/venv/Scripts/python scripts/generate_poster.py --brief-file scripts/bakeoff/briefs/brief_1_tech.txt
+```
+                              USER BRIEF
+                                  │
+                                  ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │ 1. Intelligent Planner (`PosterPlanner` / Groq LPU)         │
+    │    • Extracts all verbatim text fields (Zero-Drop Guard)    │
+    │    • Derives artistic mood, palette & generative prompts    │
+    └─────────────────────────────┬───────────────────────────────┘
+                                  │
+                                  ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │ 2. Generative Art Generation (ComfyUI Engine)               │
+    │    • Layer 0: Ideogram 4.0 atmospheric textural background  │
+    │    • Layer 3: Qwen-Image 2.1 Hero Cutout (Native Alpha RGBA)│
+    │    • Layer 4: Qwen-Image 2.1 Foreground Accents (RGBA)     │
+    │    • Layer 2: 3D Typography / Texture Mask Infill           │
+    └─────────────────────────────┬───────────────────────────────┘
+                                  │
+                                  ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │ 3. Vision Art Analyzer (`poster_agent.vision.ArtAnalyzer`)  │
+    │    • Live Pixel Sampling: Extracts glow, highlight & base   │
+    │    • Hero Geometry: Detects alpha centroid & radius         │
+    │    • Orbital Arc Math: Computes SVG textPath coordinates    │
+    │    • Light Spill Field: Radial gradient emitters            │
+    └─────────────────────────────┬───────────────────────────────┘
+                                  │
+                                  ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │ 4. Depth-Layered Composer (`BlendedLayeredRenderer`)        │
+    │    • Z-Stacking (Depth Overlap: Title under Hero)           │
+    │    • Orbital Typography hugging Hero contour                │
+    │    • Soft Gradient Scrims (Zero opaque dashboard cards)     │
+    │    • Screen-Blended Light Spill from Hero & Lanterns        │
+    │    • Ambient Film Grain & Unified Color Grading Overlay     │
+    └─────────────────────────────┬───────────────────────────────┘
+                                  │
+                                  ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │ 5. Deterministic Quality Gates (`CheckRunner`)              │
+    │    • OCR Check: RapidOCR / PaddleOCR text string fidelity   │
+    │    • Contrast Check: WCAG 2.1 AA relative luminance (>=4.5) │
+    │    • Geometry Check: Canvas overflows & text collisions     │
+    └─────────────────────────────┬───────────────────────────────┘
+                                  │
+                  ┌───────────────┴───────────────┐
+                  ▼                               ▼
+        [Any Blocking Failures?]         [All Checks Passed]
+                  │                               │
+                  ▼                               ▼
+    ┌─────────────────────────────┐ ┌─────────────────────────────┐
+    │ 6. Automated Repair Loop    │ │ 7. Vision Reviewer          │
+    │    • Actions: REFLOW_TEXT,  │ │    • 3-Second Glance Test   │
+    │      EDIT_SPEC, NEW_SEED    │ │    • Hierarchy (1-5)        │
+    │    • Re-renders candidate   │ │    • Readability & Polish   │
+    └─────────────┬───────────────┘ └─────────────────────────────┘
+                  │
+                  └────────► [Loops to Step 3/4]
 ```
 
-## Vision Reviewer & 3-Second Test
+---
 
-The reviewer module (`poster_agent/reviewer`) evaluates candidate posters using an OpenAI-compatible endpoint (targeting `LFM3-VL-2B` from Liquid AI) with a configurable reasoning/thinking mode toggle (`thinking: True/False`).
-It generates a 360px downscaled thumbnail for the **3-second test** to guarantee that the event title, date, and venue are instantly recognizable at a glance.
-A comprehensive bake-off script (`scripts/bakeoff/run_bakeoff.py`) runs fixed briefs across configurations and generates markdown tables reporting:
-- Visual polish, hierarchy, balance, readability (1-5 scale)
-- 3-Second glance test pass rate
-- Consistency score across runs
-- Latency (seconds)
+## 2. Depth Layers (Z-Stacking Architecture)
 
+Rather than segregating elements into non-overlapping boxes, the canvas is structured into physical depth layers:
 
+* **Layer 0 (`z-index: 1`) — Background Scene**: High-resolution atmospheric scene generated by Ideogram 4.0.
+* **Layer 1 (`z-index: 2`) — Light Spill System**: Large screen-blended radial gradients (`rgba(...)`) emitting outward from the hero asset and accent lights, naturally illuminating the surrounding sky and adjacent typography.
+* **Layer 2 (`z-index: 5`) — Massive Headline Title**: Spanning across the upper canvas with generative 3D sculpting (Path 2) or aurora texture infill (Path 3). Intentionally layered *behind* the upper crown of the hero orb (3D depth interleaving).
+* **Layer 3 (`z-index: 10`) — Hero Asset**: Volumetric 3D centerpiece (e.g. crystal glass orb) on native transparent alpha, overlapping the base of the title with optical drop shadows.
+* **Layer 4 (`z-index: 15`) — Foreground Accents**: Floating transparent assets (e.g. paper sky lanterns) layered into the foreground plane.
+* **Layer 5 (`z-index: 20`) — Interacting Typography**:
+  * **Orbital Curved Text**: SVG `<textPath>` wrapping gracefully around the lower hemisphere of the hero asset.
+  * **Scene-Integrated Editorial Text**: Placed directly onto the scene over a soft, transparent-to-deep gradient scrim (no opaque dashboard cards).
+* **Layer 6 (`z-index: 30`) — Unified Grade & Film Grain**: Ambient color-dodge grade and procedural SVG fractal noise grain bonding all layers into a unified cinematic piece.
+
+---
+
+## 3. Typographic Pathways
+
+The agent supports three distinct typographic treatments:
+
+| Pathway | Mechanism | Visual Style |
+| :--- | :--- | :--- |
+| **Path 1: Graphic & Dimensional CSS** | Multi-stage text-shadow extrusions, gradient borders, frosted badges | Clean, ultra-sharp vector typography with retro-future or HUD depth |
+| **Path 2: Generative 3D Asset** | Qwen-Image 2.1 native alpha 3D lettering cutout | Tactile volumetric glass/chrome ribbons with realistic organic lighting |
+| **Path 3: Generative Texture Infill** | CSS `background-clip: text` masking the generative background with vector stroke & bloom | Ethereal, shimmering cosmic lettering integrated with sky ribbons |
+
+---
+
+## 4. Module Directory Breakdown
+
+```
+project/
+├── poster_agent/
+│   ├── checks/                   # Deterministic quality gates
+│   │   ├── ocr.py                # RapidOCR / PaddleOCR text verification
+│   │   ├── contrast.py           # WCAG 2.1 AA relative luminance & contrast ratio
+│   │   ├── geometry.py           # DOM bounding box overlap & margin overflow check
+│   │   ├── logo.py               # Institutional logo dimension & clear space checks
+│   │   └── runner.py             # CheckRunner orchestrating all quality gates
+│   ├── config/                   # Type-safe YAML configuration & secret management
+│   ├── context/                  # Institutional profile, color tokens & asset loader
+│   ├── generators/               # Generative model adapters
+│   │   ├── comfyui_client.py     # ComfyUI client for Ideogram 4.0 & Qwen-Image 2.1
+│   │   ├── ideogram.py           # Ideogram 4.0 API & structured JSON prompt builder
+│   │   ├── qwen.py               # Qwen-Image native alpha RGBA adapter
+│   │   └── mock.py               # Offline mock generator for fast test execution
+│   ├── loop/                     # Autonomous quality repair loop
+│   │   └── repair.py             # N-iteration candidate ranking & cheapest-first repair
+│   ├── planner/                  # Blueprint planning
+│   │   ├── planner.py            # Groq LPU LLM structured planning (Zero-Drop Guard)
+│   │   ├── templates.py          # Template library
+│   │   └── verifier.py           # Deterministic pre-flight blueprint validation
+│   ├── renderer/                 # Multi-layer rendering engine
+│   │   ├── blended_layered_renderer.py # Z-stacked depth, light spill & curved SVG renderer
+│   │   └── renderer.py           # Core Playwright 2x HTML/CSS renderer
+│   ├── reviewer/                 # Vision-language reviewer
+│   │   ├── reviewer.py           # Design Director rubric & 3-second glance test
+│   │   └── server.py             # OpenAI-compatible vision model server interface
+│   ├── spec/                     # Pydantic data models (PosterSpec, BBox, Layers)
+│   └── vision/                   # Vision analysis of generated artwork
+│       └── art_analyzer.py       # Live palette extraction, hero geometry & orbital arc math
+├── scripts/
+│   ├── generate_poster.py        # Master autonomous CLI entry point
+│   └── bakeoff/                  # Reviewer benchmark and evaluation suite
+└── templates/                    # Core layout templates
+```
+
+---
+
+## 5. Usage & Commands
+
+### 1. Autonomous Art-First Blended Poster (Full Depth Stacking)
+```bash
+# Generate from raw brief text using the Art-First vision-assisted pipeline
+python scripts/generate_poster.py --art-first --brief "AURORA 2026\nDate: 12-14 FEBRUARY 2027\nVenue: CENTRAL AUDITORIUM\n..."
+
+# Or pass a brief text file
+python scripts/generate_poster.py --art-first --brief-file path/to/brief.txt
+```
+
+### 2. Standard Multi-Iteration Repair Loop Pipeline
+```bash
+# Run the autonomous generation and repair loop with deterministic quality checks
+python scripts/generate_poster.py --brief-file scripts/bakeoff/briefs/brief_1_tech.txt
+```
+
+### 3. Fast Offline Mock Test
+```bash
+python scripts/generate_poster.py --mock --brief "AI Summit 2026\nDate: Dec 5-7, 2026\nVenue: Apex Hall"
+```
+
+### 4. Running the Complete Test Suite
+```bash
+python -m pytest tests/ -v
+```
+
+---
+
+## 6. Deterministic Quality Gates & 3-Second Test
+
+Every candidate poster generated through the harness must satisfy:
+1. **Verbatim Text Fidelity**: Every required text item from the user brief must be present and character-accurate, verified via OCR.
+2. **WCAG 2.1 AA Contrast ($\ge 4.5:1$)**: Text luminance is verified against background textures and soft scrims.
+3. **Collision & Margin Clearance**: Text elements maintain minimum margins ($\ge 40\text{px}$) with zero unwanted overlap.
+4. **3-Second Glance Test**: The vision reviewer inspects a $360\text{px}$ downscaled thumbnail to verify that title, date, and venue are instantly recognizable within 3 seconds.
