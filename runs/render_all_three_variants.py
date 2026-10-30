@@ -36,3 +36,4 @@ def render_variants():
 
 if __name__ == "__main__":
     render_variants()
+
