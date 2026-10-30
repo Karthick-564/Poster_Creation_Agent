@@ -2,7 +2,10 @@
 import json
 import os
 from typing import Any
-from groq import Groq
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
 
 from poster_agent.config.settings import AppConfig, get_config
 from poster_agent.context.loader import ContextBundle
