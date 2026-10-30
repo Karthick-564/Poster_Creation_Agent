@@ -116,3 +116,4 @@ class GeminiClient:
                 continue
 
         raise RuntimeError(f"All Gemini models failed for critique_image. Last error: {last_error}")
+

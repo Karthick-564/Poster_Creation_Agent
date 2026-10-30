@@ -23,17 +23,18 @@ NOVA_BRIEF = """- Event: NOVA CTF 2026
 
 BG_PATH = "ComfyUI/output/ideogram_circuit_bg_00001_.png"
 HERO_PATH = "ComfyUI/output/qwen_shield_test_00001_.png"
+FLAG_PATH = "ComfyUI/output/qwen_flag_test_00001_.png"
 
 
 def main():
     print("=" * 80)
     print("STARTING GEMINI-POWERED 8-STAGE POSTER PIPELINE")
     print("=" * 80)
-    print("Planner : Gemini 3.1 Flash (Stage 2)")
+    print("Planner : Gemini 3.1 Flash (Stage 2 - Method 3 Depth-Blended Planning)")
     print("Critic  : Gemini Multimodal Vision (Stage 6 & Stage 7 Patcher Loop)")
     print("=" * 80)
 
-    run_id = "nova_ctf_gemini_run"
+    run_id = "nova_ctf_method3_master"
     pipeline = PosterPipeline(run_id=run_id, output_base="runs/pipeline_runs")
 
     pdf_path, png_path, md_path, json_path = pipeline.run(
@@ -42,7 +43,7 @@ def main():
         bg_image_path=BG_PATH,
         hero_image_path=HERO_PATH,
         title_3d_path="",
-        accent_image_path="",
+        accent_image_path=FLAG_PATH,
         theme_name="cyber_ctf",
         format_name="A2",
         use_gemini=True,
@@ -63,3 +64,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

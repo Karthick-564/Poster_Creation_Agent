@@ -191,3 +191,4 @@ Return strictly valid JSON with this schema:
             raw_inspector_responses=[critique.get("overall_critique_summary", "")],
             latency_seconds=latency,
         )
+
