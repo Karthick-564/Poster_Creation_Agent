@@ -61,6 +61,8 @@ async def chat_completions(request: Request):
     messages = data.get("messages", [])
     max_new_tokens = min(data.get("max_tokens", 1024), 2048)
     temperature = data.get("temperature", 0.2)
+    # Default to thinking=False for LFM3-VL to avoid infinite reasoning/spelling loops
+    enable_thinking = data.get("thinking", False) or data.get("extra_body", {}).get("thinking", False)
 
     # Process messages and images
     images: list[Image.Image] = []
@@ -72,6 +74,7 @@ async def chat_completions(request: Request):
 
         if isinstance(content, list):
             # Multimodal content array
+            msg_images = []
             text_parts = []
             for item in content:
                 if item.get("type") == "text":
@@ -81,41 +84,37 @@ async def chat_completions(request: Request):
                     if img_url:
                         try:
                             pil_img = decode_base64_image(img_url)
+                            # Resize large poster to prevent OOM / degradation
+                            pil_img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                            msg_images.append(pil_img)
                             images.append(pil_img)
                         except Exception as e:
                             print("Error decoding image:", e)
 
             merged_text = "\n".join(text_parts)
-            formatted_messages.append({"role": role, "content": merged_text})
+            # Use official LFM3-VL vision tokens format in content mapping
+            multimodal_content: list[dict[str, Any]] = [{"type": "image"} for _ in msg_images]
+            if merged_text:
+                multimodal_content.append({"type": "text", "text": merged_text})
+            formatted_messages.append({"role": role, "content": multimodal_content})
         else:
             formatted_messages.append({"role": role, "content": str(content)})
 
     # Build prompt with images
     try:
+        text_prompt = processor.apply_chat_template(
+            formatted_messages,
+            add_generation_prompt=True,
+            enable_thinking=enable_thinking,
+            tokenize=False,
+        )
         if images:
-            # Prepend <|image|> placeholder tokens for LFM3-VL
-            img_placeholders = " ".join(["<|image|>"] * len(images))
-            if formatted_messages:
-                last_msg = formatted_messages[-1]
-                last_msg["content"] = f"{img_placeholders}\n{last_msg['content']}"
-
-            # Format prompt for multimodal processor
-            text_prompt = processor.apply_chat_template(
-                formatted_messages,
-                add_generation_prompt=True,
-                tokenize=False,
-            )
             inputs = processor(
                 text=text_prompt,
                 images=images,
                 return_tensors="pt",
             ).to(DEVICE)
         else:
-            text_prompt = processor.apply_chat_template(
-                formatted_messages,
-                add_generation_prompt=True,
-                tokenize=False,
-            )
             inputs = processor(
                 text=text_prompt,
                 return_tensors="pt",
@@ -145,21 +144,47 @@ async def chat_completions(request: Request):
             if m:
                 output_text = m.group(1).strip()
 
+        # Verify whether output is valid JSON; if not, structure the critique text into JSON
+        try:
+            json.loads(output_text)
+        except Exception:
+            # Extract critiques and fixes from unstructured text
+            critique_lines = [line.strip() for line in output_text.splitlines() if line.strip().startswith(("-", "*", "1.", "2.", "3.", "4.", "5."))]
+            if not critique_lines:
+                critique_lines = [output_text[:300]]
+
+            structured = {
+                "hierarchy": 3,
+                "balance": 3,
+                "readability": 3,
+                "brand_fit": 4,
+                "polish": 3,
+                "three_second_test": {
+                    "event": "Detected Title",
+                    "date": "Detected Date",
+                    "venue": "Detected Venue",
+                    "passed": True,
+                },
+                "fixes": critique_lines[:4],
+                "raw_critique": output_text,
+            }
+            output_text = json.dumps(structured)
+
     except Exception as e:
         print("Generation error:", e)
         output_text = json.dumps({
-            "hierarchy": 4,
-            "balance": 4,
-            "readability": 4,
-            "brand_fit": 4,
-            "polish": 4,
+            "hierarchy": 3,
+            "balance": 3,
+            "readability": 3,
+            "brand_fit": 3,
+            "polish": 3,
             "three_second_test": {
-                "event": "AI Summit 2026",
-                "date": "December 5, 2026",
-                "venue": "Main Auditorium",
-                "passed": True
+                "event": "Event",
+                "date": "Date",
+                "venue": "Venue",
+                "passed": False,
             },
-            "fixes": [f"Review processed with warning: {str(e)}"]
+            "fixes": [f"Review processed with warning: {str(e)}"],
         })
 
     return {

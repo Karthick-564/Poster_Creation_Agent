@@ -164,7 +164,7 @@ class PrintEngine:
             )
 
             # Export High-Res Raster
-            canvas = page.locator(".poster-canvas")
+            canvas = page.locator(".poster-canvas, .print-canvas").first
             temp_screenshot = out_dir / f"temp_{base_slug}_raster.png"
             canvas.screenshot(path=str(temp_screenshot))
             browser.close()

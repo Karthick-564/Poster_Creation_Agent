@@ -139,8 +139,26 @@ class PosterReviewer:
     def _get_client(self):
         if self.client is not None:
             return self.client
-        from openai import OpenAI
-        return OpenAI(base_url=self.endpoint, api_key="local-no-key-required")
+        try:
+            from openai import OpenAI
+            return OpenAI(base_url=self.endpoint, api_key="local-no-key-required")
+        except ImportError:
+            return None
+
+    def _call_http(self, payload: dict[str, Any]) -> str:
+        """Fallback direct HTTP caller when openai SDK is not installed in current environment."""
+        import urllib.request
+        url = self.endpoint.rstrip("/") + "/chat/completions"
+        req_data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=req_data,
+            headers={"Content-Type": "application/json", "Authorization": "Bearer local"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as response:
+            res_json = json.loads(response.read().decode("utf-8"))
+            return res_json.get("choices", [{}])[0].get("message", {}).get("content", "{}")
 
     def review(
         self,
@@ -192,10 +210,13 @@ class PosterReviewer:
 
             # Optional thinking mode toggle
             if self.thinking_mode:
-                kwargs["extra_body"] = {"thinking": True}
+                kwargs["thinking"] = True
 
-            resp = client.chat.completions.create(**kwargs)
-            content = resp.choices[0].message.content or "{}"
+            if client is not None:
+                resp = client.chat.completions.create(**kwargs)
+                content = resp.choices[0].message.content or "{}"
+            else:
+                content = self._call_http(kwargs)
 
             # Extract thinking/reasoning tags if present
             if "</think>" in content:
