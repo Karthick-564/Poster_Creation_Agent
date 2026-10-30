@@ -110,3 +110,4 @@ class LayoutPatcher:
                 applied_patches.append("Enhanced 3D Title depth: added multi-stage ambient occlusion and dual-color emission glow (cyan + magenta).")
 
         return patched_html, applied_patches
+
