@@ -218,3 +218,4 @@ class ArtMeasurer:
             meets_300dpi=meets_300,
             recommended_upscale_factor=rec_scale,
         )
+

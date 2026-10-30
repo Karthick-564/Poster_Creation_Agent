@@ -35,7 +35,7 @@ class BriefExtractor:
 
     # Canonical role patterns
     KEY_PATTERNS: dict[str, list[str]] = {
-        "title": [r"event\s+title", r"title", r"event\s+name", r"name"],
+        "title": [r"event\s+title", r"title", r"event\s+name", r"name", r"event"],
         "tagline": [r"tagline", r"theme", r"motto"],
         "subtitle": [r"subtitle", r"sub-title", r"fest\s+type"],
         "date": [r"date", r"when", r"dates", r"timing\s+dates"],
@@ -143,3 +143,4 @@ class BriefExtractor:
             unmapped_lines=unmapped,
             extraction_log=log,
         )
+

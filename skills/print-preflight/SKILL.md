@@ -9,3 +9,4 @@ description: Use when validating and exporting print-ready master files (PDF/X-4
 3. Ensure 3mm bleed exists on all 4 sides.
 4. Ensure critical text and logos sit inside the 6mm safe margin.
 5. Export PDF with embedded vector typography.
+

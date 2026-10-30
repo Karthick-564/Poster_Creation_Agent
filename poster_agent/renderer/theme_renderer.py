@@ -1,6 +1,7 @@
 """Stage 4: Theme Pack Renderer with Stable Element IDs and Text-Alone Occlusion Layering."""
 import base64
 import json
+import re
 from pathlib import Path
 from typing import Any
 from PIL import Image
@@ -36,7 +37,7 @@ class ThemeRenderResult(BaseModel):
 class ThemePackRenderer:
     """Renders ExtractedBrief and MeasuredArt using stable theme packs and stable element IDs."""
 
-    def __init__(self, theme_name: str = "cyber_aurora"):
+    def __init__(self, theme_name: str = "cyber_ctf"):
         self.theme_name = theme_name
 
     def compose_html(
@@ -53,7 +54,7 @@ class ThemePackRenderer:
         art_visibility = "hidden" if hide_art else "visible"
 
         # Extract fields verbatim from brief
-        title = brief.get_text("title", "EVENT TITLE")
+        title = brief.get_text("title", "NOVA CTF 2026")
         tagline = brief.get_text("tagline", "")
         subtitle = brief.get_text("subtitle", "")
         date_str = brief.get_text("date", "")
@@ -67,13 +68,17 @@ class ThemePackRenderer:
         organizer_str = brief.get_text("organizer", "")
         team_size_str = brief.get_text("team_size", "")
 
-        # Dynamic hero size and position based on measured art bounds
+        # Parse tournament categories
+        event_items = [e.strip() for e in re.split(r"[|,]", events_str) if e.strip()] if events_str else []
+        tracks_badges_html = "".join(f'<div class="track-badge">{item}</div>' for item in event_items)
+
+        # Dynamic hero size and position based on measured art bounds (commanding focal point)
         if art_bundle.hero_geometry:
-            hero_top = max(260, art_bundle.hero_geometry.y_min // 2)
-            hero_size = max(380, min(650, art_bundle.hero_geometry.width // 2))
+            hero_top = 285
+            hero_size = max(520, min(720, int(art_bundle.hero_geometry.width * 0.95)))
         else:
-            hero_top = 345
-            hero_size = 580
+            hero_top = 295
+            hero_size = 560
 
         html_doc = f"""<!DOCTYPE html>
 <html lang="en">
@@ -82,26 +87,26 @@ class ThemePackRenderer:
   <title>{title} - Theme Render</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Space+Grotesk:wght@500;700;800&family=Syne:wght@800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Space+Grotesk:wght@600;700;800;900&family=Syne:wght@800;900&display=swap" rel="stylesheet">
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     
     :root {{
-      --title-top: 85px;
+      --title-top: 70px;
       --hero-top: {hero_top}px;
       --hero-size: {hero_size}px;
-      --metadata-bottom: 60px;
-      --card-bg: rgba(14, 7, 40, 0.68);
-      --card-border: rgba(122, 231, 199, 0.28);
-      --accent-color: #7AE7C7;
-      --highlight-color: #FFB703;
-      --danger-color: #FF4D6D;
-      --text-main: #FFF3E0;
-      --text-muted: #C9B8FF;
+      --metadata-bottom: 55px;
+      --card-bg: rgba(7, 11, 24, 0.85);
+      --card-border: rgba(0, 243, 255, 0.35);
+      --accent-color: #00FF66;
+      --highlight-color: #00F3FF;
+      --danger-color: #00FF66;
+      --text-main: #FFFFFF;
+      --text-muted: #8EA4C8;
     }}
 
     body {{
-      background: #0E0728;
+      background: #050811;
       width: {art_bundle.canvas_w}px;
       height: {art_bundle.canvas_h}px;
       margin: 0;
@@ -137,13 +142,13 @@ class ThemePackRenderer:
 
     #hero_light_spill {{
       position: absolute;
-      top: calc(var(--hero-top) + 290px);
+      top: calc(var(--hero-top) + 260px);
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 880px;
-      height: 880px;
-      background: radial-gradient(circle, rgba(122, 231, 199, 0.38) 0%, rgba(255, 183, 3, 0.22) 40%, transparent 75%);
-      filter: blur(55px);
+      width: 950px;
+      height: 950px;
+      background: radial-gradient(circle, rgba(0, 255, 102, 0.35) 0%, rgba(0, 243, 255, 0.22) 38%, transparent 72%);
+      filter: blur(65px);
       mix-blend-mode: screen;
       pointer-events: none;
       z-index: 2;
@@ -157,22 +162,8 @@ class ThemePackRenderer:
       width: var(--hero-size);
       height: var(--hero-size);
       object-fit: contain;
-      filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 45px rgba(122, 231, 199, 0.45));
+      filter: drop-shadow(0 25px 50px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 45px rgba(0, 255, 102, 0.50));
       z-index: 10;
-      pointer-events: none;
-    }}
-
-    #accent_art_1 {{
-      position: absolute;
-      top: 135px;
-      right: 65px;
-      width: 165px;
-      height: 165px;
-      object-fit: contain;
-      opacity: 0.40;
-      mix-blend-mode: screen;
-      filter: blur(1.5px) drop-shadow(0 0 25px rgba(255, 183, 3, 0.4));
-      z-index: 3;
       pointer-events: none;
     }}
 
@@ -180,9 +171,9 @@ class ThemePackRenderer:
     #title_zone {{
       position: absolute;
       top: var(--title-top);
-      left: 60px;
-      right: 60px;
-      z-index: 12;
+      left: 50px;
+      right: 50px;
+      z-index: 15;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -190,41 +181,74 @@ class ThemePackRenderer:
     }}
 
     #tagline_1 {{
-      font-size: 26px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
       font-weight: 700;
-      color: var(--accent-color);
-      letter-spacing: 0.06em;
-      text-shadow: 0 0 16px rgba(122, 231, 199, 0.6);
-      margin-bottom: 8px;
+      color: var(--highlight-color);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      text-shadow: 0 0 16px rgba(0, 243, 255, 0.6);
+      margin-bottom: 12px;
     }}
 
-    #headline_1 {{
-      max-width: 920px;
-      max-height: 290px;
-      object-fit: contain;
-      filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.98)) drop-shadow(0 0 50px rgba(122, 231, 199, 0.75));
+    #headline_zone {{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }}
 
     #headline_text_fallback {{
-      font-family: 'Syne', sans-serif;
-      font-size: 96px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 92px;
       font-weight: 900;
-      letter-spacing: 0.02em;
-      color: var(--accent-color);
-      text-shadow: 0 0 35px rgba(122, 231, 199, 0.85);
-      line-height: 1.0;
+      letter-spacing: 0.04em;
+      line-height: 1.02;
+      text-transform: uppercase;
+      color: #FFFFFF;
+      background: linear-gradient(180deg, #FFFFFF 20%, #00F3FF 70%, #00FF66 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 15px 35px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 25px rgba(0, 243, 255, 0.45));
+    }}
+
+    /* TOURNAMENT TRACKS BELT */
+    #tracks_belt {{
+      position: absolute;
+      top: calc(var(--hero-top) + var(--hero-size) + 24px);
+      left: 60px;
+      right: 60px;
+      z-index: 20;
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }}
+
+    .track-badge {{
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--highlight-color);
+      background: rgba(0, 243, 255, 0.08);
+      border: 1px solid rgba(0, 243, 255, 0.32);
+      padding: 9px 22px;
+      border-radius: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 243, 255, 0.12);
     }}
 
     /* BOTTOM METADATA WITH STABLE COMPONENT WRAPPERS */
     #bottom_metadata_container {{
       position: absolute;
       bottom: var(--metadata-bottom);
-      left: 80px;
-      right: 80px;
+      left: 70px;
+      right: 70px;
       z-index: 22;
       display: flex;
       flex-direction: column;
-      gap: 18px;
+      gap: 16px;
     }}
 
     #card_date_venue {{
@@ -232,30 +256,30 @@ class ThemePackRenderer:
       grid-template-columns: 1.15fr 1.35fr;
       gap: 28px;
       align-items: start;
-      padding: 22px 28px;
+      padding: 24px 30px;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 16px;
-      backdrop-filter: blur(14px);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      border-radius: 14px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(0, 243, 255, 0.15);
     }}
 
     #date_1 {{
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 38px;
+      font-size: 34px;
       font-weight: 800;
       color: var(--highlight-color);
       line-height: 1.1;
-      text-shadow: 0 0 24px rgba(255, 183, 3, 0.45);
+      text-shadow: 0 0 20px rgba(0, 243, 255, 0.45);
     }}
 
     #venue_1 {{
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 700;
       color: var(--text-main);
       line-height: 1.25;
-      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
     }}
 
     #subhead_prize_row {{
@@ -266,21 +290,23 @@ class ThemePackRenderer:
     }}
 
     #subhead_1 {{
-      font-size: 28px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
       font-weight: 700;
-      color: var(--text-main);
-      letter-spacing: 0.02em;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
     }}
 
     #prize_1 {{
-      font-size: 28px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 24px;
       font-weight: 800;
-      color: var(--danger-color);
-      background: rgba(255, 77, 109, 0.16);
+      color: var(--accent-color);
+      background: rgba(0, 255, 102, 0.12);
       padding: 8px 22px;
-      border-radius: 8px;
-      border: 1.8px solid var(--danger-color);
-      box-shadow: 0 0 28px rgba(255, 77, 109, 0.35);
+      border-radius: 6px;
+      border: 1.5px solid var(--accent-color);
+      box-shadow: 0 0 22px rgba(0, 255, 102, 0.35);
       white-space: nowrap;
     }}
 
@@ -293,14 +319,16 @@ class ThemePackRenderer:
 
     #cta_1 {{
       font-family: 'JetBrains Mono', monospace;
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 800;
-      color: #0E0728;
+      color: #050811;
       background: var(--accent-color);
-      padding: 10px 26px;
-      border-radius: 8px;
-      box-shadow: 0 0 30px rgba(122, 231, 199, 0.55);
+      padding: 12px 28px;
+      border-radius: 6px;
+      box-shadow: 0 0 32px rgba(0, 255, 102, 0.60);
       white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }}
   </style>
 </head>
@@ -310,37 +338,41 @@ class ThemePackRenderer:
     <div id="layer_background" class="art-layer"></div>
     <div id="hero_light_spill" class="art-layer"></div>
     {f'<img id="hero_art_1" class="art-layer" src="{hero_data_uri}" alt="Hero Art" />' if hero_data_uri else ''}
-    {f'<img id="accent_art_1" class="art-layer" src="{accent_data_uri}" alt="Accent Art" />' if accent_data_uri else ''}
+
+    <!-- TOURNAMENT TRACKS BELT -->
+    {f'<div id="tracks_belt">{tracks_badges_html}</div>' if tracks_badges_html else ''}
 
     <!-- TYPOGRAPHY WITH STABLE ELEMENT IDS -->
     <div id="title_zone">
       {f'<div id="tagline_1">{tagline}</div>' if tagline else ''}
-      {f'<img id="headline_1" src="{title_3d_data_uri}" alt="{title}" />' if title_3d_data_uri else f'<h1 id="headline_text_fallback">{title}</h1>'}
+      <div id="headline_zone">
+        <h1 id="headline_text_fallback">{title}</h1>
+      </div>
     </div>
 
     <!-- METADATA -->
     <div id="bottom_metadata_container">
       <div id="card_date_venue">
         <div>
-          <div style="font-family: 'JetBrains Mono'; font-size: 16px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">// DATE</div>
+          <div style="font-family: 'JetBrains Mono'; font-size: 15px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">// DATE & TIME</div>
           <div id="date_1">{date_str}</div>
-          {f'<div id="time_1" style="font-family: JetBrains Mono; font-size: 20px; font-weight: 600; color: var(--text-muted); margin-top: 6px;">{time_str}</div>' if time_str else ''}
+          {f'<div id="time_1" style="font-family: JetBrains Mono; font-size: 19px; font-weight: 600; color: var(--text-muted); margin-top: 6px;">{time_str}</div>' if time_str else ''}
         </div>
         <div>
-          <div style="font-family: 'JetBrains Mono'; font-size: 16px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">// VENUE</div>
+          <div style="font-family: 'JetBrains Mono'; font-size: 15px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">// VENUE & SPECS</div>
           <div id="venue_1">{venue_str}</div>
-          {f'<div id="team_size_1" style="font-family: JetBrains Mono; font-size: 18px; font-weight: 700; color: var(--accent-color); margin-top: 6px;">{team_size_str}</div>' if team_size_str else ''}
+          {f'<div id="team_size_1" style="font-family: JetBrains Mono; font-size: 17px; font-weight: 700; color: var(--accent-color); margin-top: 6px;">{team_size_str}</div>' if team_size_str else ''}
         </div>
       </div>
 
       <div id="subhead_prize_row">
-        <div id="subhead_1">{subtitle}</div>
+        <div id="subhead_1">{events_str or subtitle}</div>
         {f'<div id="prize_1">{prize_str}</div>' if prize_str else ''}
       </div>
 
       <div id="cta_footer_row">
         <div id="cta_1">{cta_str}</div>
-        {f'<div id="organizer_1" style="font-size: 20px; font-weight: 600; color: var(--text-muted);">{organizer_str}</div>' if organizer_str else ''}
+        {f'<div id="organizer_1" style="font-family: JetBrains Mono; font-size: 18px; font-weight: 600; color: var(--text-muted);">{organizer_str}</div>' if organizer_str else ''}
       </div>
     </div>
   </div>
@@ -359,6 +391,7 @@ class ThemePackRenderer:
         hero_path: str | Path = "",
         title_3d_path: str | Path = "",
         accent_path: str | Path = "",
+        html_override: str | None = None,
     ) -> ThemeRenderResult:
         """Render both full poster and text-only occlusion layer with Playwright."""
         out_dir = Path(output_dir)
@@ -374,8 +407,16 @@ class ThemePackRenderer:
         title_uri = to_uri(title_3d_path)
         accent_uri = to_uri(accent_path)
 
-        html_full = self.compose_html(brief, art_bundle, bg_uri, hero_uri, title_uri, accent_uri, hide_art=False)
-        html_text_only = self.compose_html(brief, art_bundle, bg_uri, hero_uri, title_uri, accent_uri, hide_art=True)
+        if html_override:
+            html_full = html_override
+            hide_style = "<style>.art-layer { visibility: hidden !important; } #hero_art_1, #accent_art_1, #layer_background, #hero_light_spill { display: none !important; }</style>"
+            if "</head>" in html_override:
+                html_text_only = html_override.replace("</head>", f"{hide_style}</head>")
+            else:
+                html_text_only = f"{hide_style}{html_override}"
+        else:
+            html_full = self.compose_html(brief, art_bundle, bg_uri, hero_uri, title_uri, accent_uri, hide_art=False)
+            html_text_only = self.compose_html(brief, art_bundle, bg_uri, hero_uri, title_uri, accent_uri, hide_art=True)
 
         full_html_path = out_dir / f"{base_slug}.html"
         full_html_path.write_text(html_full, encoding="utf-8")
@@ -405,7 +446,7 @@ class ThemePackRenderer:
 
             # Extract DOM Bounding Boxes for all stable IDs
             stable_ids = [
-                "title_zone", "headline_1", "headline_text_fallback", "tagline_1",
+                "title_zone", "headline_text_fallback", "tagline_1", "tracks_belt",
                 "card_date_venue", "date_1", "venue_1", "time_1", "team_size_1",
                 "subhead_1", "prize_1", "cta_1", "organizer_1", "hero_art_1"
             ]

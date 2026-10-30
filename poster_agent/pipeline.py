@@ -1,5 +1,6 @@
 """Unified 8-Stage Poster Production Harness with End-to-End Audit Reporting."""
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,9 @@ class PosterPipeline:
         canvas_w = 1258
         canvas_h = 1772
         title_text = brief.get_text("title")
+        slug_title = re.sub(r"[^\w\s-]", "", title_text).strip().lower().replace(" ", "_")
+        if not slug_title:
+            slug_title = "poster_design"
         self.logger.record_stage(
             stage_number=2,
             stage_name="Draft Spatial Planning",
@@ -131,7 +135,7 @@ class PosterPipeline:
             brief=brief,
             art_bundle=art_bundle,
             output_dir=self.output_dir,
-            base_slug=f"{brief.get_text('title').lower().replace(' ', '_')}_initial",
+            base_slug=f"{slug_title}_initial",
             bg_path=bg_image_path,
             hero_path=hero_image_path,
             title_3d_path=title_3d_path,
@@ -182,7 +186,7 @@ class PosterPipeline:
         vlm_report = inspector.audit_poster(render_res.full_png_path, brief=brief)
 
         s6_status = "PASSED" if vlm_report.overall_passed else "WARNING"
-        s6_summary = f"LFM3-VL-2B (3 samples): 3-Sec Glance {'PASSED' if vlm_report.probes[0].passed else 'FAILED'} | Authority bias check {'PASSED' if vlm_report.negative_control_passed else 'FAILED'}"
+        s6_summary = f"LFM3-VL-2B (3 samples): 3-Sec Glance {'PASSED' if vlm_report.probes[0].passed else 'FAILED'} | Dominance {'PASSED' if len(vlm_report.probes) > 1 and vlm_report.probes[1].passed else 'FAILED'} | Void {'PASSED' if len(vlm_report.probes) > 2 and vlm_report.probes[2].passed else 'FAILED'} | Color {'PASSED' if len(vlm_report.probes) > 3 and vlm_report.probes[3].passed else 'FAILED'}"
         self.logger.record_stage(
             stage_number=6,
             stage_name="Grounded Visual Inspection (LFM3-VL-2B)",
@@ -192,6 +196,7 @@ class PosterPipeline:
                 "overall_passed": vlm_report.overall_passed,
                 "negative_control_passed": vlm_report.negative_control_passed,
                 "probes": [p.model_dump() for p in vlm_report.probes],
+                "detected_issues": [i.model_dump() for i in vlm_report.detected_issues],
                 "latency_seconds": vlm_report.latency_seconds,
             },
         )
@@ -200,24 +205,26 @@ class PosterPipeline:
         # STAGE 7: 3-ROUND TYPED PATCHER WITH ROLLBACK
         # -------------------------------------------------------------
         patcher = TypedLayoutPatcher(max_rounds=3)
-        final_html, final_render, final_report, loop_summary = patcher.execute_3_round_loop(
+        combined_initial_issues = report.issues + vlm_report.detected_issues
+        final_html, final_render, final_issues, loop_summary = patcher.execute_3_round_loop(
             current_html=render_res.html_path.read_text(encoding="utf-8"),
             initial_render=render_res,
-            initial_report=report,
+            initial_issues=combined_initial_issues,
             verifier=verifier,
+            inspector=inspector,
             renderer=renderer,
             brief=brief,
             art_bundle=art_bundle,
             output_dir=self.output_dir,
-            base_slug=f"{brief.get_text('title').lower().replace(' ', '_')}_patched",
+            base_slug=f"{slug_title}_patched",
             bg_path=bg_image_path,
             hero_path=hero_image_path,
             title_3d_path=title_3d_path,
             accent_path=accent_image_path,
         )
 
-        s7_status = "PASSED" if loop_summary.converged else ("WARNING" if loop_summary.final_blocking_count == 0 else "FAILED")
-        s7_summary = f"Completed {loop_summary.rounds_used} rounds. Final blocking errors: {loop_summary.final_blocking_count}."
+        s7_status = "PASSED" if loop_summary.converged else ("WARNING" if loop_summary.final_issue_count == 0 else "FAILED")
+        s7_summary = f"Completed {loop_summary.rounds_used} rounds. Final remaining issues: {loop_summary.final_issue_count}."
         self.logger.record_stage(
             stage_number=7,
             stage_name="3-Round Bounded Typed Patcher",
@@ -237,7 +244,7 @@ class PosterPipeline:
         pdf_path, png_path, tiff_path, preflight = print_engine.render_print_master(
             html_content=final_html,
             output_dir=self.output_dir,
-            base_slug=f"{brief.get_text('title').lower().replace(' ', '_')}_{format_name.lower()}_final",
+            base_slug=f"{slug_title}_{format_name.lower()}_final",
         )
 
         s8_status = "PASSED" if preflight.passed_all else "WARNING"

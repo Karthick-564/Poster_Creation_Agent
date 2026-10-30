@@ -92,3 +92,4 @@ class AuditLogger:
         md_path.write_text("\n".join(md_lines), encoding="utf-8")
 
         return md_path, json_path
+
