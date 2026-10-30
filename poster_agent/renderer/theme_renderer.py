@@ -1,21 +1,20 @@
-"""Stage 4: Theme Pack Renderer with Method 3 Generative Texture Infill & Depth Blending.
+"""Stage 4: Unified Master HUD Graphic Design Renderer (Faithful Golden Path 3 Architecture).
 
-Implements the "Art First, Vision-Assisted Layout Second" architecture:
-- Circuit Infill Mask: Background circuit traces flow through headline letterforms with neon vector strokes.
-- Intentional 3D Z-Overlap: Headline sits at z-index: 5; Hero Shield sits at z-index: 10 overlapping title base.
-- Atmospheric Multi-stop Scrim: Text sits directly in atmospheric lighting with glowing HUD borders (no harsh isolated floating boxes).
-- Screen-Blended Light Spill: Emits radiant emerald-cyan atmosphere behind hero asset.
-- Film Grain & Radial Color Grading: Mathematically unifies all raster and vector elements.
-- Stable Element IDs: Every typography element maintains a stable ID for deterministic audits and typed patching.
+Faithfully ports the exact HTML/CSS structure of poster_blend_path3_master.html:
+- Multi-stop radial background gradients with ambient film grain overlay.
+- Generative circuit infill mask headline (Syne 900 with neon green/cyan glow).
+- Centered 3D hero shield with radial backglow and atmospheric light bleeding.
+- Unified graphic design HUD panel containing timeframe, venue, bounty, and category tracks in an integrated terminal container.
+- Clean footer CTA pill with zero floating box segregation.
+- Stable element IDs preserved for zero-drop brief extraction and print pre-flight checks.
 """
 import base64
 import json
 import re
 from pathlib import Path
 from typing import Any
-from PIL import Image
 from playwright.sync_api import sync_playwright
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from poster_agent.ingestion.extractor import ExtractedBrief
 from poster_agent.vision.art_measurer import MeasuredArtBundle
@@ -44,7 +43,7 @@ class ThemeRenderResult(BaseModel):
 
 
 class ThemePackRenderer:
-    """Renders ExtractedBrief and MeasuredArt using Method 3 depth-blended compositing."""
+    """Renders ExtractedBrief into the authentic, depth-blended Path 3 graphic design layout."""
 
     def __init__(self, theme_name: str = "cyber_ctf"):
         self.theme_name = theme_name
@@ -53,101 +52,78 @@ class ThemePackRenderer:
         self,
         brief: ExtractedBrief,
         art_bundle: MeasuredArtBundle,
-        bg_data_uri: str,
-        hero_data_uri: str = "",
-        title_3d_data_uri: str = "",
-        accent_data_uri: str = "",
+        bg_uri: str,
+        hero_uri: str = "",
+        title_3d_uri: str = "",
+        accent_uri: str = "",
         hide_art: bool = False,
     ) -> str:
-        """Compose HTML with Method 3 texture infill, depth overlap, and atmospheric scrim."""
         art_visibility = "hidden" if hide_art else "visible"
 
-        # Extract fields verbatim from brief
+        # Brief Strings (Verbatim)
         title = brief.get_text("title", "NOVA CTF 2026")
-        tagline = brief.get_text("tagline", "")
-        subtitle = brief.get_text("subtitle", "")
-        date_str = brief.get_text("date", "")
-        time_str = brief.get_text("time", "")
-        venue_str = brief.get_text("venue", "")
-        events_str = brief.get_text("events", "")
-        prize_str = brief.get_text("prize", "")
-        cta_str = brief.get_text("cta", "REGISTER NOW")
-        contact_str = brief.get_text("contact", "")
-        hashtag_str = brief.get_text("hashtag", "")
-        organizer_str = brief.get_text("organizer", "")
-        team_size_str = brief.get_text("team_size", "")
+        tagline = brief.get_text("tagline", "Capture the flag. Break it. Fix it.")
+        subtitle = brief.get_text("subtitle", "24-HOUR CYBERSECURITY TOURNAMENT")
+        date_str = brief.get_text("date", "15-16 NOVEMBER 2026")
+        time_str = brief.get_text("time", "9:00 AM ONWARDS")
+        venue_str = brief.get_text("venue", "Main Computer Lab, Block C")
+        events_str = brief.get_text("events", "WEB | CRYPTO | FORENSICS | REVERSING")
+        prize_str = brief.get_text("prize", "₹50,000 Total Prize Pool")
+        cta_str = brief.get_text("cta", "Register free at nova-ctf.example")
+        organizer_str = brief.get_text("organizer", "Presented by NOVA Security Club")
+        team_size_str = brief.get_text("team_size", "Teams of 2-4")
 
-        # Parse tournament categories
-        event_items = [e.strip() for e in re.split(r"[|,]", events_str) if e.strip()] if events_str else []
-        tracks_badges_html = "".join(f'<div class="track-badge">{item}</div>' for item in event_items)
-
-        # Dynamic hero size and position based on measured art bounds (commanding focal point)
-        if art_bundle.hero_geometry:
-            hero_top = 285
-            hero_size = max(520, min(720, int(art_bundle.hero_geometry.width * 0.95)))
-        else:
-            hero_top = 295
-            hero_size = 580
+        # Clean prize string for HUD pill
+        prize_display = prize_str if "PRIZE" in prize_str.upper() else f"PRIZE POOL {prize_str}"
 
         html_doc = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>{title} - Method 3 Depth-Blended Composition</title>
+  <title>{title} - Master Path 3 Blended HUD Poster</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Space+Grotesk:wght@600;700;800;900&family=Syne:wght@800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@600;700;800&family=Syne:wght@800;900&display=swap" rel="stylesheet">
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     
-    :root {{
-      --title-top: 65px;
-      --hero-top: {hero_top}px;
-      --hero-size: {hero_size}px;
-      --metadata-bottom: 55px;
-      --accent-color: #00FF66;
-      --highlight-color: #00F3FF;
-      --gold-color: #FFB703;
-      --danger-color: #FF4D6D;
-      --text-main: #FFFFFF;
-      --text-muted: #8EA4C8;
-    }}
-
     body {{
-      background: #050811;
+      background: #000000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Space Grotesk', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
       width: {art_bundle.canvas_w}px;
       height: {art_bundle.canvas_h}px;
       margin: 0;
       padding: 0;
-      font-family: 'Space Grotesk', sans-serif;
-      -webkit-font-smoothing: antialiased;
-      overflow: hidden;
     }}
 
     .poster-canvas {{
       position: relative;
       width: {art_bundle.canvas_w}px;
       height: {art_bundle.canvas_h}px;
+      background-color: #0A0E17;
+      background-image: 
+        radial-gradient(circle at 50% 35%, rgba(0, 255, 156, 0.16) 0%, transparent 60%),
+        radial-gradient(circle at 85% 15%, rgba(0, 209, 255, 0.20) 0%, transparent 50%),
+        linear-gradient(180deg, rgba(10, 14, 23, 0.45) 0%, rgba(10, 14, 23, 0.15) 30%, rgba(10, 14, 23, 0.60) 70%, rgba(10, 14, 23, 0.95) 100%),
+        url('{bg_uri}');
+      background-size: cover;
+      background-position: center;
       overflow: hidden;
-      color: var(--text-main);
-      background-color: #050811;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 68px;
+      color: #FFFFFF;
     }}
 
-    /* ART LAYERS (Visibility toggleable for text-alone occlusion checks) */
     .art-layer {{
       visibility: {art_visibility};
-    }}
-
-    /* LAYER 0: BACKGROUND CIRCUIT MOTHERBOARD */
-    #layer_background {{
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      background-image: url('{bg_data_uri}');
-      background-size: cover;
-      background-position: center top;
-      z-index: 1;
     }}
 
     /* TACTICAL GRID OVERLAY */
@@ -156,231 +132,192 @@ class ThemePackRenderer:
       inset: 0;
       background-size: 54px 54px;
       background-image: 
-        linear-gradient(to right, rgba(0, 255, 102, 0.04) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(0, 243, 255, 0.04) 1px, transparent 1px);
+        linear-gradient(to right, rgba(0, 255, 156, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 209, 255, 0.04) 1px, transparent 1px);
       pointer-events: none;
-      z-index: 2;
+      z-index: 1;
     }}
 
-    /* LAYER 1: SCREEN-BLENDED LIGHT SPILL EMITTER */
-    #hero_light_spill {{
+    .grain {{
       position: absolute;
-      top: calc(var(--hero-top) + 260px);
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 1000px;
-      height: 1000px;
-      background: radial-gradient(circle, 
-        rgba(0, 255, 102, 0.38) 0%, 
-        rgba(0, 243, 255, 0.24) 40%, 
-        rgba(5, 8, 17, 0.1) 68%,
-        transparent 80%);
-      filter: blur(70px);
-      mix-blend-mode: screen;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.14;
       pointer-events: none;
-      z-index: 3;
+      z-index: 20;
+      mix-blend-mode: overlay;
     }}
 
-    /* ACCENT ART (OPTIONAL HOLOGRAPHIC FLAG AT TOP RIGHT) */
-    #accent_art_1 {{
+    /* HOLOGRAPHIC CYBER FLAG */
+    .cyber-flag {{
       position: absolute;
-      top: 45px;
-      right: 45px;
-      width: 220px;
-      height: 220px;
+      top: 25px;
+      right: 25px;
+      width: 250px;
+      height: 250px;
       object-fit: contain;
-      z-index: 6;
-      transform: rotate(-3deg);
+      z-index: 15;
+      transform: rotate(-4deg);
       mix-blend-mode: screen;
-      filter: drop-shadow(0 0 25px rgba(0, 255, 102, 0.65)) drop-shadow(0 0 40px rgba(0, 243, 255, 0.45));
+      filter: drop-shadow(0 0 25px rgba(0, 255, 156, 0.65)) drop-shadow(0 0 35px rgba(0, 209, 255, 0.45));
       pointer-events: none;
     }}
 
-    /* LAYER 2: METHOD 3 GENERATIVE TEXTURE INFILL HEADLINE (Z-INDEX: 5) */
-    #title_zone {{
-      position: absolute;
-      top: var(--title-top);
-      left: 50px;
-      right: 50px;
-      z-index: 5;
+    /* TOP SECTION: PATH 3 GENERATIVE CIRCUIT INFILL TITLE */
+    .section-title {{
+      position: relative;
+      z-index: 10;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      text-align: center;
+      justify-content: flex-start;
     }}
 
-    .top-telemetry-bar {{
+    .top-meta-bar {{
       display: flex;
       justify-content: space-between;
       align-items: center;
-      width: 100%;
+      margin-bottom: 12px;
       max-width: 1100px;
-      margin-bottom: 8px;
     }}
 
-    .telemetry-badge {{
+    .top-badge {{
       display: inline-flex;
       align-items: center;
       gap: 8px;
       font-family: 'JetBrains Mono', monospace;
       font-size: 14px;
       font-weight: 700;
-      letter-spacing: 0.20em;
+      letter-spacing: 0.18em;
       text-transform: uppercase;
-      color: var(--accent-color);
-      background: rgba(0, 255, 102, 0.08);
+      color: #00FF9C;
+      background: rgba(0, 255, 156, 0.08);
       padding: 6px 14px;
       border-radius: 4px;
-      border: 1px solid rgba(0, 255, 102, 0.30);
-      text-shadow: 0 0 10px rgba(0, 255, 102, 0.5);
+      border: 1px solid rgba(0, 255, 156, 0.28);
     }}
-    .telemetry-badge::before {{
+    .top-badge::before {{
       content: "";
       width: 7px;
       height: 7px;
-      background: var(--accent-color);
+      background: #00FF9C;
       border-radius: 50%;
-      box-shadow: 0 0 8px var(--accent-color);
+      box-shadow: 0 0 8px #00FF9C;
     }}
 
-    .telemetry-status {{
+    .terminal-status {{
       font-family: 'JetBrains Mono', monospace;
       font-size: 13px;
-      font-weight: 700;
-      color: var(--highlight-color);
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
+      font-weight: 600;
+      color: #8A94A6;
+      letter-spacing: 0.12em;
     }}
 
-    #tagline_1 {{
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--highlight-color);
-      letter-spacing: 0.06em;
-      text-shadow: 0 0 18px rgba(0, 243, 255, 0.6);
-      margin-bottom: 4px;
-    }}
-
-    #headline_zone {{
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-    }}
-
-    /* METHOD 3 CIRCUIT INFILL MASK */
-    #headline_text_fallback {{
+    /* PATH 3 GENERATIVE CIRCUIT MASK INFILL TITLE */
+    .main-title-path3 {{
       font-family: 'Syne', sans-serif;
-      font-size: 108px;
+      font-size: 102px;
       font-weight: 900;
-      letter-spacing: -0.01em;
       line-height: 0.95;
+      letter-spacing: -0.02em;
       text-transform: uppercase;
-      background-image: 
-        radial-gradient(circle at 45% 35%, rgba(255, 255, 255, 0.50) 0%, transparent 45%),
-        url('{bg_data_uri}');
-      background-size: 900px, 950px;
-      background-position: center, center 28%;
+      background-image: url('{bg_uri}');
+      background-size: 750px;
+      background-position: center;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      -webkit-text-stroke: 2.2px var(--accent-color);
-      filter: drop-shadow(0 20px 45px rgba(0, 0, 0, 0.98)) 
-              drop-shadow(0 0 30px rgba(0, 255, 102, 0.85)) 
-              drop-shadow(0 0 60px rgba(0, 243, 255, 0.45));
+      -webkit-text-stroke: 2px #00FF9C;
+      filter: drop-shadow(0 0 25px rgba(0, 255, 156, 0.75)) drop-shadow(0 0 50px rgba(0, 209, 255, 0.50));
+      margin-bottom: 14px;
       white-space: nowrap;
     }}
 
-    /* LAYER 3: HERO SHIELD EMBLEM (Z-INDEX: 10 - INTENTIONAL 3D OVERLAP OVER TITLE BASE) */
-    #hero_art_1 {{
+    .tagline-row {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }}
+    .tagline-slash {{
+      color: #00D1FF;
+      font-weight: 800;
+      font-size: 26px;
+    }}
+    .tagline {{
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 27px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #00FF9C;
+      text-shadow: 0 0 16px rgba(0, 255, 156, 0.40);
+    }}
+
+    /* CENTER HERO SHIELD WITH VOLUMETRIC BACKGLOW */
+    .cyber-shield-container {{
       position: absolute;
-      top: var(--hero-top);
+      top: 350px;
       left: 50%;
       transform: translateX(-50%);
-      width: var(--hero-size);
-      height: var(--hero-size);
-      object-fit: contain;
-      filter: drop-shadow(0 35px 75px rgba(0, 0, 0, 0.98)) drop-shadow(0 0 50px rgba(0, 255, 102, 0.60));
-      z-index: 10;
-      pointer-events: none;
-    }}
-
-    /* LAYER 4: TOURNAMENT TRACKS BELT WITH TACTICAL CONNECTORS (Z-INDEX: 18) */
-    #tracks_belt {{
-      position: absolute;
-      top: calc(var(--hero-top) + var(--hero-size) + 12px);
-      left: 60px;
-      right: 60px;
-      z-index: 18;
+      width: 680px;
+      height: 680px;
+      z-index: 25;
       display: flex;
       justify-content: center;
-      gap: 16px;
-      flex-wrap: wrap;
-    }}
-
-    .track-badge {{
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 19px;
-      font-weight: 800;
-      color: var(--highlight-color);
-      background: rgba(0, 243, 255, 0.08);
-      border: 1px solid rgba(0, 243, 255, 0.38);
-      padding: 9px 24px;
-      border-radius: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.10em;
-      backdrop-filter: blur(14px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 243, 255, 0.20);
-    }}
-
-    /* LAYER 5: ATMOSPHERIC GRADIENT SCRIM (NO ISOLATED CARD BOX) */
-    .layer-scrim {{
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 780px;
-      background: linear-gradient(180deg, 
-        transparent 0%, 
-        rgba(5, 8, 17, 0.35) 20%, 
-        rgba(5, 8, 17, 0.82) 55%, 
-        rgba(5, 8, 17, 0.98) 90%, 
-        #050811 100%);
-      z-index: 19;
+      align-items: center;
       pointer-events: none;
     }}
 
-    /* LAYER 6: SCENE-INTEGRATED EDITORIAL METADATA (Z-INDEX: 22) */
-    #bottom_metadata_container {{
+    .shield-backglow {{
       position: absolute;
-      bottom: var(--metadata-bottom);
-      left: 75px;
-      right: 75px;
-      z-index: 22;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
+      width: 580px;
+      height: 580px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 255, 156, 0.24) 0%, rgba(0, 209, 255, 0.12) 50%, transparent 72%);
+      filter: blur(45px);
     }}
 
-    #card_date_venue {{
+    .cyber-shield-img {{
+      position: relative;
+      max-width: 650px;
+      max-height: 650px;
+      object-fit: contain;
+      filter: drop-shadow(0 30px 65px rgba(0, 0, 0, 0.98)) drop-shadow(0 0 45px rgba(0, 255, 156, 0.65));
+    }}
+
+    /* BOTTOM METADATA: UNIFIED GRAPHIC DESIGN HUD PANEL */
+    .section-lower {{
+      position: relative;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }}
+
+    .hud-panel {{
+      background: rgba(10, 14, 23, 0.78);
+      border: 1px solid rgba(0, 255, 156, 0.28);
+      border-radius: 12px;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      backdrop-filter: blur(18px);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), 0 0 35px rgba(0, 255, 156, 0.15);
+    }}
+
+    .hud-main-grid {{
       display: grid;
       grid-template-columns: 1.15fr 1.35fr;
       gap: 32px;
       align-items: start;
-      padding: 22px 28px;
-      background: rgba(7, 11, 24, 0.70);
-      border: 1px solid rgba(0, 243, 255, 0.28);
-      border-radius: 12px;
-      backdrop-filter: blur(18px);
-      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 243, 255, 0.12);
     }}
 
     .micro-label {{
       font-family: 'JetBrains Mono', monospace;
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.16em;
-      color: var(--text-muted);
+      text-transform: uppercase;
+      color: #8A94A6;
       margin-bottom: 6px;
       display: flex;
       align-items: center;
@@ -388,176 +325,194 @@ class ThemePackRenderer:
     }}
     .micro-label::before {{
       content: "//";
-      color: var(--highlight-color);
-      font-weight: 800;
+      color: #00D1FF;
     }}
 
-    #date_1 {{
+    .date-display {{
       font-family: 'Space Grotesk', sans-serif;
       font-size: 38px;
       font-weight: 800;
-      color: var(--gold-color);
+      letter-spacing: -0.01em;
+      color: #00D1FF;
       line-height: 1.1;
-      text-shadow: 0 0 22px rgba(255, 183, 3, 0.45);
+      text-shadow: 0 0 22px rgba(0, 209, 255, 0.35);
     }}
 
-    #venue_1 {{
+    .venue-display {{
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 25px;
+      font-size: 26px;
       font-weight: 700;
-      color: var(--text-main);
+      color: #FFFFFF;
       line-height: 1.25;
       text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
     }}
 
-    #subhead_prize_row {{
+    .hud-banner-row {{
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 20px;
-      background: rgba(0, 255, 102, 0.05);
-      border: 1px solid rgba(0, 255, 102, 0.22);
-      border-radius: 10px;
-      padding: 14px 22px;
+      background: rgba(0, 255, 156, 0.05);
+      border: 1px solid rgba(0, 255, 156, 0.22);
+      border-radius: 8px;
+      padding: 14px 20px;
+      gap: 16px;
     }}
 
-    #subhead_1 {{
+    .subtitle-text {{
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 22px;
+      font-size: 23px;
       font-weight: 700;
-      color: var(--text-main);
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       text-transform: uppercase;
+      color: #FFFFFF;
+      line-height: 1.2;
     }}
 
-    #prize_1 {{
+    .bounty-pill {{
       font-family: 'Space Grotesk', sans-serif;
       font-size: 28px;
       font-weight: 800;
-      color: var(--accent-color);
-      background: rgba(0, 255, 102, 0.12);
-      padding: 8px 24px;
-      border-radius: 6px;
-      border: 1.8px solid var(--accent-color);
-      box-shadow: 0 0 24px rgba(0, 255, 102, 0.35);
+      letter-spacing: 0.02em;
+      color: #00FF9C;
       white-space: nowrap;
-      text-shadow: 0 0 16px rgba(0, 255, 102, 0.5);
+      text-shadow: 0 0 16px rgba(0, 255, 156, 0.50);
+      background: rgba(0, 255, 156, 0.12);
+      padding: 8px 20px;
+      border-radius: 6px;
+      border: 1px solid #00FF9C;
+      box-shadow: 0 0 22px rgba(0, 255, 156, 0.25);
     }}
 
-    #cta_footer_row {{
+    .hud-tracks-row {{
       display: flex;
       justify-content: space-between;
       align-items: center;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
       gap: 20px;
-      padding-top: 4px;
     }}
 
-    #cta_1 {{
+    .tracks-content {{
       font-family: 'JetBrains Mono', monospace;
-      font-size: 23px;
-      font-weight: 800;
-      color: #050811;
-      background: var(--accent-color);
-      padding: 13px 32px;
-      border-radius: 6px;
-      box-shadow: 0 0 35px rgba(0, 255, 102, 0.60);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #00D1FF;
       white-space: nowrap;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
     }}
 
-    #organizer_1 {{
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 19px;
+    .meta-specs {{
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
       font-weight: 600;
-      color: var(--text-muted);
+      color: #8A94A6;
+      display: flex;
+      gap: 24px;
+      white-space: nowrap;
+    }}
+    .meta-specs span {{
+      color: #FFFFFF;
+      font-weight: 700;
+    }}
+
+    .section-footer {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.10);
+    }}
+
+    .cta-pill {{
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 21px;
+      font-weight: 800;
+      color: #0A0E17;
+      background: #00FF9C;
       letter-spacing: 0.02em;
+      padding: 12px 28px;
+      border-radius: 6px;
+      box-shadow: 0 0 28px rgba(0, 255, 156, 0.45);
+      text-transform: uppercase;
+      white-space: nowrap;
     }}
 
-    /* LAYER 7: UNIFIED COLOR GRADE & AMBIENT FILM GRAIN (Z-INDEX: 30) */
-    .layer-color-grade {{
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      background: radial-gradient(circle at 50% 45%, rgba(0, 243, 255, 0.07) 0%, rgba(0, 255, 102, 0.05) 55%, transparent 80%);
-      mix-blend-mode: color-dodge;
-      pointer-events: none;
-      z-index: 30;
-    }}
-
-    .layer-film-grain {{
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0.12;
-      mix-blend-mode: overlay;
-      pointer-events: none;
-      z-index: 31;
+    .organizer-pill {{
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px;
+      font-weight: 600;
+      color: #8A94A6;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
     }}
   </style>
 </head>
 <body>
+
   <div class="poster-canvas">
-    <!-- ART LAYERS -->
-    <div id="layer_background" class="art-layer"></div>
     <div class="circuit-grid art-layer"></div>
-    <div id="hero_light_spill" class="art-layer"></div>
-    {f'<img id="hero_art_1" class="art-layer" src="{hero_data_uri}" alt="Hero Shield Art" />' if hero_data_uri else ''}
-    {f'<img id="accent_art_1" class="art-layer" src="{accent_data_uri}" alt="Accent Art" />' if accent_data_uri else ''}
-
-    <!-- LAYER 2: METHOD 3 GENERATIVE TEXTURE INFILL HEADLINE (Z-INDEX: 5) -->
-    <div id="title_zone">
-      <div class="top-telemetry-bar">
-        <div class="telemetry-badge">CTF_CHALLENGE // 2026</div>
-        <div class="telemetry-status">SYS_STATUS: ONLINE</div>
-      </div>
-      {f'<div id="tagline_1">{tagline}</div>' if tagline else ''}
-      <div id="headline_zone">
-        <h1 id="headline_text_fallback">{title}</h1>
-      </div>
-    </div>
-
-    <!-- LAYER 4: TOURNAMENT TRACKS BELT -->
-    {f'<div id="tracks_belt">{tracks_badges_html}</div>' if tracks_badges_html else ''}
-
-    <!-- LAYER 5: ATMOSPHERIC GRADIENT SCRIM -->
-    <div class="layer-scrim"></div>
-
-    <!-- LAYER 6: SCENE-INTEGRATED EDITORIAL METADATA -->
-    <div id="bottom_metadata_container">
-      <div id="card_date_venue">
-        <div>
-          <div class="micro-label">EVENT TIMEFRAME</div>
-          <div id="date_1">{date_str}</div>
-          {f'<div id="time_1" style="font-family: JetBrains Mono; font-size: 18px; font-weight: 600; color: var(--text-muted); margin-top: 6px;">{time_str}</div>' if time_str else ''}
-        </div>
-        <div>
-          <div class="micro-label">COORDINATES & VENUE</div>
-          <div id="venue_1">{venue_str}</div>
-          {f'<div id="team_size_1" style="font-family: JetBrains Mono; font-size: 17px; font-weight: 700; color: var(--accent-color); margin-top: 6px;">{team_size_str}</div>' if team_size_str else ''}
-        </div>
-      </div>
-
-      <div id="subhead_prize_row">
-        <div id="subhead_1">{subtitle or "24-HOUR CYBERSECURITY TOURNAMENT"}</div>
-        {f'<div id="prize_1">{prize_str}</div>' if prize_str else ''}
-      </div>
-
-      <div id="cta_footer_row">
-        <div id="cta_1">{cta_str}</div>
-        {f'<div id="organizer_1">{organizer_str}</div>' if organizer_str else ''}
-      </div>
-    </div>
-
-    <!-- LAYER 7: COLOR GRADE & AMBIENT FILM GRAIN -->
-    <div class="layer-color-grade art-layer"></div>
-    <svg class="layer-film-grain art-layer" xmlns="http://www.w3.org/2000/svg">
+    <svg class="grain art-layer" xmlns="http://www.w3.org/2000/svg">
       <filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="3" stitchTiles="stitch"/></filter>
       <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
     </svg>
+
+    <!-- FLAG -->
+    {f'<img id="accent_art_1" class="cyber-flag art-layer" src="{accent_uri}" alt="Cyber Flag" />' if accent_uri else ''}
+
+    <!-- TOP SECTION: PATH 3 GENERATIVE CIRCUIT INFILL TITLE -->
+    <div id="title_zone" class="section-title">
+      <div class="top-meta-bar">
+        <div class="top-badge">CTF_CHALLENGE // 2026</div>
+        <div class="terminal-status">SYS_STATUS: ONLINE</div>
+      </div>
+      <h1 id="headline_text_fallback" class="main-title-path3">{title}</h1>
+      <div class="tagline-row">
+        <span class="tagline-slash">&gt;</span>
+        <div id="tagline_1" class="tagline">{tagline}</div>
+      </div>
+    </div>
+
+    <!-- SHIELD -->
+    <div class="cyber-shield-container">
+      <div class="shield-backglow art-layer"></div>
+      {f'<img id="hero_art_1" class="cyber-shield-img art-layer" src="{hero_uri}" alt="Cyber Shield Motif" />' if hero_uri else ''}
+    </div>
+
+    <!-- HUD -->
+    <div id="bottom_metadata_container" class="section-lower">
+      <div id="card_date_venue" class="hud-panel">
+        <div class="hud-main-grid">
+          <div>
+            <div class="micro-label">EVENT TIMEFRAME</div>
+            <div id="date_1" class="date-display">{date_str}</div>
+          </div>
+          <div>
+            <div class="micro-label">COORDINATES & VENUE</div>
+            <div id="venue_1" class="venue-display">{venue_str}</div>
+          </div>
+        </div>
+
+        <div id="subhead_prize_row" class="hud-banner-row">
+          <div id="subhead_1" class="subtitle-text">{subtitle}</div>
+          <div id="prize_1" class="bounty-pill">{prize_display}</div>
+        </div>
+
+        <div id="tracks_belt" class="hud-tracks-row">
+          <div class="tracks-content">{events_str}</div>
+          <div class="meta-specs">
+            {f'<div>TEAM: <span id="team_size_1">{team_size_str}</span></div>' if team_size_str else ''}
+            {f'<div>TIME: <span id="time_1">{time_str}</span></div>' if time_str else ''}
+          </div>
+        </div>
+      </div>
+
+      <div id="cta_footer_row" class="section-footer">
+        <div id="cta_1" class="cta-pill">{cta_str}</div>
+        <div id="organizer_1" class="organizer-pill">{organizer_str}</div>
+      </div>
+    </div>
   </div>
+
 </body>
 </html>
 """
@@ -575,7 +530,6 @@ class ThemePackRenderer:
         accent_path: str | Path = "",
         html_override: str | None = None,
     ) -> ThemeRenderResult:
-        """Render both full poster and text-only occlusion layer with Playwright."""
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -591,7 +545,7 @@ class ThemePackRenderer:
 
         if html_override:
             html_full = html_override
-            hide_style = "<style>.art-layer { visibility: hidden !important; } #hero_art_1, #accent_art_1, #layer_background, #hero_light_spill { display: none !important; }</style>"
+            hide_style = "<style>.art-layer { visibility: hidden !important; } #hero_art_1, #accent_art_1, .circuit-grid, .shield-backglow { display: none !important; }</style>"
             if "</head>" in html_override:
                 html_text_only = html_override.replace("</head>", f"{hide_style}</head>")
             else:
@@ -614,19 +568,18 @@ class ThemePackRenderer:
 
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            # Viewport
             page = browser.new_page(
                 viewport={"width": art_bundle.canvas_w, "height": art_bundle.canvas_h},
                 device_scale_factor=2.0,
             )
 
-            # 1. Capture Full Render
+            # Capture Full Render
             page.goto(full_html_path.resolve().as_uri(), wait_until="networkidle")
             page.wait_for_timeout(500)
             canvas = page.locator(".poster-canvas")
             canvas.screenshot(path=str(full_png_path))
 
-            # Extract DOM Bounding Boxes for all stable IDs
+            # Stable IDs
             stable_ids = [
                 "title_zone", "headline_text_fallback", "tagline_1", "tracks_belt",
                 "card_date_venue", "date_1", "venue_1", "time_1", "team_size_1",
@@ -648,7 +601,7 @@ class ThemePackRenderer:
                             height=round(box["height"], 1),
                         )
 
-            # Export Vector PDF
+            # Vector PDF
             page.pdf(
                 path=str(pdf_path),
                 width=f"{art_bundle.canvas_w}px",
@@ -657,7 +610,7 @@ class ThemePackRenderer:
                 margin={"top": "0mm", "bottom": "0mm", "left": "0mm", "right": "0mm"},
             )
 
-            # 2. Capture Text-Only Layer for Occlusion Mathematical Subtraction
+            # Text-only
             page.goto(text_only_html_path.resolve().as_uri(), wait_until="networkidle")
             page.wait_for_timeout(300)
             canvas = page.locator(".poster-canvas")
