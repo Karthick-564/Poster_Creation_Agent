@@ -193,3 +193,4 @@ class ComfyUIClient:
             folder_type=img_info.get("type", "output"),
             dest_path=output_path,
         )
+

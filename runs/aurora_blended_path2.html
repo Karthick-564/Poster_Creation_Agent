@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AURORA 2026 - Art-First Blended Composition (Path 2: 3D Sculpted Title)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&family=Syne:wght@800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #06030F;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Space Grotesk', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 1080 x 1350 px (4:5 portrait) Canvas */
+    .poster-canvas {
+      position: relative;
+      width: 1080px;
+      height: 1350px;
+      background-color: #0E0728;
+      overflow: hidden;
+      color: #FFF3E0;
+    }
+
+    /* LAYER 0 (z-index: 1): BACKGROUND SCENE */
+    .layer-background {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background-image: url('C:/Users/iQube/.gemini/antigravity/brain/98f40bc9-b037-4830-8e36-54702f37f83a/aurora_bg_ideogram.png');
+      background-size: cover;
+      background-position: center top;
+      z-index: 1;
+    }
+
+    /* LAYER 1 (z-index: 2): LIGHT SPILL SYSTEM */
+    .hero-light-spill {
+      position: absolute;
+      top: 550px;
+      left: 540px;
+      width: 780px;
+      height: 780px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, 
+        rgba(122, 231, 199, 0.45) 0%, 
+        rgba(255, 183, 3, 0.28) 38%, 
+        rgba(255, 77, 109, 0.16) 62%, 
+        transparent 80%);
+      filter: blur(55px);
+      mix-blend-mode: screen;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .lantern-light-spill {
+      position: absolute;
+      top: 170px;
+      left: 890px;
+      width: 380px;
+      height: 380px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(255, 183, 3, 0.55) 0%, rgba(255, 77, 109, 0.28) 50%, transparent 75%);
+      filter: blur(40px);
+      mix-blend-mode: screen;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* LAYER 2 (z-index: 5): MASSIVE 3D HEADLINE (LAYERED UNDER HERO ORB) */
+    .layer-title-zone {
+      position: absolute;
+      top: 60px;
+      left: 40px;
+      right: 40px;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .tagline-verbatim {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: #7AE7C7;
+      letter-spacing: 0.05em;
+      text-shadow: 0 0 16px rgba(122, 231, 199, 0.6);
+      margin-bottom: 6px;
+    }
+
+    .title-path2-wrapper {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .title-path2-img {
+      max-width: 780px;
+      max-height: 250px;
+      object-fit: contain;
+      filter: drop-shadow(0 20px 45px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 40px rgba(122, 231, 199, 0.55));
+    }
+
+    /* LAYER 3 (z-index: 10): HERO GLASS ORB (PHYSICALLY OVERLAPS TITLE) */
+    .layer-hero-orb {
+      position: absolute;
+      top: 300px; /* Overlaps bottom crown of 3D title */
+      left: 540px;
+      transform: translateX(-50%);
+      width: 490px;
+      height: 490px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .orb-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 45px rgba(122, 231, 199, 0.45));
+    }
+
+    /* LAYER 4 (z-index: 15): FOREGROUND ACCENTS (LANTERNS OVERLAPPING FOREGROUND) */
+    .layer-foreground-lanterns {
+      position: absolute;
+      top: 70px;
+      right: 40px;
+      width: 200px;
+      height: 200px;
+      object-fit: contain;
+      z-index: 15;
+      mix-blend-mode: screen;
+      filter: drop-shadow(0 0 30px rgba(255, 183, 3, 0.7)) drop-shadow(0 0 45px rgba(255, 77, 109, 0.4));
+      pointer-events: none;
+    }
+
+    /* LAYER 5 (z-index: 20): INTERACTING TYPOGRAPHY */
+    
+    /* Curved Events Line wrapping cleanly around orb lower curvature */
+    .layer-orbital-events {
+      position: absolute;
+      top: 300px;
+      left: 540px;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .curved-events-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .orbital-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      fill: #7AE7C7;
+      filter: drop-shadow(0 0 12px rgba(122, 231, 199, 0.85)) drop-shadow(0 2px 14px rgba(0, 0, 0, 0.95));
+    }
+
+    .events-microcopy-pill {
+      position: absolute;
+      top: 755px;
+      left: 540px;
+      transform: translateX(-50%);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.20em;
+      color: #FFB703;
+      background: rgba(14, 7, 40, 0.65);
+      padding: 4px 14px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 183, 3, 0.4);
+      text-shadow: 0 0 12px rgba(255, 183, 3, 0.7);
+      z-index: 21;
+    }
+
+    /* SOFT GRADIENT SCRIM (NO OPAQUE CARD!) */
+    .layer-scrim {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 560px;
+      background: linear-gradient(180deg, 
+        transparent 0%, 
+        rgba(14, 7, 40, 0.40) 20%, 
+        rgba(14, 7, 40, 0.82) 55%, 
+        rgba(14, 7, 40, 0.98) 90%, 
+        #0E0728 100%);
+      z-index: 18;
+      pointer-events: none;
+    }
+
+    /* EDITORIAL INFO ELEMENTS (ON SCENE DIRECTLY) */
+    .layer-scene-info {
+      position: absolute;
+      bottom: 40px;
+      left: 65px;
+      right: 65px;
+      z-index: 22;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Row 1: Date & Venue Flanking Grid */
+    .info-date-venue-row {
+      display: grid;
+      grid-template-columns: 1.1fr 1.4fr;
+      gap: 28px;
+      align-items: start;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(122, 231, 199, 0.25);
+    }
+
+    .allowlist-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: #C9B8FF;
+      margin-bottom: 6px;
+    }
+
+    .date-display {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 34px;
+      font-weight: 800;
+      color: #FFB703;
+      line-height: 1.1;
+      text-shadow: 0 0 20px rgba(255, 183, 3, 0.45);
+    }
+
+    .venue-display {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 23px;
+      font-weight: 700;
+      color: #FFF3E0;
+      line-height: 1.25;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+    }
+
+    /* Row 2: Subtitle & Prize Glow Ribbon */
+    .info-subtitle-prize-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .subtitle-display {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 23px;
+      font-weight: 700;
+      color: #FFF3E0;
+      letter-spacing: 0.02em;
+      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
+    }
+
+    .prize-badge {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      color: #FF4D6D;
+      white-space: nowrap;
+      text-shadow: 0 0 20px rgba(255, 77, 109, 0.6);
+      background: rgba(255, 77, 109, 0.16);
+      padding: 7px 20px;
+      border-radius: 8px;
+      border: 1.5px solid #FF4D6D;
+      box-shadow: 0 0 25px rgba(255, 77, 109, 0.35);
+    }
+
+    /* Row 3: Time & Entry */
+    .info-time-entry-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .time-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      color: #FFF3E0;
+      letter-spacing: 0.02em;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    }
+
+    .entry-display {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 22px;
+      font-weight: 600;
+      color: #C9B8FF;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    }
+
+    /* Row 4: 2-Tier Footer */
+    .info-footer-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .footer-tier-1 {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .footer-tier-2 {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding-top: 6px;
+    }
+
+    .cta-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      font-weight: 800;
+      color: #0E0728;
+      background: #7AE7C7;
+      padding: 8px 24px;
+      border-radius: 8px;
+      box-shadow: 0 0 28px rgba(122, 231, 199, 0.55);
+      white-space: nowrap;
+    }
+
+    .organizer-display {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 21px;
+      font-weight: 600;
+      color: #C9B8FF;
+      white-space: nowrap;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    }
+
+    .contact-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 21px;
+      font-weight: 600;
+      color: #C9B8FF;
+      white-space: nowrap;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    }
+
+    .hashtag-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      font-weight: 800;
+      color: #FFB703;
+      background: rgba(255, 183, 3, 0.15);
+      padding: 5px 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 183, 3, 0.45);
+      text-shadow: 0 0 14px rgba(255, 183, 3, 0.5);
+      white-space: nowrap;
+    }
+
+    /* LAYER 6 (z-index: 30): UNIFIED COLOR GRADE & AMBIENT FILM GRAIN */
+    .layer-color-grade {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 45%, rgba(122, 231, 199, 0.08) 0%, rgba(255, 77, 109, 0.06) 60%, transparent 80%);
+      mix-blend-mode: color-dodge;
+      pointer-events: none;
+      z-index: 30;
+    }
+
+    .layer-film-grain {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.12;
+      mix-blend-mode: overlay;
+      pointer-events: none;
+      z-index: 31;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="poster-canvas">
+
+    <!-- LAYER 0: BACKGROUND SCENE -->
+    <div class="layer-background"></div>
+
+    <!-- LAYER 1: LIGHT SPILL EMITTERS -->
+    <div class="hero-light-spill"></div>
+    <div class="lantern-light-spill"></div>
+
+    <!-- LAYER 2: MASSIVE HEADLINE (Path 2: 3D Sculpted Ribbon Title, LAYERED UNDER HERO ORB) -->
+    <div class="layer-title-zone">
+      <div class="tagline-verbatim">Where code meets culture.</div>
+      <div class="title-path2-wrapper">
+        <img 
+          src="C:/Users/iQube/.gemini/antigravity/brain/98f40bc9-b037-4830-8e36-54702f37f83a/aurora_title_3d.png" 
+          alt="AURORA 2026" 
+          class="title-path2-img" 
+        />
+      </div>
+    </div>
+
+    <!-- LAYER 3: HERO GLASS ORB (OVERLAPS LOWER CROWN OF TITLE) -->
+    <div class="layer-hero-orb">
+      <img 
+        src="C:/Users/iQube/.gemini/antigravity/brain/98f40bc9-b037-4830-8e36-54702f37f83a/aurora_orb_hero.png" 
+        alt="Aurora Glass Orb Hero" 
+        class="orb-img" 
+      />
+    </div>
+
+    <!-- LAYER 4: FOREGROUND ACCENTS (LANTERNS IN FOREGROUND) -->
+    <img 
+      src="C:/Users/iQube/.gemini/antigravity/brain/98f40bc9-b037-4830-8e36-54702f37f83a/aurora_lanterns_accent.png" 
+      alt="Floating Paper Lanterns" 
+      class="layer-foreground-lanterns" 
+    />
+
+    <!-- LAYER 5: INTERACTING TYPOGRAPHY -->
+
+    <!-- Curved Events Line wrapping around the lower perimeter of the Orb -->
+    <div class="layer-orbital-events">
+      <svg class="curved-events-svg" viewBox="0 0 600 600">
+        <defs>
+          <path id="orbital-arc-path" d="M 40,245 A 260,260 0 0,0 560,245" fill="none" />
+        </defs>
+        <text class="orbital-text">
+          <textPath href="#orbital-arc-path" startOffset="50%" text-anchor="middle">
+            HACKATHON / ROBO WARS / DANCE / OPEN MIC
+          </textPath>
+        </text>
+      </svg>
+    </div>
+
+    <div class="events-microcopy-pill">// EVENTS</div>
+
+    <!-- SOFT GRADIENT SCRIM (NO OPAQUE CARD) -->
+    <div class="layer-scrim"></div>
+
+    <!-- SCENE-INTEGRATED EDITORIAL INFO BLOCKS -->
+    <div class="layer-scene-info">
+
+      <!-- Row 1: Date + Venue -->
+      <div class="info-date-venue-row">
+        <div>
+          <div class="allowlist-label">// DATE</div>
+          <div class="date-display">12-14 FEBRUARY 2027</div>
+        </div>
+        <div>
+          <div class="allowlist-label">// VENUE</div>
+          <div class="venue-display">CENTRAL AUDITORIUM, GREEN VALLEY COLLEGE, COIMBATORE</div>
+        </div>
+      </div>
+
+      <!-- Row 2: Subtitle + Prize -->
+      <div class="info-subtitle-prize-row">
+        <div class="subtitle-display">INTER-COLLEGE TECH & CULTURE FEST</div>
+        <div class="prize-badge">PRIZES WORTH ₹2,00,000</div>
+      </div>
+
+      <!-- Row 3: Time + Entry -->
+      <div class="info-time-entry-row">
+        <div class="time-display">10:00 AM - 6:00 PM DAILY</div>
+        <div class="entry-display">Free entry with college ID</div>
+      </div>
+
+      <!-- Row 4: 2-Tier Footer -->
+      <div class="info-footer-container">
+        <div class="footer-tier-1">
+          <div class="cta-pill">REGISTER: aurora26.example/join</div>
+          <div class="organizer-display">Presented by the Student Council</div>
+        </div>
+        <div class="footer-tier-2">
+          <div class="contact-display">queries@aurora26.example</div>
+          <div class="hashtag-badge">#Aurora26</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- LAYER 6: UNIFIED COLOR GRADE & AMBIENT FILM GRAIN -->
+    <div class="layer-color-grade"></div>
+    <svg class="layer-film-grain" xmlns="http://www.w3.org/2000/svg">
+      <filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="3" stitchTiles="stitch"/></filter>
+      <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
+    </svg>
+
+  </div>
+
+</body>
+</html>

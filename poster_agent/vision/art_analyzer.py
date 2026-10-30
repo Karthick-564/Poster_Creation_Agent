@@ -1,10 +1,12 @@
-"""Art-First Vision Analyzer.
+"""Art-First Vision Analyzer (Enhanced with PosterLayout CVPR Saliency & PosterO Layout Trees).
 
 Inspects generated art assets (background, hero RGBA, accents) to extract:
 1. Color palette (sampled directly from image pixels).
-2. Geometry & focal bounds (alpha channel centroid and bounding box of hero).
-3. Light spill parameters (radial emitter centers and color stops).
-4. Depth layer coordinates (title under-orb overlap, curved text arc, soft scrim regions).
+2. Content-aware saliency & negative space maps (PosterLayout CVPR 2023).
+3. Optical center calculation (~41.5% vertical height).
+4. Modular typographic scale (1.333 ratio) and 8px baseline grid rhythm.
+5. Hero geometry and orbital arc coordinates.
+6. Screen-blended light spill emitters.
 """
 import math
 from pathlib import Path
@@ -12,6 +14,14 @@ from typing import Any
 import numpy as np
 from PIL import Image
 from pydantic import BaseModel, Field
+
+from .saliency import SaliencyAnalyzer, SaliencyProfile
+from poster_agent.planner.layout_tree import (
+    ModularTypographicScale,
+    BaseGridRhythm,
+    build_semantic_layout_tree,
+    LayoutTreePlan,
+)
 
 
 class PaletteProfile(BaseModel):
@@ -43,7 +53,7 @@ class ArcGeometry(BaseModel):
     """SVG curved text path parameters hugging the hero asset."""
     center_x: int = 540
     center_y: int = 560
-    radius: int = 265
+    radius: int = 269
     svg_path_d: str = ""
 
 
@@ -51,13 +61,13 @@ class LightSpillProfile(BaseModel):
     """Screen-blended radial light emitters."""
     hero_emitter_x: int = 540
     hero_emitter_y: int = 560
-    hero_emitter_radius: int = 650
-    hero_glow_rgba: str = "rgba(122, 231, 199, 0.40)"
-    hero_core_rgba: str = "rgba(255, 183, 3, 0.30)"
-    lantern_emitter_x: int = 860
-    lantern_emitter_y: int = 180
-    lantern_emitter_radius: int = 300
-    lantern_glow_rgba: str = "rgba(255, 183, 3, 0.50)"
+    hero_emitter_radius: int = 780
+    hero_glow_rgba: str = "rgba(122, 231, 199, 0.45)"
+    hero_core_rgba: str = "rgba(255, 183, 3, 0.28)"
+    lantern_emitter_x: int = 890
+    lantern_emitter_y: int = 170
+    lantern_emitter_radius: int = 380
+    lantern_glow_rgba: str = "rgba(255, 183, 3, 0.55)"
 
 
 class ArtCompositionPlan(BaseModel):
@@ -68,10 +78,13 @@ class ArtCompositionPlan(BaseModel):
     hero: HeroGeometry = Field(default_factory=HeroGeometry)
     orbital_arc: ArcGeometry = Field(default_factory=ArcGeometry)
     light_spill: LightSpillProfile = Field(default_factory=LightSpillProfile)
-    title_y: int = 175
-    title_height: int = 160
-    title_overlaps_hero_px: int = 40
-    scrim_start_y: int = 760
+    saliency: SaliencyProfile = Field(default_factory=SaliencyProfile)
+    scale: ModularTypographicScale = Field(default_factory=ModularTypographicScale)
+    grid: BaseGridRhythm = Field(default_factory=BaseGridRhythm)
+    title_y: int = 150
+    title_height: int = 195
+    title_overlaps_hero_px: int = 35
+    scrim_start_y: int = 750
 
 
 class ArtAnalyzer:
@@ -80,20 +93,25 @@ class ArtAnalyzer:
     def __init__(self, canvas_w: int = 1080, canvas_h: int = 1350):
         self.canvas_w = canvas_w
         self.canvas_h = canvas_h
+        self.saliency_analyzer = SaliencyAnalyzer(target_w=canvas_w, target_h=canvas_h)
 
     def rgb_to_hex(self, rgb: tuple[int, int, int]) -> str:
         return f"#{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}"
 
     def analyze(
         self,
-        bg_path: str | Path,
+        bg_path: str | Path | None = None,
         hero_rgba_path: str | Path | None = None,
         accent_rgba_path: str | Path | None = None,
     ) -> ArtCompositionPlan:
         """Inspect the art files and synthesize the layout plan."""
         plan = ArtCompositionPlan(canvas_w=self.canvas_w, canvas_h=self.canvas_h)
 
-        # 1. Inspect Hero RGBA for geometry and color sampling
+        # 1. Content-Aware Saliency Analysis (PosterLayout CVPR)
+        saliency_prof = self.saliency_analyzer.analyze_canvas(bg_path=bg_path, hero_rgba_path=hero_rgba_path)
+        plan.saliency = saliency_prof
+
+        # 2. Inspect Hero RGBA for geometry and color sampling
         if hero_rgba_path and Path(hero_rgba_path).exists():
             hero_img = Image.open(hero_rgba_path)
             if hero_img.mode != "RGBA":
@@ -106,9 +124,7 @@ class ArtAnalyzer:
                 y_idx, x_idx = np.where(visible_mask)
                 x_min, x_max = int(x_idx.min()), int(x_idx.max())
                 y_min, y_max = int(y_idx.min()), int(y_idx.max())
-                w_orig, h_orig = hero_img.size
 
-                # Sample colors from visible pixels
                 rgb_arr = np.array(hero_img.convert("RGB"))
                 vis_pixels = rgb_arr[visible_mask]
 
@@ -126,20 +142,19 @@ class ArtAnalyzer:
                 plan.palette.glow_rgb = glow
                 plan.palette.highlight_rgb = p95
 
-        # 2. Inspect Background for deep sky tone
+        # 3. Inspect Background for deep sky tone
         if bg_path and Path(bg_path).exists():
             bg_img = Image.open(bg_path).convert("RGB")
             bg_arr = np.array(bg_img)
-            # Sample bottom corner for deepest background tone
             deep_tone = tuple(bg_arr[-100:, :100].mean(axis=(0, 1)).astype(int))
             plan.palette.sky_deep_hex = self.rgb_to_hex(deep_tone)
 
-        # 3. Compute Depth & Placement
-        # Target Hero sizing on canvas: centered horizontally, center_y ~ 560, diameter ~ 490px
+        # 4. Compute Optical Center Placement (Optical Center ~ 41.5% from top)
         hero_diameter = 490
         hero_radius = hero_diameter // 2
-        hero_center_x = self.canvas_w // 2
-        hero_center_y = 560
+        hero_center_x = saliency_prof.optical_center_x
+        # Position slightly below optical center so hero center aligns with visual weight
+        hero_center_y = 550
 
         plan.hero = HeroGeometry(
             center_x=hero_center_x,
@@ -152,15 +167,12 @@ class ArtAnalyzer:
         )
 
         # Orbital Arc for curved text hugging lower hemisphere
-        # Arc sweeps from angle 160 deg to 20 deg (underneath the orb)
         arc_radius = hero_radius + 24
-        # SVG path for an arc: start at (cx - R*cos(15), cy + R*sin(15)), sweep to (cx + R*cos(15), ...)
         start_x = hero_center_x - int(arc_radius * math.cos(math.radians(18)))
         start_y = hero_center_y + int(arc_radius * math.sin(math.radians(18)))
         end_x = hero_center_x + int(arc_radius * math.cos(math.radians(18)))
         end_y = hero_center_y + int(arc_radius * math.sin(math.radians(18)))
 
-        # Arc path SVG d string (curves underneath the orb)
         plan.orbital_arc = ArcGeometry(
             center_x=hero_center_x,
             center_y=hero_center_y,
@@ -172,21 +184,19 @@ class ArtAnalyzer:
         plan.light_spill = LightSpillProfile(
             hero_emitter_x=hero_center_x,
             hero_emitter_y=hero_center_y,
-            hero_emitter_radius=680,
-            hero_glow_rgba=f"rgba({plan.palette.glow_rgb[0]}, {plan.palette.glow_rgb[1]}, {plan.palette.glow_rgb[2]}, 0.42)",
-            hero_core_rgba=f"rgba({plan.palette.highlight_rgb[0]}, {plan.palette.highlight_rgb[1]}, {plan.palette.highlight_rgb[2]}, 0.32)",
-            lantern_emitter_x=860,
-            lantern_emitter_y=190,
-            lantern_emitter_radius=320,
+            hero_emitter_radius=780,
+            hero_glow_rgba=f"rgba({plan.palette.glow_rgb[0]}, {plan.palette.glow_rgb[1]}, {plan.palette.glow_rgb[2]}, 0.45)",
+            hero_core_rgba=f"rgba({plan.palette.highlight_rgb[0]}, {plan.palette.highlight_rgb[1]}, {plan.palette.highlight_rgb[2]}, 0.28)",
+            lantern_emitter_x=890,
+            lantern_emitter_y=170,
+            lantern_emitter_radius=380,
             lantern_glow_rgba="rgba(255, 183, 3, 0.55)",
         )
 
-        # Title sits at Y=140 to 350. Orb top is at Y = 560 - 245 = 315.
-        # Title bottom is at Y = 350 -> 35px overlap where orb sits in front of title!
+        # Z-Stacking parameters
         plan.title_y = 150
         plan.title_height = 195
         plan.title_overlaps_hero_px = 35
-        plan.scrim_start_y = 750
+        plan.scrim_start_y = saliency_prof.recommended_scrim_start_y
 
         return plan
-
