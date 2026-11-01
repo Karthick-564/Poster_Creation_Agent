@@ -170,13 +170,15 @@ class VectorCraftRenderer:
         rotation: float = 0.0,
     ) -> "VectorCraftRenderer":
         """Add a live rectangle shape with optional paint styling."""
-        if fill or (stroke and stroke_width > 0):
-            self.commands.append({"command": "select.none", "params": {}})
-            if fill:
-                self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
-            if stroke and stroke_width > 0:
-                self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
-                self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
+        self.commands.append({"command": "select.none", "params": {}})
+        if fill:
+            self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
+        else:
+            self.commands.append({"command": "paint.none", "params": {}})
+
+        if stroke and stroke_width > 0:
+            self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
+            self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
 
         params: dict[str, Any] = {"x": x, "y": y, "width": width, "height": height}
         if radius > 0:
@@ -199,13 +201,15 @@ class VectorCraftRenderer:
         rotation: float = 0.0,
     ) -> "VectorCraftRenderer":
         """Add an ellipse or circle shape."""
-        if fill or (stroke and stroke_width > 0):
-            self.commands.append({"command": "select.none", "params": {}})
-            if fill:
-                self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
-            if stroke and stroke_width > 0:
-                self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
-                self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
+        self.commands.append({"command": "select.none", "params": {}})
+        if fill:
+            self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
+        else:
+            self.commands.append({"command": "paint.none", "params": {}})
+
+        if stroke and stroke_width > 0:
+            self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
+            self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
 
         params: dict[str, Any] = {"x": x, "y": y, "width": width, "height": height}
         if rotation != 0.0:
@@ -223,13 +227,15 @@ class VectorCraftRenderer:
         closed: bool = True,
     ) -> "VectorCraftRenderer":
         """Add a custom vector path via SVG path data."""
-        if fill or (stroke and stroke_width > 0):
-            self.commands.append({"command": "select.none", "params": {}})
-            if fill:
-                self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
-            if stroke and stroke_width > 0:
-                self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
-                self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
+        self.commands.append({"command": "select.none", "params": {}})
+        if fill:
+            self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
+        else:
+            self.commands.append({"command": "paint.none", "params": {}})
+
+        if stroke and stroke_width > 0:
+            self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
+            self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
 
         self.commands.append({
             "command": "path.create",
@@ -251,13 +257,15 @@ class VectorCraftRenderer:
         stroke_width: float = 0.0,
     ) -> "VectorCraftRenderer":
         """Add a star polygon (e.g. 4-point sparkle star)."""
-        if fill or (stroke and stroke_width > 0):
-            self.commands.append({"command": "select.none", "params": {}})
-            if fill:
-                self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
-            if stroke and stroke_width > 0:
-                self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
-                self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
+        self.commands.append({"command": "select.none", "params": {}})
+        if fill:
+            self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
+        else:
+            self.commands.append({"command": "paint.none", "params": {}})
+
+        if stroke and stroke_width > 0:
+            self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
+            self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
 
         params: dict[str, Any] = {
             "cx": cx,
@@ -392,6 +400,9 @@ class VectorCraftRenderer:
         role: Optional[str] = None,
     ) -> "VectorCraftRenderer":
         """Add crisp native typography with font metrics."""
+        if not text or not text.strip():
+            return self
+
         params: dict[str, Any] = {
             "text": text,
             "x": x,
@@ -620,6 +631,9 @@ class VectorCraftRenderer:
         role: Optional[str] = None,
     ) -> "VectorCraftRenderer":
         """Place editorial text along an arbitrary vector path baseline."""
+        if not text or not text.strip():
+            return self
+
         self.commands.append({
             "command": "path.create",
             "params": {"d": path_d, "closed": False},
