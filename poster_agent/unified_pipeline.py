@@ -84,6 +84,10 @@ class UnifiedPosterPipeline:
         print(f"Run ID      : {self.run_id}")
         print(f"Output Dir  : {self.run_dir}")
         print("=" * 80)
+        if self.use_mock:
+            print(">>> MODE: MOCK — offline smoke test only. NO real diffusion, NO real critique.")
+            print(">>> Outputs are pipeline-valid but NOT real posters. Omit --mock for live production.")
+            print("=" * 80)
 
         # -------------------------------------------------------------
         # STAGE 1: BRIEF INGESTION & ZERO-DROP GUARD
