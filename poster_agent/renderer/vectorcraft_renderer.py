@@ -4,12 +4,52 @@ import logging
 import os
 import random
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def get_vectorcraft_fonts_dir(cli_path: Optional[str | Path] = None) -> Path:
+    """Resolve the shared VectorCraft Fonts directory programmatically.
+
+    Follows VectorCraft's exact prefs_dir.rs & profile.rs resolution logic:
+    1. VECTORCRAFT_CONFIG_DIR env var if set: <VECTORCRAFT_CONFIG_DIR>/Fonts
+    2. Portable mode marker ('portable.txt' or 'VectorCraft.portable') beside executable:
+       <exe_dir>/VectorCraftData/Fonts
+    3. Platform conventions:
+       - Windows: %APPDATA%/VectorCraft/Fonts
+       - macOS: ~/Library/Application Support/VectorCraft/Fonts
+       - Linux: $XDG_CONFIG_HOME/vectorcraft/Fonts or ~/.config/vectorcraft/Fonts
+    """
+    config_dir_env = os.environ.get("VECTORCRAFT_CONFIG_DIR")
+    if config_dir_env:
+        return Path(config_dir_env) / "Fonts"
+
+    resolved_cli = Path(cli_path).resolve() if cli_path else (
+        Path(__file__).resolve().parent.parent.parent
+        / VectorCraftRenderer.DEFAULT_CLI_REL
+    ).resolve()
+
+    exe_dir = resolved_cli.parent
+    if (exe_dir / "portable.txt").is_file() or (exe_dir / "VectorCraft.portable").is_file():
+        return exe_dir / "VectorCraftData" / "Fonts"
+
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            return Path(appdata) / "VectorCraft" / "Fonts"
+        return Path.home() / "AppData" / "Roaming" / "VectorCraft" / "Fonts"
+    elif sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "VectorCraft" / "Fonts"
+    else:
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        if xdg:
+            return Path(xdg) / "vectorcraft" / "Fonts"
+        return Path.home() / ".config" / "vectorcraft" / "Fonts"
 
 
 @dataclass
@@ -22,6 +62,7 @@ class VectorCraftResult:
     execution_time_sec: float = 0.0
     command_count: int = 0
     step_results: list[dict[str, Any]] = field(default_factory=list)
+    text_manifest: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     error_message: Optional[str] = None
 
@@ -41,10 +82,14 @@ class VectorCraftRenderer:
             raise FileNotFoundError(f"VectorCraft CLI binary not found at: {self.cli_path}")
 
         self.commands: list[dict[str, Any]] = []
+        self._queued_texts: list[dict[str, Any]] = []
+        self.text_manifest: list[dict[str, Any]] = []
 
     def clear(self) -> None:
         """Clear queued commands."""
         self.commands.clear()
+        self._queued_texts.clear()
+        self.text_manifest.clear()
 
     def new_document(
         self,
@@ -52,6 +97,7 @@ class VectorCraftRenderer:
         height: float,
         units: str = "Points",
         color_mode: str = "rgb",
+        raster_resolution: int | str = 300,
     ) -> "VectorCraftRenderer":
         """Initialize a new document artboard."""
         self.commands.append({
@@ -62,6 +108,32 @@ class VectorCraftRenderer:
                 "units": units,
                 "colorMode": color_mode,
             },
+        })
+        if raster_resolution:
+            self.set_raster_effects_settings(resolution=raster_resolution, color_model=color_mode)
+        return self
+
+    def set_raster_effects_settings(
+        self,
+        resolution: int | str = 300,
+        color_model: str = "rgb",
+        background: str = "transparent",
+        anti_alias: bool = True,
+        clipping_mask: bool = False,
+        add_around: float = 0.0,
+    ) -> "VectorCraftRenderer":
+        """Configure print resolution and settings for live raster effects."""
+        params: dict[str, Any] = {
+            "resolution": resolution,
+            "colorModel": color_model,
+            "background": background,
+            "antiAlias": anti_alias,
+            "clippingMask": clipping_mask,
+            "addAround": add_around,
+        }
+        self.commands.append({
+            "command": "document.rasterEffectsSettings",
+            "params": params,
         })
         return self
 
@@ -95,18 +167,20 @@ class VectorCraftRenderer:
         rotation: float = 0.0,
     ) -> "VectorCraftRenderer":
         """Add a live rectangle shape with optional paint styling."""
+        if fill or (stroke and stroke_width > 0):
+            self.commands.append({"command": "select.none", "params": {}})
+            if fill:
+                self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
+            if stroke and stroke_width > 0:
+                self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
+                self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
+
         params: dict[str, Any] = {"x": x, "y": y, "width": width, "height": height}
         if radius > 0:
             params["radius"] = radius
         if rotation != 0.0:
             params["rotation"] = rotation
         self.commands.append({"command": "shape.rectangle", "params": params})
-
-        if fill:
-            self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
-        if stroke and stroke_width > 0:
-            self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
-            self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
         return self
 
     def add_shape_ellipse(
@@ -121,16 +195,18 @@ class VectorCraftRenderer:
         rotation: float = 0.0,
     ) -> "VectorCraftRenderer":
         """Add an ellipse or circle shape."""
+        if fill or (stroke and stroke_width > 0):
+            self.commands.append({"command": "select.none", "params": {}})
+            if fill:
+                self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
+            if stroke and stroke_width > 0:
+                self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
+                self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
+
         params: dict[str, Any] = {"x": x, "y": y, "width": width, "height": height}
         if rotation != 0.0:
             params["rotation"] = rotation
         self.commands.append({"command": "shape.ellipse", "params": params})
-
-        if fill:
-            self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
-        if stroke and stroke_width > 0:
-            self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
-            self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
         return self
 
     def add_path(
@@ -142,15 +218,18 @@ class VectorCraftRenderer:
         closed: bool = True,
     ) -> "VectorCraftRenderer":
         """Add a custom vector path via SVG path data."""
+        if fill or (stroke and stroke_width > 0):
+            self.commands.append({"command": "select.none", "params": {}})
+            if fill:
+                self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
+            if stroke and stroke_width > 0:
+                self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
+                self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
+
         self.commands.append({
             "command": "path.create",
             "params": {"d": d, "closed": closed},
         })
-        if fill:
-            self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
-        if stroke and stroke_width > 0:
-            self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
-            self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
         return self
 
     def add_shape_star(
@@ -166,6 +245,14 @@ class VectorCraftRenderer:
         stroke_width: float = 0.0,
     ) -> "VectorCraftRenderer":
         """Add a star polygon (e.g. 4-point sparkle star)."""
+        if fill or (stroke and stroke_width > 0):
+            self.commands.append({"command": "select.none", "params": {}})
+            if fill:
+                self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
+            if stroke and stroke_width > 0:
+                self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
+                self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
+
         params: dict[str, Any] = {
             "cx": cx,
             "cy": cy,
@@ -176,12 +263,6 @@ class VectorCraftRenderer:
         if rotation != 0.0:
             params["rotation"] = rotation
         self.commands.append({"command": "shape.star", "params": params})
-
-        if fill:
-            self.commands.append({"command": "paint.setFill", "params": {"color": fill}})
-        if stroke and stroke_width > 0:
-            self.commands.append({"command": "paint.setStroke", "params": {"color": stroke}})
-            self.commands.append({"command": "stroke.set", "params": {"weight": stroke_width}})
         return self
 
     def add_starfield(
@@ -298,6 +379,10 @@ class VectorCraftRenderer:
         rotation: float = 0.0,
         justify: str = "auto",
         area: Optional[dict[str, Any]] = None,
+        style: str = "",
+        tracking: float = 0.0,
+        leading: Optional[float] = None,
+        role: Optional[str] = None,
     ) -> "VectorCraftRenderer":
         """Add crisp native typography with font metrics."""
         params: dict[str, Any] = {
@@ -313,8 +398,75 @@ class VectorCraftRenderer:
             params["rotation"] = rotation
         if area:
             params["area"] = area
+        if style:
+            params["style"] = style
         self.commands.append({"command": "text.create", "params": params})
+
+        style_params: dict[str, Any] = {}
+        if style:
+            style_params["style"] = style
+        if tracking != 0.0:
+            style_params["tracking"] = tracking
+        if leading is not None:
+            style_params["leading"] = leading
+
+        if style_params:
+            self.commands.append({"command": "text.setStyle", "params": style_params})
+
+        self._queued_texts.append({
+            "role": role,
+            "text": text,
+            "size": size,
+            "font": font,
+            "style": style,
+            "tracking": tracking,
+            "leading": leading,
+        })
         return self
+
+    def fit_headline(self, target_id: Optional[int | str] = None) -> "VectorCraftRenderer":
+        """Track the first line of area type so it fills the frame width (Swiss headline lockup)."""
+        params: dict[str, Any] = {}
+        if target_id is not None:
+            params["id"] = target_id
+        self.commands.append({"command": "text.fitHeadline", "params": params})
+        return self
+
+    def area_text(
+        self,
+        text: str,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        size: float,
+        font: str = "Arial",
+        color: str = "#000000",
+        fit: str = "autoHeight",
+        rotation: float = 0.0,
+        justify: str = "auto",
+        style: str = "",
+        tracking: float = 0.0,
+        leading: Optional[float] = None,
+        role: Optional[str] = None,
+    ) -> "VectorCraftRenderer":
+        """Add area text within a bounding box."""
+        area_params = {"width": width, "height": height, "fit": fit}
+        return self.add_text(
+            text=text,
+            x=x,
+            y=y,
+            size=size,
+            font=font,
+            color=color,
+            rotation=rotation,
+            justify=justify,
+            area=area_params,
+            style=style,
+            tracking=tracking,
+            leading=leading,
+            role=role,
+        )
 
     def execute(
         self,
@@ -364,13 +516,48 @@ class VectorCraftRenderer:
 
             # Parse results from stdout JSON lines
             step_results = []
+            text_manifest = []
+            queued_idx = 0
+
             for line in res.stdout.strip().splitlines():
                 line = line.strip()
                 if line.startswith("{") and line.endswith("}"):
                     try:
-                        step_results.append(json.loads(line))
+                        step_data = json.loads(line)
+                        step_results.append(step_data)
+
+                        cmd_name = step_data.get("command")
+                        if cmd_name in ("text.create", "text.createInPath"):
+                            step_res = step_data.get("result", {})
+                            queued_meta = self._queued_texts[queued_idx] if queued_idx < len(self._queued_texts) else {}
+                            queued_idx += 1
+
+                            manifest_item = {
+                                "id": step_res.get("id"),
+                                "role": queued_meta.get("role"),
+                                "text": queued_meta.get("text", ""),
+                                "bounds": step_res.get("bounds"),
+                                "overflow": step_res.get("overflow"),
+                                "size": queued_meta.get("size"),
+                                "font": queued_meta.get("font"),
+                                "style": queued_meta.get("style", ""),
+                            }
+                            text_manifest.append(manifest_item)
+
+                            if step_res.get("overflow"):
+                                role_desc = manifest_item["role"] or manifest_item["text"][:24]
+                                print(f">>> TEXT OVERFLOW: node {manifest_item['id']} ({role_desc})")
                     except json.JSONDecodeError:
                         pass
+
+            self.text_manifest = text_manifest
+            if text_manifest:
+                manifest_file = work_path / "text_manifest.json"
+                try:
+                    with open(manifest_file, "w", encoding="utf-8") as f:
+                        json.dump(text_manifest, f, indent=2)
+                except Exception as e:
+                    logger.warning(f"Could not write text_manifest.json: {e}")
 
             if res.returncode != 0:
                 err_msg = res.stderr.strip() or res.stdout.strip()
@@ -379,6 +566,7 @@ class VectorCraftRenderer:
                     execution_time_sec=elapsed,
                     command_count=len(self.commands),
                     step_results=step_results,
+                    text_manifest=text_manifest,
                     error_message=err_msg,
                 )
 
@@ -390,6 +578,7 @@ class VectorCraftRenderer:
                 execution_time_sec=elapsed,
                 command_count=len(self.commands),
                 step_results=step_results,
+                text_manifest=text_manifest,
             )
         except Exception as e:
             elapsed = time.time() - start_time

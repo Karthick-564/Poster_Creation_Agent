@@ -57,12 +57,7 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
 
 ## 5. Known Open Issues (priority order)
 
-1. **Fill-ordering bug in `vectorcraft_renderer.py`** — `add_shape_rectangle/ellipse/path/star`
-   emit `paint.setFill` AFTER the shape-create command. The VectorCraft engine applies the
-   paint *current at creation time* (`add_art_turned → new_art_look(s.paint.fill, …)`), so the
-   intended fill lands on the NEXT shape and the first shape of each styled pair gets the wrong
-   paint (e.g. the first prize-ribbon hairline at y=1008 vs the one at y=1052). Fix: emit
-   `paint.setFill` (+ `stroke.set`) **before** the create command.
+1. **[FIXED] Fill-ordering bug in `vectorcraft_renderer.py`** — Resolved by emitting `select.none` followed by `paint.setFill` / `paint.setStroke` / `stroke.set` *before* the create command. Verified via regression test `tests/test_vectorcraft_paint_order.py::test_paint_ordering_two_rectangles`.
 2. **Stage 7 fallback fabricates a pass** — Gemini 429/503 → hardcoded `overall_score: 9,
    READY_FOR_PRINT` defeats the "strict gate". Should either fail hard or run deterministic
    checks instead.
@@ -97,8 +92,13 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
 - Gemini critique images must be downscaled ≤1024px before base64 upload.
 - Always Ideogram background at 896×1120 (4:5, multiples of 16), then Lanczos-resize to 1080×1350
   in Stage 4 (`layer0_feathered_bg.png`).
-- VectorCraft `text.create` returns `bounds`/`overflow` in its result JSON — currently discarded;
-  free deterministic geometry data for future checks.
+- VectorCraft `text.create` returns `bounds`/`overflow` in its result JSON — recorded per run in `text_manifest.json` and `VectorCraftResult.text_manifest`.
+- Engine facts catalogue documented in full at `docs/vc_engine_facts.md`:
+  - `paint.setFill`: Accepts per-stop `opacity` in `gradient.stops`, enabling smooth alpha scrims over images.
+  - `transparency.set`: Supports all 16 PDF blend modes (`screen`, `multiply`, `overlay`, etc.) and object/layer opacity.
+  - `document.rasterEffectsSettings`: Live pixel effects (drop shadow, blur) render at print resolution via `resolution: 300`.
+  - `text.fitHeadline`: Natively tracks area text line to fill frame width.
+  - Shared fonts: Programmatically resolved at `<exe_dir>/VectorCraftData/Fonts` (portable) or platform prefs without hardcoded user paths.
 
 ## 7. Superseded / Do Not Revive
 

@@ -33,4 +33,8 @@ runs/*
 # Bakeoff temp renders
 scripts/bakeoff/reports/temp_render/
 
+# VectorCraft runtime data & portable preferences
+**/VectorCraftData/
+
+
 
