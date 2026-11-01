@@ -42,12 +42,18 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    context_text = args.context
+    if not context_text:
+        ctx_file = Path("context.md")
+        if ctx_file.exists():
+            context_text = ctx_file.read_text(encoding="utf-8")
+
     pipeline = UnifiedPosterPipeline(
         run_id=args.run_id,
         artifact_dir=args.artifact_dir,
         use_mock=args.mock,
     )
-    result = pipeline.execute(brief_text=brief_text, context_text=args.context)
+    result = pipeline.execute(brief_text=brief_text, context_text=context_text)
     print("\nCLI RESULT SUMMARY:")
     print(f"Master Print PDF : {result['pdf']}")
     print(f"2x Render PNG    : {result['png_2x']}")

@@ -463,6 +463,7 @@ class GeminiClient:
 
     FALLBACK_MODELS = [
         "gemini-flash-latest",
+        "gemini-flash-lite-latest",
     ]
 
     def __init__(self, api_key: str | None = None):
@@ -522,6 +523,12 @@ class GeminiClient:
             for m in models_to_try:
                 try:
                     data = self._call_api(m, payload, timeout=timeout)
+                except Exception as e:
+                    # Model API level failure (503/404/timeout) -> fallback to next model
+                    last_error = e
+                    continue
+
+                try:
                     text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
                     parsed = json.loads(text)
                     if validator:
@@ -530,8 +537,9 @@ class GeminiClient:
                             raise ValueError(f"Schema validation failed: {err_msg}")
                     return parsed
                 except Exception as e:
+                    # Schema or JSON parsing failure -> break model loop to retry next attempt
                     last_error = e
-                    continue
+                    break
 
         return {"error": f"Gemini generate_json failed after retry: {last_error}"}
 

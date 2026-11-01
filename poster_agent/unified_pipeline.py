@@ -216,7 +216,7 @@ REQUIREMENTS:
 5. 60/30/10 Palette: bg_60, hero_30, accent_10 hex colors (#RRGGBB) adhering to palette policy.
 6. Typography & Accent: body_stance (<= 20 words), tracking_stance (<= 20 words), accent_row_choice (<= 20 words).
 7. Assets:
-   - hero: ideogram_caption, negative_caption ("text, letters, numbers, words, watermark"), aspect ("4:5").
+   - hero: ideogram_caption (describe physical subject ONLY, e.g. student developers collaborating at desks. STRICTLY NO floating UI elements, NO floating screens, NO app icons, NO UI cards/widgets), negative_caption ("text, letters, numbers, words, watermark, floating cards, UI widgets, buttons, screens"), aspect ("4:5").
    - background: ideogram_caption (strictly zero-text, no event strings, pure atmosphere).
    - accents: list of {{id, ideogram_caption}}.
 8. Calm Regions Requested: Up to 4 normalized bounding boxes [y0, x0, y1, x1] in 0-1000 where text must sit.
@@ -345,7 +345,9 @@ Output strictly valid JSON conforming to the schema.
         s3_t0 = time.time()
         hero_path = self.run_dir / "layer3_hero.png"
         hero_caption = concept_plan["assets"]["hero"]["ideogram_caption"]
-        qwen_hero_prompt = f"Isolated 3D {hero_caption}, directional studio lighting from {concept_plan['light_plan']['key_direction']}, crisp outer silhouette, pure black background for alpha extraction, high detail, centered, no text, no letters, isolated on empty alpha channel, transparent background, clean sticker cutout, 3D render, sharp edges, no background"
+        for banned_ui in ["holographic", "screens", "dashboard", "ui elements", "cards", "widgets", "floating elements", "code elements", "floating icons", "app icons"]:
+            hero_caption = re.sub(rf"\b{banned_ui}\b", "", hero_caption, flags=re.IGNORECASE)
+        qwen_hero_prompt = f"Isolated 3D {hero_caption.strip()}, directional studio lighting from {concept_plan['light_plan']['key_direction']}, crisp outer silhouette, pure black background for alpha extraction, high detail, centered, no text, no letters, isolated on empty alpha channel, transparent background, clean sticker cutout, 3D render, sharp edges, no background"
 
         if self.use_mock:
             print(">>> [Mock Mode] Synthesizing mock hero cutout locally...")
@@ -732,7 +734,7 @@ Check each of these expected fields:
 - CTA: "{brief.get_text('cta')}"
 
 2. EDITORIAL CRAFT STANDARDS:
-- Posters are NOT web dashboards: Confirm ZERO rectangular container cards, ZERO button pills, and ZERO colored card boxes wrapping text.
+- Posters are NOT web dashboards: Confirm ZERO rectangular container cards, ZERO button pills, and ZERO colored card boxes wrapping text. (Note: pure typography CTAs with arrows like 'Scan to Apply →' or URL links are standard editorial print typography, not web buttons).
 - Depth Layering: Confirm headline typography and hero asset are integrated with cinematic depth.
 - Color Balance: Confirm strict role-based color distribution.
 

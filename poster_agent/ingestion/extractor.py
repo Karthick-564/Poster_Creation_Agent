@@ -120,7 +120,7 @@ class BriefExtractor:
             for line in context_text.splitlines():
                 if ":" in line and not line.strip().startswith("#"):
                     k, v = line.split(":", 1)
-                    k_norm = k.strip().lower()
+                    k_norm = re.sub(r"[\*\_\-\#]+", "", k).strip().lower()
                     v_clean = v.strip()
                     if v_clean:
                         for canonical_key, aliases in self.KEY_PATTERNS.items():

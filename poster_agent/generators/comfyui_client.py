@@ -63,18 +63,27 @@ class ComfyUIClient:
         with open(wf_path, "r", encoding="utf-8") as f:
             wf = json.load(f)
 
+        # Dynamic seed randomization
+        if "98:18" in wf and "inputs" in wf["98:18"]:
+            wf["98:18"]["inputs"]["noise_seed"] = int(time.time() * 1000) % 1000000000000000
+
+        # Clean structured Ideogram prompt without safety filter trigger words
+        palette_list = palette[:5] if palette else ["#FFFFFF", "#0B2A5B", "#4285F4"]
         ideogram_prompt = {
             "high_level_description": description,
-            "style_description": {
-                "aesthetics": "Rich, high-impact poster background art with deep atmospheric depth and luminous lighting.",
-                "medium": "digital_illustration",
-                "art_style": "cinematic digital painting, smooth atmospheric gradients, ethereal lighting. Contemporary atmospheric background key visual with clean calm negative space. PURE NON-TEXT BACKGROUND ARTWORK: ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO SIGNAGE, NO LABELS, NO WATERMARKS, NO NUMBERS.",
-                "color_palette": palette[:5] if palette else ["#1B1040", "#7AE7C7", "#FF4D6D", "#FFB703"],
-            },
+            "style_description": f"Clean modern graphic illustration, cinematic digital painting with smooth atmospheric gradients and soft studio lighting. Color palette: {', '.join(palette_list)}.",
             "compositional_deconstruction": {
-                "background": f"{description}. Deep ambient background with soft atmospheric lighting, leaving clean negative space for overlays. NO EMBEDDED TEXT, NO LABELS, NO WATERMARKS.",
-                "elements": [],
+                "background": f"{description}. Ambient backdrop with soft studio lighting, spacious calm negative space for vector typography.",
+                "elements": [
+                    {
+                        "type": "obj",
+                        "bbox": [400, 250, 700, 750],
+                        "desc": "Soft abstract ambient gradient ribbons and subtle architectural shadows.",
+                        "color_palette": palette_list[:3],
+                    }
+                ],
             },
+            "aspect_ratio": "4:5",
         }
 
         wf["98:24"]["inputs"]["text"] = json.dumps(ideogram_prompt, indent=2)
@@ -141,7 +150,7 @@ class ComfyUIClient:
             },
             "5": {
                 "inputs": {
-                    "text": "blurry, low quality, noise, solid background, white background, black background, text, watermark, hands, stand, base",
+                    "text": "blurry, low quality, noise, solid background, white background, black background, text, watermark, hands, stand, base, floating cards, app icons, web buttons, UI widgets, dashboard panels, floating screens, frames, borders",
                     "clip": ["2", 0],
                 },
                 "class_type": "CLIPTextEncode",

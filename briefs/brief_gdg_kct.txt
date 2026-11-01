@@ -1,0 +1,35 @@
+POSTER BRIEF: GDG KCT RECRUITMENT 2026
+Format: 1024 x 1536 px (2:3 portrait)
+Title: We Are Recruiting
+Eyebrow: LEARN / BUILD / GROW
+Tagline: REAL PEOPLE. REAL PROJECTS. REAL IMPACT.
+Subtitle: Join GDG KCT On Campus and be a part of a community that builds, learns and creates impact!
+Section: OPEN POSITIONS
+Position 1: Team Members
+Position 1 tagline: Bring your ideas, passion and energy!
+Position 1 point 1: Work on real-world projects
+Position 1 point 2: Collaborate with amazing peers
+Position 1 point 3: Learn new technologies
+Position 1 point 4: Be part of a vibrant community
+Position 2: Leads
+Position 2 tagline: Take initiative, drive events and make an impact!
+Position 2 point 1: Plan and execute events
+Position 2 point 2: Mentor and guide the team
+Position 2 point 3: Build leadership skills
+Position 2 point 4: Shape the future of GDG KCT
+Deadline label: TIME TO FILL
+Deadline: Within Monday
+Date: 03/11/2026, 11:59 PM
+Deadline note: (For both Leads and Team Members)
+CTA: Scan to Apply →
+QR link: https://forms.example/gdg-kct-apply
+Closing line: BE THE CHANGE. JOIN GDG KCT!
+Events: Tech Talks • Build Sessions • Hackathons • Community Projects
+Organizer: Google Developer Groups On Campus • KCT, Coimbatore
+Partner: KUMARAGURU Institutions
+Logos: logo_gdg_oncampus.png, logo_kumaraguru.png (supplied files, use as-is)
+Mood: clean, friendly, energetic, student tech community, light background
+Palette: #FFFFFF #0B2A5B #4285F4 #EA4335 #FBBC05 #34A853 #E8F0FE #E6F4EA
+Palette use: navy for text; the four Google colors only on the word "Recruiting", the check marks, and a corner stripe
+Art: one flat vector illustration of students collaborating at laptops, no text, no logos, transparent background
+
