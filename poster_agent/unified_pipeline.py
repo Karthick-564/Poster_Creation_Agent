@@ -483,6 +483,7 @@ Return strictly valid JSON with this schema:
             report_md = self.run_dir / f"{title_slug}_master_pipeline_report.md"
 
         total_runtime = time.time() - total_t0
+        _posix = lambda p: str(p).replace("\\", "/")  # noqa: E731 — file:/// links
         report_text = f"""# {brief.get_text('title')} — Autonomous Master Pipeline Report
 
 **Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}  
@@ -515,10 +516,10 @@ Return strictly valid JSON with this schema:
 ---
 
 ## 3. Final Deliverables
-- **Print Master Vector PDF**: [{dest_pdf.name}](file:///{str(dest_pdf).replace('\\', '/')})
-- **2x High-Res Render (2160 x 2700 px)**: [{dest_png.name}](file:///{str(dest_png).replace('\\', '/')})
-- **Layer 0 Background Art**: [{dest_bg.name}](file:///{str(dest_bg).replace('\\', '/')})
-- **Layer 3 Hero Cutout**: [{dest_hero.name}](file:///{str(dest_hero).replace('\\', '/')})
+- **Print Master Vector PDF**: [{dest_pdf.name}](file:///{_posix(dest_pdf)})
+- **2x High-Res Render (2160 x 2700 px)**: [{dest_png.name}](file:///{_posix(dest_png)})
+- **Layer 0 Background Art**: [{dest_bg.name}](file:///{_posix(dest_bg)})
+- **Layer 3 Hero Cutout**: [{dest_hero.name}](file:///{_posix(dest_hero)})
 """
         report_md.write_text(report_text, encoding="utf-8")
 
