@@ -21,6 +21,44 @@ from poster_agent.renderer.vectorcraft_renderer import (
     get_vectorcraft_fonts_dir,
 )
 
+LABEL_DATE = "DATE:"
+LABEL_SCHEDULE = "SCHEDULE:"
+LABEL_EVENT_SCHEDULE = "EVENT SCHEDULE:"
+LABEL_LOCATION = "LOCATION:"
+LABEL_TRACKS = "TRACKS:"
+LABEL_FEATURED_TRACKS = "FEATURED TRACKS:"
+LABEL_TRACKS_HIGHLIGHTS = "TRACKS & HIGHLIGHTS"
+LABEL_TRACKS_HIGHLIGHTS_COLON = "TRACKS & HIGHLIGHTS:"
+LABEL_PRIZES_REGISTRATION = "PRIZES & REGISTRATION"
+LABEL_PRIZES_REGISTRATION_COLON = "PRIZES & REGISTRATION:"
+LABEL_AWARD_POOL = "AWARD POOL:"
+LABEL_AWARDS = "AWARDS:"
+LABEL_REGISTRATION_ACTION = "REGISTRATION ACTION:"
+LABEL_REGISTRATION = "REGISTRATION:"
+LABEL_CIRCUIT_ELIGIBILITY = "CIRCUIT ELIGIBILITY:"
+LABEL_PRESENTED_BY = "PRESENTED BY"
+LABEL_JOIN = "JOIN:"
+
+MICROCOPY_ALLOWLIST: list[str] = [
+    LABEL_DATE,
+    LABEL_SCHEDULE,
+    LABEL_EVENT_SCHEDULE,
+    LABEL_LOCATION,
+    LABEL_TRACKS,
+    LABEL_FEATURED_TRACKS,
+    LABEL_TRACKS_HIGHLIGHTS,
+    LABEL_TRACKS_HIGHLIGHTS_COLON,
+    LABEL_PRIZES_REGISTRATION,
+    LABEL_PRIZES_REGISTRATION_COLON,
+    LABEL_AWARD_POOL,
+    LABEL_AWARDS,
+    LABEL_REGISTRATION_ACTION,
+    LABEL_REGISTRATION,
+    LABEL_CIRCUIT_ELIGIBILITY,
+    LABEL_PRESENTED_BY,
+    LABEL_JOIN,
+]
+
 
 @dataclass
 class TypographicRow:
@@ -420,17 +458,26 @@ def compose_focal_point(
     # Layer 0: Full-Bleed Background Art
     vc.place_image(bg_path, rect=[0, 0, width, height])
 
-    # Layer 1: Soft Scrims (Zero Discontinuity: Edge Stop Always Opacity 0.0)
-    # Top header scrim fades down into canvas, ending at opacity 0.0
+    # Layer 1: Soft Scrims (Zero Discontinuity: Overshoot past canvas edge, final 0.0 stop before edge)
+    fade_overshoot = 0.03 * min(width, height)
+    total_w = width + 2 * fade_overshoot
+    total_h = height + 2 * fade_overshoot
+
+    fade_top_y = height * 0.32
+    d_top = (fade_top_y - (-fade_overshoot))
+    stop_top = d_top / total_h
     vc.soft_scrim(
-        x=0, y=0, width=width, height=height * 0.32,
-        stops=[(0.0, canvas_base, 0.85), (1.0, canvas_base, 0.0)],
+        x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+        stops=[(0.0, canvas_base, 0.85), (stop_top * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
         direction="to_bottom",
     )
-    # Bottom footer scrim fades up into canvas, ending at opacity 0.0 at its top edge
+
+    fade_bot_y = height * 0.58
+    d_bot = (height + fade_overshoot) - fade_bot_y
+    stop_bot = d_bot / total_h
     vc.soft_scrim(
-        x=0, y=height * 0.58, width=width, height=height * 0.42,
-        stops=[(0.0, canvas_base, 0.90), (1.0, canvas_base, 0.0)],
+        x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+        stops=[(0.0, canvas_base, 0.90), (stop_bot * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
         direction="to_top",
     )
 
@@ -638,15 +685,25 @@ def compose_z_pattern(
     # Layer 0: Background
     vc.place_image(bg_path, rect=[0, 0, width, height])
 
-    # Layer 1: Atmospheric Scrims (Edge Stop Strictly Opacity 0.0)
+    # Layer 1: Atmospheric Scrims (Overshoot past canvas edge, final 0.0 stop before edge)
+    fade_overshoot = 0.03 * min(width, height)
+    total_w = width + 2 * fade_overshoot
+    total_h = height + 2 * fade_overshoot
+
+    fade_top_y = height * 0.35
+    d_top = (fade_top_y - (-fade_overshoot))
+    stop_top = d_top / total_h
     vc.soft_scrim(
-        x=0, y=0, width=width, height=height * 0.35,
-        stops=[(0.0, canvas_base, 0.88), (1.0, canvas_base, 0.0)],
+        x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+        stops=[(0.0, canvas_base, 0.88), (stop_top * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
         direction="to_bottom",
     )
+    fade_bot_y = height * 0.55
+    d_bot = (height + fade_overshoot) - fade_bot_y
+    stop_bot = d_bot / total_h
     vc.soft_scrim(
-        x=0, y=height * 0.55, width=width, height=height * 0.45,
-        stops=[(0.0, canvas_base, 0.90), (1.0, canvas_base, 0.0)],
+        x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+        stops=[(0.0, canvas_base, 0.90), (stop_bot * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
         direction="to_top",
     )
 
@@ -690,19 +747,44 @@ def compose_z_pattern(
             )
         title_start_y = height * 0.12
 
-    # Diagonal Headline: Area text bounded by margin box with autoHeight
+    # Mid-Canvas Diagonal Hero geometry (computed before headline for collision safety)
+    hero_w = min(width * 0.50, height * 0.38)
+    hero_h = hero_w
+    hero_cx = width * 0.55
+    hero_cy = height * 0.44
+    hero_top_y = hero_cy - hero_h / 2.0
+
+    # Diagonal Slice: Two-line staggered headline
     title_row = plan.get_row("title")
     title_y = max(title_start_y, height * 0.11)
     if title_row:
+        headline_size = title_row.size * 0.85
         h_box_w = width - (2 * margin)
-        h_block_h = estimate_headline_height(title_row.text, title_row.size * 0.85, h_box_w, title_row.font)
+        words = title_row.text.split()
+        if len(words) >= 2:
+            best_k = 1
+            best_diff = float("inf")
+            for k in range(1, len(words)):
+                w1 = estimate_text_width(" ".join(words[:k]), headline_size, title_row.font)
+                w2 = estimate_text_width(" ".join(words[k:]), headline_size, title_row.font)
+                diff = abs(w1 - w2)
+                if diff < best_diff:
+                    best_diff = diff
+                    best_k = k
+            line1 = " ".join(words[:best_k])
+            line2 = " ".join(words[best_k:])
+        else:
+            line1 = title_row.text
+            line2 = ""
+
+        l1_h = estimate_headline_height(line1, headline_size, h_box_w, title_row.font)
         vc.area_text(
-            text=title_row.text,
+            text=line1,
             x=margin,
             y=title_y,
             width=h_box_w,
-            height=h_block_h + 10,
-            size=title_row.size * 0.85,
+            height=l1_h + 8,
+            size=headline_size,
             font=title_row.font,
             style="Bold",
             color=structural_color,
@@ -711,10 +793,42 @@ def compose_z_pattern(
             role="headline_line1",
         )
 
-    # Mid-Canvas Diagonal Hero
-    hero_w = min(width * 0.50, height * 0.38)
-    hero_h = hero_w
-    hero_cx = width * 0.55
+        if line2:
+            l2_x = margin + width * 0.16
+            l2_max_w = (width - margin) - l2_x
+            l2_y = title_y + headline_size * 0.55
+            l2_size = headline_size
+
+            # Width clamp
+            est_l2_w = estimate_text_width(line2, l2_size, title_row.font)
+            if est_l2_w > l2_max_w and est_l2_w > 0:
+                l2_size = max(18.0, l2_size * (l2_max_w / est_l2_w) * 0.95)
+
+            # Hero intersection clamp
+            l2_h = estimate_headline_height(line2, l2_size, l2_max_w, title_row.font)
+            if l2_y + l2_h > hero_top_y - 8:
+                avail_h = (hero_top_y - 8) - l2_y
+                if avail_h > 20:
+                    scale = max(0.45, avail_h / max(1.0, l2_h))
+                    l2_size = max(16.0, l2_size * scale)
+                    l2_h = estimate_headline_height(line2, l2_size, l2_max_w, title_row.font)
+                else:
+                    l2_y = hero_top_y - 8 - l2_h
+
+            vc.area_text(
+                text=line2,
+                x=l2_x,
+                y=l2_y,
+                width=l2_max_w,
+                height=l2_h + 8,
+                size=l2_size,
+                font=title_row.font,
+                style="Bold",
+                color=structural_color,
+                justify="left",
+                fit="autoHeight",
+                role="headline_line2",
+            )
     hero_cy = height * 0.44
 
     vc.radial_light(
@@ -737,7 +851,7 @@ def compose_z_pattern(
     events_row = plan.get_row("events")
     if events_row:
         vc.add_text(
-            text="FEATURED TRACKS:", x=margin, y=bot_y, size=12.0,
+            text=LABEL_FEATURED_TRACKS, x=margin, y=bot_y, size=12.0,
             font=fonts["mono"], style="Regular", color=palette[2] if len(palette) > 2 else "#00BBF9",
             justify="left", role="events_label",
         )
@@ -761,7 +875,7 @@ def compose_z_pattern(
     prize_row = plan.get_row("prize")
     accent_target_id = None
     if prize_row:
-        prz_txt = f"AWARDS: {prize_row.text}"
+        prz_txt = f"{LABEL_AWARDS} {prize_row.text}"
         prz_sz = _clamp_zp(prz_txt, prize_row.size * 0.90, prize_row.font)
         vc.add_text(
             text=prz_txt, x=margin, y=bot_y, size=prz_sz,
@@ -772,7 +886,7 @@ def compose_z_pattern(
 
     cta_row = plan.get_row("cta")
     if cta_row:
-        cta_txt = f"JOIN: {cta_row.text}  →"
+        cta_txt = f"{LABEL_JOIN} {cta_row.text}  →"
         cta_sz = _clamp_zp(cta_txt, cta_row.size * 0.95, cta_row.font)
         vc.add_text(
             text=cta_txt, x=width - margin, y=bot_y, size=cta_sz,
@@ -820,13 +934,16 @@ def compose_split(
     vc.place_image(hero_path, rect=[hero_cx - hero_w / 2.0, hero_cy - hero_h / 2.0, hero_w, hero_h])
     hero_node_id = "$last"
 
-    # BUG 4 FIX: Seamless scrim covering entire lower field down to canvas edge
-    # Direction 'to_top' starts at bottom with solid 1.0 opacity, fading to opacity 0.0 at y = 0.44 * H
-    # Eliminates hard opaque rectangle boundary cutting through the headline
+    # Layer 1: Atmospheric Scrim (Overshoot past canvas edge, final 0.0 stop before edge)
+    fade_overshoot = 0.03 * min(width, height)
+    total_w = width + 2 * fade_overshoot
+    total_h = height + 2 * fade_overshoot
     split_top_y = height * 0.44
+    d = (height + fade_overshoot) - split_top_y
+    stop_split = d / total_h
     vc.soft_scrim(
-        x=0, y=split_top_y, width=width, height=height - split_top_y,
-        stops=[(0.0, canvas_base, 1.0), (0.70, canvas_base, 1.0), (1.0, canvas_base, 0.0)],
+        x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+        stops=[(0.0, canvas_base, 1.0), (stop_split * 0.70, canvas_base, 1.0), (stop_split * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
         direction="to_top",
     )
 
@@ -875,7 +992,7 @@ def compose_split(
 
     events_row = plan.get_row("events")
     if events_row:
-        ev_txt = f"TRACKS: {events_row.text}"
+        ev_txt = f"{LABEL_TRACKS} {events_row.text}"
         ev_sz = _clamp_split(ev_txt, events_row.size * 0.85, events_row.font)
         vc.add_text(
             text=ev_txt, x=type_x, y=type_y, size=ev_sz,
@@ -885,7 +1002,7 @@ def compose_split(
 
     date_row = plan.get_row("date_time")
     if date_row:
-        dt_txt = f"SCHEDULE: {date_row.text}"
+        dt_txt = f"{LABEL_SCHEDULE} {date_row.text}"
         dt_sz = _clamp_split(dt_txt, date_row.size * 0.90, fonts["sans"])
         vc.add_text(
             text=dt_txt, x=type_x, y=type_y, size=dt_sz,
@@ -905,7 +1022,7 @@ def compose_split(
     prize_row = plan.get_row("prize")
     accent_target_id = None
     if prize_row:
-        prz_txt = f"PRIZE POOL: {prize_row.text}"
+        prz_txt = f"{LABEL_AWARD_POOL} {prize_row.text}"
         prz_sz = _clamp_split(prz_txt, prize_row.size, prize_row.font)
         vc.add_text(
             text=prz_txt, x=type_x, y=type_y, size=prz_sz,
@@ -916,7 +1033,7 @@ def compose_split(
 
     cta_row = plan.get_row("cta")
     if cta_row:
-        cta_txt = f"REGISTRATION: {cta_row.text}"
+        cta_txt = f"{LABEL_REGISTRATION} {cta_row.text}"
         cta_sz = _clamp_split(cta_txt, cta_row.size, cta_row.font)
         vc.add_text(
             text=cta_txt, x=type_x, y=type_y, size=cta_sz,
@@ -958,15 +1075,25 @@ def compose_grid_3col(
     # Layer 0: Background
     vc.place_image(bg_path, rect=[0, 0, width, height])
 
-    # Scrims (Edge Stop Strictly Opacity 0.0)
+    # Layer 1: Atmospheric Scrims (Overshoot past canvas edge, final 0.0 stop before edge)
+    fade_overshoot = 0.03 * min(width, height)
+    total_w = width + 2 * fade_overshoot
+    total_h = height + 2 * fade_overshoot
+
+    fade_top_y = height * 0.30
+    d_top = (fade_top_y - (-fade_overshoot))
+    stop_top = d_top / total_h
     vc.soft_scrim(
-        x=0, y=0, width=width, height=height * 0.30,
-        stops=[(0.0, canvas_base, 0.90), (1.0, canvas_base, 0.0)],
+        x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+        stops=[(0.0, canvas_base, 0.90), (stop_top * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
         direction="to_bottom",
     )
+    fade_bot_y = height * 0.65
+    d_bot = (height + fade_overshoot) - fade_bot_y
+    stop_bot = d_bot / total_h
     vc.soft_scrim(
-        x=0, y=height * 0.65, width=width, height=height * 0.35,
-        stops=[(0.0, canvas_base, 0.90), (1.0, canvas_base, 0.0)],
+        x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+        stops=[(0.0, canvas_base, 0.90), (stop_bot * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
         direction="to_top",
     )
 
@@ -1050,7 +1177,7 @@ def compose_grid_3col(
 
     # Left Column (Tracks & Schedule Block)
     l_y = mid_top_y
-    vc.add_text(text="TRACKS & HIGHLIGHTS", x=col1_x, y=l_y, size=13.0, font=fonts["mono"], style="Bold", color=accent_color, justify="left", role="col1_header")
+    vc.add_text(text=LABEL_TRACKS_HIGHLIGHTS, x=col1_x, y=l_y, size=13.0, font=fonts["mono"], style="Bold", color=accent_color, justify="left", role="col1_header")
     l_y += height * 0.022
     vc.add_shape_rectangle(x=col1_x, y=l_y, width=col_w, height=1, fill=accent_color)
     l_y += height * 0.028
@@ -1067,7 +1194,7 @@ def compose_grid_3col(
 
     # Left Column: Schedule block fills vertical space
     l_y = max(l_y + 15, height * 0.62)
-    vc.add_text(text="EVENT SCHEDULE:", x=col1_x, y=l_y, size=12.0, font=fonts["mono"], color=palette[2] if len(palette) > 2 else "#00BBF9", justify="left", role="sched_label")
+    vc.add_text(text=LABEL_EVENT_SCHEDULE, x=col1_x, y=l_y, size=12.0, font=fonts["mono"], color=palette[2] if len(palette) > 2 else "#00BBF9", justify="left", role="sched_label")
     l_y += height * 0.022
     date_row = plan.get_row("date_time")
     if date_row:
@@ -1086,7 +1213,7 @@ def compose_grid_3col(
 
     # BUG 1 FIX: Right Column (Bounded by col_w using fit="shrinkText" - ZERO canvas escape)
     r_y = mid_top_y
-    vc.add_text(text="PRIZES & REGISTRATION", x=col3_x, y=r_y, size=13.0, font=fonts["mono"], style="Bold", color=accent_color, justify="left", role="col3_header")
+    vc.add_text(text=LABEL_PRIZES_REGISTRATION, x=col3_x, y=r_y, size=13.0, font=fonts["mono"], style="Bold", color=accent_color, justify="left", role="col3_header")
     r_y += height * 0.022
     vc.add_shape_rectangle(x=col3_x, y=r_y, width=col_w, height=1, fill=accent_color)
     r_y += height * 0.028
@@ -1094,7 +1221,7 @@ def compose_grid_3col(
     prize_row = plan.get_row("prize")
     accent_target_id = None
     if prize_row:
-        vc.add_text(text="AWARD POOL:", x=col3_x, y=r_y, size=12.0, font=fonts["mono"], color=palette[2] if len(palette) > 2 else "#00BBF9", justify="left", role="prize_label")
+        vc.add_text(text=LABEL_AWARD_POOL, x=col3_x, y=r_y, size=12.0, font=fonts["mono"], color=palette[2] if len(palette) > 2 else "#00BBF9", justify="left", role="prize_label")
         r_y += height * 0.024
         # Bounded area text within col_w: never overflows right margin
         vc.area_text(
@@ -1106,7 +1233,7 @@ def compose_grid_3col(
 
     cta_row = plan.get_row("cta")
     if cta_row:
-        vc.add_text(text="REGISTRATION ACTION:", x=col3_x, y=r_y, size=12.0, font=fonts["mono"], color=palette[2] if len(palette) > 2 else "#00BBF9", justify="left", role="cta_label")
+        vc.add_text(text=LABEL_REGISTRATION_ACTION, x=col3_x, y=r_y, size=12.0, font=fonts["mono"], color=palette[2] if len(palette) > 2 else "#00BBF9", justify="left", role="cta_label")
         r_y += height * 0.024
         # Bounded area text within col_w: never overflows right margin
         vc.area_text(
@@ -1117,22 +1244,13 @@ def compose_grid_3col(
             accent_target_id = "$last"
         r_y += height * 0.055
 
-    # Right Column: Circuit Info fills vertical space
-    r_y = max(r_y + 15, height * 0.62)
-    vc.add_text(text="CIRCUIT ELIGIBILITY:", x=col3_x, y=r_y, size=12.0, font=fonts["mono"], color=palette[2] if len(palette) > 2 else "#00BBF9", justify="left", role="elig_label")
-    r_y += height * 0.022
-    vc.area_text(
-        text="ALL COLLEGES & UNIVERSITIES", x=col3_x, y=r_y, width=col_w, height=35,
-        size=13.0, font=fonts["sans"], style="Bold", color=structural_color, justify="left", fit="shrinkText", role="elig_text",
-    )
-
     # Monospace Footer Strip (JetBrains Mono if available)
     footer_y = height - margin - 25
     vc.add_shape_rectangle(x=margin, y=footer_y - 12, width=width - 2 * margin, height=1, fill=palette[2] if len(palette) > 2 else "#00BBF9")
 
     footer_parts = []
     if date_row:
-        footer_parts.append(f"DATE: {date_row.text}")
+        footer_parts.append(f"{LABEL_DATE} {date_row.text}")
     if venue_row:
         footer_parts.append(venue_row.text)
     full_footer = "   ◆   ".join(footer_parts)

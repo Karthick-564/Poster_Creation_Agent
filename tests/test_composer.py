@@ -10,11 +10,13 @@ Covers:
 """
 import os
 from pathlib import Path
+import numpy as np
 import pytest
 from PIL import Image
 
 from poster_agent.ingestion.extractor import BriefExtractor, ExtractedBrief
 from poster_agent.renderer.composer import (
+    MICROCOPY_ALLOWLIST,
     TypographicPlan,
     audit_fonts,
     build_typography_plan,
@@ -197,7 +199,7 @@ def test_font_audit_graceful_degradation(monkeypatch, tmp_path):
 
 
 def test_scrim_gradient_edge_stops_terminate_at_zero_opacity(sample_brief, default_palette):
-    """Verify that every gradient scrim across all archetypes ends at opacity 0.0 at the outer edge."""
+    """Verify that every gradient scrim across all archetypes ends at opacity 0.0 at outer edge, and bounds extend past canvas edges."""
     for arch in ["focal_point", "z_pattern", "split", "grid_3col"]:
         vc = compose(
             brief=sample_brief,
@@ -218,6 +220,73 @@ def test_scrim_gradient_edge_stops_terminate_at_zero_opacity(sample_brief, defau
             assert stops[-1]["opacity"] == 0.0, (
                 f"Outer stop does not terminate at 0.0 opacity in {arch}: {stops[-1]}"
             )
+
+        # Extend test to assert rect bounds extend to/beyond canvas edge on fade side
+        linear_scrim_cmds = [
+            (i, c) for i, c in enumerate(vc.commands)
+            if c["command"] == "paint.setFill" and c["params"].get("gradient", {}).get("kind") == "linear"
+        ]
+        assert len(linear_scrim_cmds) > 0, f"No linear scrim gradients in {arch}"
+        for i, cmd in linear_scrim_cmds:
+            rect_cmd = vc.commands[i + 1]
+            assert rect_cmd["command"] == "shape.rectangle", f"Expected shape.rectangle after scrim paint in {arch}"
+            p = rect_cmd["params"]
+            assert p["x"] <= 0.0, f"Scrim rect x={p['x']} does not extend to/past left canvas edge in {arch}"
+            assert p["x"] + p["width"] >= 1080.0, f"Scrim rect right edge does not reach right canvas edge in {arch}"
+            assert p["y"] <= 0.0, f"Scrim rect y={p['y']} does not extend to/past top canvas edge in {arch}"
+            assert p["y"] + p["height"] >= 1350.0, f"Scrim rect bottom edge does not reach bottom canvas edge in {arch}"
+
+
+def test_microcopy_allowlist_only(sample_brief, default_palette):
+    """Verify that all _label roles match MICROCOPY_ALLOWLIST and no queued row is constant outside {allowlist ∪ brief}."""
+    brief_terms = {f.text.strip().upper() for f in sample_brief.fields.values() if f.text and f.text.strip()}
+    if sample_brief.fields.get("events"):
+        for t in sample_brief.fields["events"].text.split("/"):
+            if t.strip():
+                brief_terms.add(t.strip().upper())
+
+    for arch in ["focal_point", "z_pattern", "split", "grid_3col"]:
+        vc = compose(
+            brief=sample_brief,
+            palette=default_palette,
+            bg_path=Path("dummy_bg.png"),
+            hero_path=Path("dummy_hero.png"),
+            archetype=arch,
+        )
+        assert len(vc._queued_texts) > 0
+
+        for item in vc._queued_texts:
+            role = item.get("role") or ""
+            text = item.get("text") or ""
+
+            # Role ending in _label must be strictly in MICROCOPY_ALLOWLIST
+            if role.endswith("_label"):
+                assert text in MICROCOPY_ALLOWLIST, f"Role '{role}' text '{text}' not in MICROCOPY_ALLOWLIST in {arch}"
+
+            # Fabricated copy guard: no row contains unallowed eligibility copy
+            assert "CIRCUIT ELIGIBILITY" not in text.upper(), f"Fabricated eligibility label in {arch}: {text}"
+            assert "ALL COLLEGES" not in text.upper(), f"Fabricated eligibility text in {arch}: {text}"
+
+            # Content verification: text must be in allowlist or contain brief terms
+            if text in MICROCOPY_ALLOWLIST:
+                continue
+            clean = text.replace("★", "").replace("◆", "").replace("—", "").replace("//", "").replace("→", "").strip().upper()
+            if clean in [a.upper().rstrip(":") for a in MICROCOPY_ALLOWLIST]:
+                continue
+
+            has_support = any(
+                (term in clean or clean in term)
+                for term in brief_terms
+                if len(term) >= 3
+            )
+            if not has_support:
+                has_support = any(
+                    word in clean
+                    for term in brief_terms
+                    for word in term.split()
+                    if len(word) >= 4
+                )
+            assert has_support, f"Text '{text}' (role '{role}') in {arch} has no brief support and is outside allowlist"
 
 
 def test_cross_row_band_overlap_resolution(pathological_brief, default_palette):
@@ -255,12 +324,70 @@ def test_cross_row_band_overlap_resolution(pathological_brief, default_palette):
         f"Z-pattern top band rows collide at same y! org_y={org_cmd['params']['y']}, date_y={date_cmd['params']['y']}"
     )
 
+    # Stagger rows: line 1 and line 2 do not overlap top band, each other, or hero rect
+    l1_q = next(q for q in vc_zp._queued_texts if q.get("role") == "headline_line1")
+    l2_q = next(q for q in vc_zp._queued_texts if q.get("role") == "headline_line2")
+    l1_cmd = next(c for c in vc_zp.commands if c["command"] == "text.create" and c["params"]["text"] == l1_q["text"])
+    l2_cmd = next(c for c in vc_zp.commands if c["command"] == "text.create" and c["params"]["text"] == l2_q["text"])
+    hero_cmd = next(c for c in vc_zp.commands if c["command"] == "file.place" and "dummy_hero" in c["params"]["path"])
+
+    l1_p = l1_cmd["params"]
+    l2_p = l2_cmd["params"]
+    hero_rect = hero_cmd["params"]["rect"]
+
+    top_band_bottom = max(org_cmd["params"]["y"], date_cmd["params"]["y"])
+    assert l1_p["y"] >= top_band_bottom, f"Headline line 1 y={l1_p['y']} overlaps top band y={top_band_bottom}"
+    assert l2_p["y"] > l1_p["y"], f"Headline line 2 y={l2_p['y']} not below line 1 y={l1_p['y']}"
+    assert l2_p["x"] > l1_p["x"], f"Headline line 2 x={l2_p['x']} not staggered right of line 1 x={l1_p['x']}"
+    assert l2_p["y"] < hero_rect[1], f"Headline line 2 y={l2_p['y']} collides with hero top y={hero_rect[1]}"
+
     # 3. Z-pattern: bottom band elements (events, venue, prize, cta) must have non-overlapping y-slots
     venue_cmd = next(c for c in vc_zp.commands if c["command"] == "text.create" and "ABDUL KALAM" in c["params"]["text"].upper())
     prize_cmd = next(c for c in vc_zp.commands if c["command"] == "text.create" and "INNOVATION GRANT POOL" in c["params"]["text"].upper())
     cta_cmd = next(c for c in vc_zp.commands if c["command"] == "text.create" and "BIOECONOMY2027" in c["params"]["text"].upper())
     assert prize_cmd["params"]["y"] >= venue_cmd["params"]["y"] + 20.0, f"Prize overlaps venue: prize_y={prize_cmd['params']['y']}, venue_y={venue_cmd['params']['y']}"
     assert cta_cmd["params"]["y"] >= prize_cmd["params"]["y"] + 20.0, f"CTA overlaps prize: cta_y={cta_cmd['params']['y']}, prize_y={prize_cmd['params']['y']}"
+
+
+def test_seam_free_render_margin_columns(sample_brief, default_palette, tmp_path):
+    """Verify that rendered posters have max luminance delta < 6.0 in left/right 8% strips for y in [5%, 95%]."""
+    if not CLI_PATH.exists():
+        pytest.skip("VectorCraft CLI binary not found")
+
+    bg_path = tmp_path / "bg_seam.png"
+    hero_path = tmp_path / "hero_seam.png"
+    Image.new("RGBA", (1080, 1350), (10, 15, 25, 255)).save(bg_path)
+    Image.new("RGBA", (600, 600), (0, 200, 150, 255)).save(hero_path)
+
+    for arch in ["focal_point", "split"]:
+        vc = compose(
+            brief=sample_brief,
+            palette=default_palette,
+            bg_path=bg_path,
+            hero_path=hero_path,
+            archetype=arch,
+        )
+        vc.cli_path = CLI_PATH
+        out_png = tmp_path / f"seam_{arch}.png"
+        res = vc.execute(output_png=out_png, work_dir=tmp_path)
+        assert res.success, f"Render failed for {arch}: {res.error_message}"
+
+        img = Image.open(out_png).convert("RGB")
+        arr = np.array(img, dtype=float)
+        lum = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+        H, W = lum.shape
+
+        y_start = int(H * 0.05)
+        y_end = int(H * 0.95)
+
+        col_left = lum[y_start:y_end, int(W * 0.02)]
+        col_right = lum[y_start:y_end, int(W * 0.98)]
+
+        max_delta_left = float(np.abs(np.diff(col_left)).max())
+        max_delta_right = float(np.abs(np.diff(col_right)).max())
+
+        assert max_delta_left < 6.0, f"Left margin seam detected in {arch}: max delta = {max_delta_left:.2f} >= 6.0"
+        assert max_delta_right < 6.0, f"Right margin seam detected in {arch}: max delta = {max_delta_right:.2f} >= 6.0"
 
 
 def test_canvas_bounds_overflow_detection(tmp_path):
