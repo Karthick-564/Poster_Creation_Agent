@@ -1336,6 +1336,7 @@ def compose(
     layout_hints: Optional[list[str]] = None,
     width: float = 1080,
     height: float = 1350,
+    layout_plan: Optional[dict[str, Any]] = None,
 ) -> VectorCraftRenderer:
     """Master compose entrypoint: dispatches to chosen archetype composer."""
     forced_archetype = os.environ.get("POSTER_FORCE_ARCHETYPE")
