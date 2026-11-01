@@ -68,14 +68,9 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
    which were never measured. **Report wording must be synced to what a gate actually verified.**
 4. **Stage 2 silent fallback plan** — Gemini rate-limit → hardcoded cyberpunk plan with only a
    console note. At minimum link/record in the run log that the plan was a fallback.
-5. **Layout hardcoded in `_assemble_vectorcraft`** — text y-coordinates, sizes, fonts are static;
-   Stage 2 "planner" only produces palette + art prompts, not layout. Also the subfooter string
-   *"Open to All Engineering & Technology Colleges ◆ Official National Circuit"* is event-specific
-   and hardcoded (unify: pass through brief or drop).
-6. **ArtMeasurer output unused** — Stage 4 measures hero geometry/halo but `_assemble_vectorcraft`
-   places the hero at a fixed rect. Measured data should drive placement (or the stage is theater).
-7. **Static layout vs sparse briefs** — only `title/date/venue` are required; a brief without
-   events/prize/cta renders with empty gaps because layout doesn't adapt.
+5. **[FIXED — composer.py, archetype-driven] Layout hardcoded in `_assemble_vectorcraft`** — Replaced with `poster_agent/renderer/composer.py`. Dynamically builds a `TypographicPlan` with relative canvas scaling and dispatches across 4 distinct archetypes (`focal_point`, `z_pattern`, `split`, `grid_3col`). Hardcoded event subfooter string removed; all typography originates from the brief.
+6. **[FIXED for focal_point] ArtMeasurer output unused** — Stage 4 measured hero cutout geometry and aspect ratio now dynamically drive hero scaling and centering in the `focal_point` archetype (remaining archetypes to follow in future phases).
+7. **[FIXED — composer.py compact layout] Static layout vs sparse briefs** — `TypographicPlan` only instantiates rows for fields present in the brief; sparse briefs (e.g. only `title/date/venue`) render compact, balanced layouts with zero blank gap placeholders.
 8. **Seed not persisted** (reproducibility) — save ComfyUI seeds per run.
 9. **Title year split assumption** — `_assemble_vectorcraft` assumes a trailing 4-digit year;
    titles without years take an alternate static branch (sizes differ).
@@ -100,7 +95,7 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - `transparency.set`: Supports all 16 PDF blend modes (`screen`, `multiply`, `overlay`, etc.) and object/layer opacity.
   - `document.rasterEffectsSettings`: Live pixel effects (drop shadow, blur) render at print resolution via `resolution: 300`.
   - `text.fitHeadline`: Natively tracks area text line to fill frame width.
-  - Shared fonts: Programmatically resolved at `<exe_dir>/VectorCraftData/Fonts` (portable) or platform prefs without hardcoded user paths.
+  - Shared fonts: Programmatically resolved at `<exe_dir>/VectorCraftData/Fonts` (portable) or platform prefs without hardcoded user paths. Available TTFs audited at runtime: Inter, JetBrainsMono, SourceSans3, SourceSerif4. Note: Outfit font is NOT installed; composer degrades gracefully to Inter/Segoe UI/Arial.
 
 ## 7. Superseded / Do Not Revive
 

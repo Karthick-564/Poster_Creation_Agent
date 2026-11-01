@@ -16,6 +16,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
+from typing import Any, Optional
 
 import cv2
 import numpy as np
@@ -139,9 +140,20 @@ TASK:
    - Massive Headline (Syne or Arial, 90-100pt).
    - Clean editorial event lineup separated by typographic slashes/bullets (NO BUTTON BOXES).
    - Grand prize ribbon flanked by fine technical hairline rules (NO BUTTON BOXES).
+5. Choose layout archetype by text density and mood per poster-design-craft doctrine:
+   - focal_point: bold graphic / music / gigs / single subject hero.
+   - z_pattern: low-to-medium text, cinematic, festival headliners.
+   - split: editorial, high-contrast cultural fests, conferences, academic talks.
+   - grid_3col: content-dense events, multi-track hackathons, symposiums.
+   hero_role: central | upper_left | divider
 
 Output strictly valid JSON with this schema:
 {{
+  "layout": {{
+    "archetype": "focal_point | z_pattern | split | grid_3col",
+    "hints": ["short ordering/emphasis notes"],
+    "hero_role": "central | upper_left | divider"
+  }},
   "palette": ["#RRGGBB", "#RRGGBB", "#RRGGBB", "#RRGGBB", "#RRGGBB"],
   "ideogram_prompt": {{
     "high_level_description": "string",
@@ -163,6 +175,11 @@ Output strictly valid JSON with this schema:
 """
         if self.use_mock:
             plan_json = {
+                "layout": {
+                    "archetype": "focal_point",
+                    "hints": ["central optical radiance with orbital logistics"],
+                    "hero_role": "central"
+                },
                 "palette": ["#070B19", "#00F5D4", "#00BBF9", "#FEE440", "#FFFFFF"],
                 "ideogram_prompt": {
                     "high_level_description": "Atmospheric, deep-focus cinematic abstract tech event backdrop. Luminous cyan and electric blue fiber-optic grid lines and cybernetic neon light beams receding into deep obsidian mist, volumetric dark digital realm, vast calm empty dark negative space across the upper header and lower footer.",
@@ -189,6 +206,11 @@ Output strictly valid JSON with this schema:
                 title = brief.get_text("title")
                 blurb = brief.get_text("blurb")
                 plan_json = {
+                    "layout": {
+                        "archetype": "focal_point",
+                        "hints": ["central optical radiance with orbital logistics"],
+                        "hero_role": "central"
+                    },
                     "palette": ["#070B19", "#00F5D4", "#00BBF9", "#FEE440", "#FFFFFF"],
                     "ideogram_prompt": {
                         "high_level_description": "Atmospheric, deep-focus cinematic abstract tech event backdrop. Luminous cyan and electric blue fiber-optic grid lines and cybernetic neon light beams receding into deep obsidian mist, volumetric dark digital realm, vast calm empty dark negative space across the upper header and lower footer.",
@@ -207,6 +229,24 @@ Output strictly valid JSON with this schema:
                     "qwen_hero_prompt": "Intricate 3D cybernetic glowing crystalline mainframe core with fiber optic microcircuits and quantum processor, isolated on empty alpha channel, transparent background, clean sticker cutout, 3D render, sharp edges, no background",
                     "planning_notes": "Modern Swiss layout with Bahnschrift typography, zero button cards, and zero procedural starfield clutter."
                 }
+
+        layout_data = plan_json.get("layout", {})
+        if not isinstance(layout_data, dict):
+            layout_data = {}
+        archetype = layout_data.get("archetype", "focal_point")
+        if archetype not in ("focal_point", "z_pattern", "split", "grid_3col"):
+            archetype = "focal_point"
+        layout_hints = layout_data.get("hints", [])
+        if not isinstance(layout_hints, list):
+            layout_hints = []
+        hero_role = layout_data.get("hero_role", "central")
+
+        forced_archetype = os.environ.get("POSTER_FORCE_ARCHETYPE")
+        if forced_archetype in ("focal_point", "z_pattern", "split", "grid_3col"):
+            archetype = forced_archetype
+
+        self.current_archetype = archetype
+        self.current_layout_hints = layout_hints
 
         palette = plan_json.get("palette", ["#070B19", "#00F5D4", "#00BBF9", "#FEE440", "#FFFFFF"])
         ideogram_prompt = plan_json["ideogram_prompt"]
@@ -228,6 +268,7 @@ Output strictly valid JSON with this schema:
         self.log_gate(
             2, "Spatial & Typographic Planning", "PASSED",
             f"Planner synthesized skill-grounded prompts in {s2_duration:.3f}s:\n" +
+            f"  • Layout Archetype: {archetype} (hero_role={hero_role})\n" +
             f"  • Palette: {', '.join(palette)}\n" +
             f"  • Ideogram Background High-Level: {ideogram_prompt['high_level_description']}\n" +
             f"  • Qwen Hero Prompt: {qwen_hero_prompt[:120]}...\n" +
@@ -317,11 +358,14 @@ Output strictly valid JSON with this schema:
         pdf_out = self.run_dir / "master_print.pdf"
         png_2x_out = self.run_dir / "master_render_2x.png"
 
-        self._assemble_vectorcraft(
+        vc_res = self._assemble_vectorcraft(
             brief=brief,
             palette=palette,
             bg_path=feathered_bg_path,
             hero_path=hero_path,
+            hero_geom=hero_geom,
+            archetype=archetype,
+            layout_hints=layout_hints,
             pdf_out=pdf_out,
             png_out=png_2x_out,
         )
@@ -330,10 +374,13 @@ Output strictly valid JSON with this schema:
         if not png_2x_out.exists() or png_2x_out.stat().st_size < min_render_size:
             self.log_gate(5, "Depth-Layered Assembly", "FAILED", "VectorCraft compilation produced invalid output.")
 
+        text_count = len(vc_res.text_manifest)
+        overflow_count = sum(1 for t in vc_res.text_manifest if t.get("overflow"))
         s5_duration = time.time() - s5_t0
         self.log_gate(
             5, "Depth-Layered Assembly (VectorCraft)", "PASSED",
             f"VectorCraft compiled in {s5_duration:.3f}s:\n" +
+            f"  • Archetype  : {archetype}, {text_count} text rows, {overflow_count} overflow warnings\n" +
             f"  • Master PDF : {pdf_out.name} ({pdf_out.stat().st_size / 1024 / 1024:.2f} MB)\n" +
             f"  • Master 2x  : {png_2x_out.name} ({png_2x_out.stat().st_size / 1024 / 1024:.2f} MB)"
         )
@@ -498,7 +545,7 @@ Return strictly valid JSON with this schema:
 | **Stage 2** | **Spatial & Typographic Planning** | `PASSED` | {s2_duration:.3f}s | Valid Ideogram & Qwen JSON + Swiss Editorial Budget |
 | **Stage 3** | **Generative Art Generation (RTX 4090)** | `PASSED` | {s3_duration:.2f}s | Layer 0 (Ideogram 4.0) + Layer 3 (Qwen 2.1) verified |
 | **Stage 4** | **True Art Measurement** | `PASSED` | {s4_duration:.3f}s | Alpha bounds & calm negative space verified |
-| **Stage 5** | **Depth-Layered Assembly (VectorCraft)** | `PASSED` | {s5_duration:.3f}s | VectorCraft compiled with 0 errors; ZERO web buttons |
+| **Stage 5** | **Depth-Layered Assembly (VectorCraft)** | `PASSED` | {s5_duration:.3f}s | Archetype: {archetype}, {text_count} text rows, {overflow_count} overflow warnings |
 | **Stage 6** | **Deterministic Physical Quality Gates** | `PASSED` | {s6_duration:.3f}s | Exact 2160x2700 px (2x), safe margins > 40px |
 | **Stage 7** | **Grounded Multimodal Visual Critique** | `PASSED` | {s7_duration:.2f}s | OCR 100% verbatim, score {vlm_score}/10 |
 | **Stage 8** | **Print Packaging & Certification** | `PASSED` | 0.005s | True Vector PDF & 2x PNG deliverables packaged |
@@ -544,124 +591,25 @@ Return strictly valid JSON with this schema:
         hero_path: Path,
         pdf_out: Path,
         png_out: Path,
-    ):
-        """Assembles depth-layered vector composition following Swiss editorial rules."""
-        vc = VectorCraftRenderer()
-        vc.new_document(width=1080, height=1350, units="Points", color_mode="rgb")
-
-        # Layer 0: Full-Bleed Background Art
-        vc.place_image(bg_path, rect=[0, 0, 1080, 1350])
-
-        # Layer 1: Atmospheric Highlights & Gradients (Zero Opaque Cutout Blobs)
-        # Note: Do NOT add solid opaque ellipses here. VectorCraft add_shape_ellipse creates
-        # 100% opaque shapes that punch dark holes in the background image.
-        accent = palette[1] if len(palette) > 1 else "#00F5D4"
-        highlight = palette[2] if len(palette) > 2 else "#00BBF9"
-        warm = palette[3] if len(palette) > 3 else "#FEE440"
-        text_light = palette[4] if len(palette) > 4 else "#FFFFFF"
-
-        # Layer 2: Massive Headline Display Title (Editorial Swiss Typography)
-        if brief.get_text("organizer"):
-            vc.add_text(
-                text=brief.get_text("organizer").upper(),
-                x=540, y=68, size=12, font="Bahnschrift",
-                color=highlight, justify="center"
-            )
-
-        if brief.get_text("subtitle"):
-            vc.add_text(
-                text=f"—   {brief.get_text('subtitle').upper()}   —",
-                x=540, y=102, size=13, font="Bahnschrift",
-                color=accent, justify="center"
-            )
-
-        # Title Lockup
-        title_text = brief.get_text("title").upper()
-        year_match = re.search(r"(\d{4})$", title_text)
-        if year_match:
-            main_title = title_text[:year_match.start()].strip()
-            year_text = year_match.group(1)
-            vc.add_text(text=main_title, x=540, y=190, size=94, font="Bahnschrift", color=text_light, justify="center")
-            vc.add_text(text="  ".join(list(year_text)), x=540, y=238, size=34, font="Bahnschrift", color=accent, justify="center")
-        else:
-            vc.add_text(text=title_text, x=540, y=200, size=92, font="Bahnschrift", color=text_light, justify="center")
-
-        if brief.get_text("tagline"):
-            vc.add_text(
-                text=brief.get_text("tagline").upper(),
-                x=540, y=275, size=14, font="Segoe UI",
-                color=highlight, justify="center"
-            )
-
-        # Layer 3: Layered 3D Hero Cutout Asset (Overlapping Title Base)
-        hero_w = 540
-        hero_h = 540
-        hero_x = int(540 - (hero_w / 2))
-        hero_y = 300
-        vc.place_image(hero_path, rect=[hero_x, hero_y, hero_w, hero_h])
-
-        # Layer 4: ZERO Procedural Starfield / Particles (Clean Design Discipline)
-        # Note: Do not draw random 4-point twinkle stars or dot clusters.
-
-        # Layer 5: Clean Editorial Festival Typography (ZERO Web-Button Cards)
-        if brief.get_text("blurb"):
-            vc.add_shape_rectangle(x=220, y=865, width=640, height=1, fill=highlight)
-            vc.add_text(
-                text=brief.get_text("blurb"),
-                x=540, y=888, size=14, font="Segoe UI",
-                color="#DCE5F5", justify="center"
-            )
-
-        # Event Lineup: Elegant Typographic Ribbon with Diamonds
-        events_raw = [e.strip() for e in brief.get_text("events").split("/") if e.strip()]
-        line_1 = "   ◆   ".join(events_raw[:2]) if len(events_raw) >= 2 else brief.get_text("events")
-        line_2 = "   ◆   ".join(events_raw[2:]) if len(events_raw) > 2 else ""
-
-        vc.add_text(text=line_1.upper(), x=540, y=940, size=18, font="Bahnschrift", color=text_light, justify="center")
-        if line_2:
-            vc.add_text(text=line_2.upper(), x=540, y=970, size=18, font="Bahnschrift", color=text_light, justify="center")
-
-        # Grand Prize Ribbon (Hairline Technical Frame - ZERO BUTTON)
-        if brief.get_text("prize"):
-            vc.add_shape_rectangle(x=240, y=1008, width=600, height=1, fill=warm)
-            vc.add_text(
-                text=f"★   {brief.get_text('prize').upper()}   ★",
-                x=540, y=1034, size=24, font="Bahnschrift",
-                color=warm, justify="center"
-            )
-            vc.add_shape_rectangle(x=240, y=1052, width=600, height=1, fill=warm)
-
-        # Dates & Time
-        date_str = brief.get_text("date").upper()
-        time_str = brief.get_text("time").upper()
-        sched_text = f"{date_str}   |   {time_str}" if time_str else date_str
-        vc.add_text(text=sched_text, x=540, y=1086, size=20, font="Bahnschrift", color=text_light, justify="center")
-
-        # Bilingual Venue Block
-        venue_str = brief.get_text("venue").upper()
-        venue_tamil = brief.get_text("venue_tamil")
-        full_venue = f"LOCATION: {venue_str}  •  {venue_tamil}" if venue_tamil else f"LOCATION: {venue_str}"
-        vc.add_text(text=full_venue, x=540, y=1120, size=16, font="Nirmala UI", color=highlight, justify="center")
-
-        # CTA Ribbon (Editorial Hairline Delimiters - ZERO WEB BUTTON)
-        if brief.get_text("cta"):
-            vc.add_shape_rectangle(x=180, y=1154, width=720, height=1, fill=accent)
-            vc.add_text(
-                text=f"◆   {brief.get_text('cta').upper()}   ◆",
-                x=540, y=1180, size=22, font="Bahnschrift",
-                color=accent, justify="center"
-            )
-            vc.add_shape_rectangle(x=180, y=1200, width=720, height=1, fill=accent)
-
-        # Sub-footer
-        vc.add_text(
-            text="Open to All Engineering & Technology Colleges   ◆   Official National Circuit",
-            x=540, y=1236, size=12, font="Segoe UI",
-            color="#7F9BC2", justify="center"
+        hero_geom: Optional[Any] = None,
+        archetype: str = "focal_point",
+        layout_hints: Optional[list[str]] = None,
+    ) -> Any:
+        """Assembles depth-layered vector composition following archetype-native rules."""
+        from poster_agent.renderer.composer import compose
+        vc = compose(
+            brief=brief,
+            palette=palette,
+            bg_path=bg_path,
+            hero_path=hero_path,
+            hero_geom=hero_geom,
+            archetype=archetype,
+            layout_hints=layout_hints,
+            width=1080,
+            height=1350,
         )
-
-        # Execute VectorCraft
         vc_res = vc.execute(output_png=png_out, output_pdf=pdf_out, scale=2.0, work_dir=self.run_dir)
         if not vc_res.success:
             raise RuntimeError(f"VectorCraft render error: {vc_res.error_message}")
+        return vc_res
 
