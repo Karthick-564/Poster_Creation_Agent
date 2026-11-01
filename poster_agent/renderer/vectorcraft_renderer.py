@@ -84,12 +84,14 @@ class VectorCraftRenderer:
         self.commands: list[dict[str, Any]] = []
         self._queued_texts: list[dict[str, Any]] = []
         self.text_manifest: list[dict[str, Any]] = []
+        self._last_node_step_idx: Optional[int] = None
 
     def clear(self) -> None:
         """Clear queued commands."""
         self.commands.clear()
         self._queued_texts.clear()
         self.text_manifest.clear()
+        self._last_node_step_idx = None
 
     def new_document(
         self,
@@ -152,6 +154,7 @@ class VectorCraftRenderer:
         elif at:
             params["at"] = at
         self.commands.append({"command": "file.place", "params": params})
+        self._last_node_step_idx = len(self.commands) - 1
         return self
 
     def add_shape_rectangle(
@@ -181,6 +184,7 @@ class VectorCraftRenderer:
         if rotation != 0.0:
             params["rotation"] = rotation
         self.commands.append({"command": "shape.rectangle", "params": params})
+        self._last_node_step_idx = len(self.commands) - 1
         return self
 
     def add_shape_ellipse(
@@ -207,6 +211,7 @@ class VectorCraftRenderer:
         if rotation != 0.0:
             params["rotation"] = rotation
         self.commands.append({"command": "shape.ellipse", "params": params})
+        self._last_node_step_idx = len(self.commands) - 1
         return self
 
     def add_path(
@@ -230,6 +235,7 @@ class VectorCraftRenderer:
             "command": "path.create",
             "params": {"d": d, "closed": closed},
         })
+        self._last_node_step_idx = len(self.commands) - 1
         return self
 
     def add_shape_star(
@@ -263,6 +269,7 @@ class VectorCraftRenderer:
         if rotation != 0.0:
             params["rotation"] = rotation
         self.commands.append({"command": "shape.star", "params": params})
+        self._last_node_step_idx = len(self.commands) - 1
         return self
 
     def add_starfield(
@@ -401,6 +408,7 @@ class VectorCraftRenderer:
         if style:
             params["style"] = style
         self.commands.append({"command": "text.create", "params": params})
+        self._last_node_step_idx = len(self.commands) - 1
 
         style_params: dict[str, Any] = {}
         if style:
@@ -467,6 +475,224 @@ class VectorCraftRenderer:
             leading=leading,
             role=role,
         )
+
+    def add_effect(
+        self,
+        effect_name: str,
+        params: Optional[dict[str, Any]] = None,
+        target_id: Optional[int | str] = None,
+    ) -> "VectorCraftRenderer":
+        """Attach a live effect (e.g. stylize.dropShadow, texture.grain) to an object.
+
+        If target_id is omitted, targets the active selection (the most recently created node).
+        """
+        payload: dict[str, Any] = {"effect": effect_name, "params": params or {}}
+        if target_id is not None:
+            if target_id in ("$last", "last"):
+                if self._last_node_step_idx is not None:
+                    payload["id"] = f"${self._last_node_step_idx}.id"
+                else:
+                    payload["id"] = "$last.id"
+            else:
+                payload["id"] = target_id
+        self.commands.append({"command": "effect.apply", "params": payload})
+        return self
+
+    def soft_scrim(
+        self,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        stops: Optional[list[tuple[float, str, float]]] = None,
+        direction: str = "to_bottom",
+    ) -> "VectorCraftRenderer":
+        """Create a non-destructive atmospheric gradient scrim over background art.
+
+        Unlike solid shape fills, soft_scrim uses per-stop alpha so underlying art
+        shows through without punching an opaque hole.
+
+        stops: List of (offset, hex_color, alpha) tuples. Defaults to dark fade to transparent.
+        direction: 'to_bottom' | 'to_top' | 'to_right' | 'to_left'
+        """
+        if not stops:
+            stops = [(0.0, "#070B19", 0.85), (1.0, "#070B19", 0.0)]
+
+        if direction == "to_bottom":
+            start = [x + width / 2.0, y]
+            end = [x + width / 2.0, y + height]
+        elif direction == "to_top":
+            start = [x + width / 2.0, y + height]
+            end = [x + width / 2.0, y]
+        elif direction == "to_right":
+            start = [x, y + height / 2.0]
+            end = [x + width, y + height / 2.0]
+        elif direction == "to_left":
+            start = [x + width, y + height / 2.0]
+            end = [x, y + height / 2.0]
+        else:
+            start = [x + width / 2.0, y]
+            end = [x + width / 2.0, y + height]
+
+        formatted_stops = [
+            {"offset": s[0], "color": s[1], "opacity": s[2]}
+            for s in stops
+        ]
+
+        self.commands.append({"command": "select.none", "params": {}})
+        self.commands.append({
+            "command": "paint.setFill",
+            "params": {
+                "gradient": {
+                    "kind": "linear",
+                    "method": "classic",
+                    "stops": formatted_stops,
+                    "start": start,
+                    "end": end,
+                    "dither": True,
+                }
+            },
+        })
+        self.commands.append({
+            "command": "shape.rectangle",
+            "params": {"x": x, "y": y, "width": width, "height": height},
+        })
+        self._last_node_step_idx = len(self.commands) - 1
+        return self
+
+    def radial_light(
+        self,
+        cx: float,
+        cy: float,
+        radius: float,
+        color: str = "#00F5D4",
+        alpha_stop_inner: float = 0.8,
+        alpha_stop_outer: float = 0.0,
+        blend_mode: str = "screen",
+    ) -> "VectorCraftRenderer":
+        """Add a screen-blended radial light spill or atmospheric glow."""
+        x = cx - radius
+        y = cy - radius
+        w = radius * 2.0
+        h = radius * 2.0
+
+        formatted_stops = [
+            {"offset": 0.0, "color": color, "opacity": alpha_stop_inner},
+            {"offset": 1.0, "color": color, "opacity": alpha_stop_outer},
+        ]
+
+        self.commands.append({"command": "select.none", "params": {}})
+        self.commands.append({
+            "command": "paint.setFill",
+            "params": {
+                "gradient": {
+                    "kind": "radial",
+                    "method": "classic",
+                    "stops": formatted_stops,
+                    "start": [cx, cy],
+                    "end": [cx + radius, cy],
+                    "dither": True,
+                }
+            },
+        })
+        self.commands.append({
+            "command": "shape.ellipse",
+            "params": {"x": x, "y": y, "width": w, "height": h},
+        })
+        self._last_node_step_idx = len(self.commands) - 1
+        if blend_mode:
+            self.commands.append({
+                "command": "transparency.set",
+                "params": {"blend": blend_mode},
+            })
+        return self
+
+    def orbital_text(
+        self,
+        path_d: str,
+        text: str,
+        size: float,
+        font: str = "Arial",
+        style: str = "",
+        color: str = "#000000",
+        at: Optional[list[float]] = None,
+        justify: str = "center",
+        role: Optional[str] = None,
+    ) -> "VectorCraftRenderer":
+        """Place editorial text along an arbitrary vector path baseline."""
+        self.commands.append({
+            "command": "path.create",
+            "params": {"d": path_d, "closed": False},
+        })
+
+        params: dict[str, Any] = {
+            "path": "$last.id",
+            "mode": "onPath",
+            "text": text,
+            "size": size,
+            "font": font,
+            "color": color,
+            "justify": justify,
+        }
+        if style:
+            params["style"] = style
+        if at is not None:
+            params["at"] = at
+
+        self.commands.append({"command": "text.createInPath", "params": params})
+        self._last_node_step_idx = len(self.commands) - 1
+
+        self._queued_texts.append({
+            "role": role,
+            "text": text,
+            "size": size,
+            "font": font,
+            "style": style,
+            "tracking": 0.0,
+            "leading": None,
+        })
+        return self
+
+    def gradient_fill(
+        self,
+        id_or_last: Optional[int | str] = None,
+        stops: Optional[list[tuple[float, str, float]]] = None,
+        direction: str = "to_bottom",
+        kind: str = "linear",
+        start: Optional[list[float]] = None,
+        end: Optional[list[float]] = None,
+    ) -> "VectorCraftRenderer":
+        """Apply a gradient fill to an existing shape or the active selection."""
+        if not stops:
+            stops = [(0.0, "#000000", 1.0), (1.0, "#FFFFFF", 1.0)]
+
+        formatted_stops = [
+            {"offset": s[0], "color": s[1], "opacity": s[2] if len(s) > 2 else 1.0}
+            for s in stops
+        ]
+
+        grad_params: dict[str, Any] = {
+            "kind": kind,
+            "method": "classic",
+            "stops": formatted_stops,
+            "dither": True,
+        }
+        if start is not None and end is not None:
+            grad_params["start"] = start
+            grad_params["end"] = end
+
+        payload: dict[str, Any] = {"gradient": grad_params}
+        if id_or_last is not None:
+            if id_or_last in ("$last", "last"):
+                if self._last_node_step_idx is not None:
+                    payload["id"] = f"${self._last_node_step_idx}.id"
+                else:
+                    payload["id"] = "$last.id"
+            else:
+                payload["id"] = id_or_last
+
+        self.commands.append({"command": "paint.setFill", "params": payload})
+        return self
 
     def execute(
         self,
