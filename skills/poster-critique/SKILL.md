@@ -5,13 +5,13 @@ description: Use when inspecting a rendered poster for hierarchy, readability, c
 # Poster Critique Skill
 
 ## Inspection Procedure
-1. **Deterministic Pre-flight**: Run mechanical checks first (bounding box overlaps, sampled pixel contrast, margin overflow).
-2. **Visual Language Model (VLM) Probes**: Run focused, checkable probes via 3-sample low-temperature (T=0.1) voting against the local inspector model (`LFM3-VL-2B`):
-   - **Glance Test (3-Second Readability)**: At 360px thumbnail scale, confirm Event Title and Date are immediately legible.
-   - **Hero Dominance**: Confirm the hero asset anchors the composition (>= 35% of poster height, central focal point).
+1. **Deterministic Probes First**: Run mechanical checks first via deterministic artifacts (`runs/{run_id}/text_manifest.json` bounds/overflow + future `document.json`, sampled pixel contrast, margin clipping).
+2. **Visual Language Model (VLM) Probes (Gemini VL Visual Critic)**: Run focused, checkable probes via Gemini VL:
+   - **Glance Test (3-Second Readability)**: At 300px thumbnail scale, confirm Event Title and Date are immediately legible.
+   - **Hero Dominance**: Confirm the hero asset anchors the composition (>= 30–60% of poster canvas height, commanding focal point).
    - **Spatial Balance / Center Void**: Check that there is no dead empty gulf (> 400px unutilized canvas) between elements.
-   - **Color Harmony**: Check that typography, card backgrounds, and button accents belong to a cohesive palette (e.g. cyber neon emerald + cyan) rather than clashing circus colors.
-   - **Negative Control**: Confirm the inspector does not hallucinate non-existent items (guard against authority bias).
+   - **Color Harmony**: Check that typography, atmosphere, and accents belong to a cohesive palette rather than clashing circus colors.
+   - **Negative Control**: Confirm the critic does not hallucinate non-existent items (guard against authority bias).
 3. **Pairwise Comparison**: When evaluating before/after rounds, compare A vs B and B vs A to prevent presentation order bias.
 4. **Typed Op Dispatch**: Map each flagged flaw to an atomic typed patch operation.
 

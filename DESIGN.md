@@ -2,6 +2,7 @@
 
 > Inspired by Brian Gardner's `DESIGN.md` specification standard, *PosterGen (CVPR 2026)*, *PosterMELD (2026)*, and professional graphic design principles.
 > This document specifies the visual rules, architectural constraints, and prompt-engineering directives for the AI Planner and Renderer.
+> Operational distillation of this standard (movement table, compositing recipe, review rubric) lives in `skills/poster-design-craft/SKILL.md`; keep the two in agreement.
 
 ---
 

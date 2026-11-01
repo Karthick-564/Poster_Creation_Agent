@@ -1,7 +1,8 @@
 # Agent Handoff — 2026-11-01
 
 > Read this file FIRST, then in order: `AGENTS.md` (policies), `DESIGN.md` (design system),
-> `context.md` (KCT brand), `configs/default.yaml`.
+> `context.md` (KCT brand), `configs/default.yaml`, `skills/poster-design-craft/SKILL.md` (Stage 2 doctrine),
+> `skills/poster-critique/SKILL.md` (Stage 7 critique).
 
 ## 1. Active Architecture (CURRENT TRUTH ONLY)
 
@@ -13,7 +14,7 @@
   - `poster_agent/vision/art_measurer.py` — Alpha bbox, center, halo score. ⚠️ Measured geometry is currently **logged but unused** by the layout (hero placed at fixed 540×540 rect).
   - `poster_agent/renderer/vectorcraft_renderer.py` — VectorCraft CLI bridge. CLI binary path: `tools/vectorcraft_bin/vectorcraft-0.19.0-windows-x64-portable/vectorcraft-cli.exe`. Batch JSON → `vectorcraft-cli run --commands <file> --export <png> --scale 2 --export <pdf>`. 60s subprocess timeout (tight for large exports).
 - Prior planner used **Groq** (`GROQ_API_KEY` still in `.env`) — now legacy. Gemini is the live planner.
-- Stage 2 injects two skills from `skills/`: `ideogram-prompting`, `poster-graphic-design`.
+- Stage 2 injects poster-design-craft (was: ideogram-prompting + poster-graphic-design).
 - Canvas: 1080×1350 (4:5) rendered at scale 2.0 → gate requires exactly **2160×2700** PNG.
 - Fonts used: `Bahnschrift`, `Segoe UI`, `Nirmala UI` (Windows system fonts; Tamil venue block relies on Nirmala UI complex-script shaping — unverified inside VectorCraft).
 
@@ -87,8 +88,9 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   `--artifact-dir` as the only sanctioned external copy mechanism.
 - Keep deliverables in `runs/{run_id}/` by default; copy to external `--artifact-dir` only when
   explicitly specified via CLI flag.
+- Skills consolidated: `skills/poster-design-craft/SKILL.md` adopted as the single master design doctrine (folding Ideogram zero-text gate and Swiss design rules); superseded skills (`poster-design-studio`, `poster-graphic-design`, `ideogram-prompting`) removed.
 - No HTML container cards / rounded button pills on posters; editorial typography sits directly
-  on atmospheric scrims (per `DESIGN.md` + `skills/poster-graphic-design`).
+  on atmospheric scrims (per `DESIGN.md` + `skills/poster-design-craft`).
 - Gemini critique images must be downscaled ≤1024px before base64 upload.
 - Always Ideogram background at 896×1120 (4:5, multiples of 16), then Lanczos-resize to 1080×1350
   in Stage 4 (`layer0_feathered_bg.png`).

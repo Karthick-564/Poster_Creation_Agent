@@ -59,8 +59,8 @@ class UnifiedPosterPipeline:
 
         self.use_mock = use_mock
         self.skills_dir = PROJECT_ROOT / "skills"
-        self.ideogram_skill = self._load_skill("ideogram-prompting")
-        self.design_skill = self._load_skill("poster-graphic-design")
+        self.design_craft_skill = self._load_skill("poster-design-craft")
+        self.ideogram_skill = self.design_craft_skill
 
         self.comfy = ComfyUIClient()
         self.gemini = GeminiClient()
@@ -114,13 +114,10 @@ class UnifiedPosterPipeline:
         s2_t0 = time.time()
         planner_prompt = f"""You are an elite Art Director and Lead Graphic Designer planning a high-impact festival poster.
 
-INCORPORATE THESE TWO MASTER DESIGN SKILLS:
+INCORPORATE THIS MASTER DESIGN DOCTRINE:
 
-=== SKILL 1: IDEOGRAM 4.0 PROMPT ENGINEERING ===
-{self.ideogram_skill}
-
-=== SKILL 2: EDITORIAL POSTER GRAPHIC DESIGN (SWISS STYLE) ===
-{self.design_skill}
+=== MASTER DESIGN DOCTRINE (POSTER-DESIGN-CRAFT) ===
+{self.design_craft_skill}
 
 EVENT BRIEF:
 {chr(10).join(f"- {k}: {v.text}" for k, v in brief.fields.items())}
