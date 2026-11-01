@@ -85,6 +85,8 @@ class VectorCraftRenderer:
         self._queued_texts: list[dict[str, Any]] = []
         self.text_manifest: list[dict[str, Any]] = []
         self._last_node_step_idx: Optional[int] = None
+        self.doc_width: Optional[float] = None
+        self.doc_height: Optional[float] = None
 
     def clear(self) -> None:
         """Clear queued commands."""
@@ -92,6 +94,8 @@ class VectorCraftRenderer:
         self._queued_texts.clear()
         self.text_manifest.clear()
         self._last_node_step_idx = None
+        self.doc_width = None
+        self.doc_height = None
 
     def new_document(
         self,
@@ -102,6 +106,8 @@ class VectorCraftRenderer:
         raster_resolution: int | str = 300,
     ) -> "VectorCraftRenderer":
         """Initialize a new document artboard."""
+        self.doc_width = width
+        self.doc_height = height
         self.commands.append({
             "command": "file.new",
             "params": {
@@ -772,21 +778,46 @@ class VectorCraftRenderer:
                             queued_meta = self._queued_texts[queued_idx] if queued_idx < len(self._queued_texts) else {}
                             queued_idx += 1
 
+                            bounds = step_res.get("bounds")
+                            overflow_reasons = []
+                            if step_res.get("overflow"):
+                                if isinstance(step_res["overflow"], list):
+                                    overflow_reasons.extend(step_res["overflow"])
+                                else:
+                                    overflow_reasons.append(str(step_res["overflow"]))
+
+                            if bounds and self.doc_width and self.doc_height:
+                                bx = float(bounds.get("x", 0.0))
+                                by = float(bounds.get("y", 0.0))
+                                bw = float(bounds.get("width", 0.0))
+                                bh = float(bounds.get("height", 0.0))
+                                safe_margin = max(40.0, self.doc_width * 0.04)
+                                tol = 1.0  # 1pt tolerance for floating point bounds
+                                if bx < (safe_margin - tol):
+                                    overflow_reasons.append(f"left_margin_escape(x={bx:.1f}<{safe_margin:.1f})")
+                                if (bx + bw) > (self.doc_width - safe_margin + tol):
+                                    overflow_reasons.append(f"right_margin_escape(right={bx+bw:.1f}>{self.doc_width-safe_margin:.1f})")
+                                if by < (safe_margin - tol):
+                                    overflow_reasons.append(f"top_margin_escape(y={by:.1f}<{safe_margin:.1f})")
+                                if (by + bh) > (self.doc_height - safe_margin + tol):
+                                    overflow_reasons.append(f"bottom_margin_escape(bottom={by+bh:.1f}>{self.doc_height-safe_margin:.1f})")
+
+                            final_overflow = overflow_reasons if overflow_reasons else None
                             manifest_item = {
                                 "id": step_res.get("id"),
                                 "role": queued_meta.get("role"),
                                 "text": queued_meta.get("text", ""),
-                                "bounds": step_res.get("bounds"),
-                                "overflow": step_res.get("overflow"),
+                                "bounds": bounds,
+                                "overflow": final_overflow,
                                 "size": queued_meta.get("size"),
                                 "font": queued_meta.get("font"),
                                 "style": queued_meta.get("style", ""),
                             }
                             text_manifest.append(manifest_item)
 
-                            if step_res.get("overflow"):
+                            if final_overflow:
                                 role_desc = manifest_item["role"] or manifest_item["text"][:24]
-                                print(f">>> TEXT OVERFLOW: node {manifest_item['id']} ({role_desc})")
+                                print(f">>> TEXT OVERFLOW: node {manifest_item['id']} ({role_desc}): {final_overflow}")
                     except json.JSONDecodeError:
                         pass
 
