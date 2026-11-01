@@ -130,8 +130,8 @@ def estimate_text_width(text: str, size: float, font: str = "Inter", tracking: f
     """Accurately estimate text rendered width in points."""
     if not text:
         return 0.0
-    # Ratio for uppercase / title-cased sans vs monospace
-    ratio = 0.60 if "mono" in font.lower() else 0.58
+    # Ratio for uppercase display text vs lowercase sans vs monospace
+    ratio = 0.60 if "mono" in font.lower() else (0.66 if text.isupper() else 0.58)
     tracking_offset = (tracking / 1000.0) * size * len(text)
     return (len(text) * size * ratio) + tracking_offset
 
@@ -143,9 +143,9 @@ def estimate_headline_height(text: str, size: float, max_width: float, font: str
         return 0.0
     lines = 1
     curr_w = 0.0
-    space_w = size * 0.30
     for w in words:
         w_len = estimate_text_width(w, size, font)
+        space_w = estimate_text_width(" ", size, font)
         if curr_w == 0.0:
             curr_w = w_len
         elif curr_w + space_w + w_len <= max_width:
@@ -153,7 +153,10 @@ def estimate_headline_height(text: str, size: float, max_width: float, font: str
         else:
             lines += 1
             curr_w = w_len
-    line_height = size * 1.15
+    total_w = estimate_text_width(text, size, font)
+    if total_w > max_width and lines == 1:
+        lines = 2
+    line_height = size * 1.25
     return max(size, lines * line_height)
 
 
@@ -507,7 +510,15 @@ def compose_focal_point(
     title_row = plan.get_row("title")
     h_box_w = width - (2 * margin)
     if title_row:
-        h_block_h = estimate_headline_height(title_row.text, title_row.size, h_box_w, title_row.font)
+        # Check if single line fits with slight adjustment
+        est_single_w = estimate_text_width(title_row.text, title_row.size, font=title_row.font)
+        h_size = title_row.size
+        if "\n" not in title_row.text and est_single_w > h_box_w:
+            scale_fit = (h_box_w / est_single_w) * 0.96
+            if title_row.size * scale_fit >= 72.0:
+                h_size = max(72.0, title_row.size * scale_fit)
+
+        h_block_h = estimate_headline_height(title_row.text, h_size, h_box_w, title_row.font)
         # Bounded area text with fitHeadline
         vc.area_text(
             text=title_row.text,
@@ -515,7 +526,7 @@ def compose_focal_point(
             y=curr_y,
             width=h_box_w,
             height=h_block_h + 10,
-            size=title_row.size,
+            size=h_size,
             font=title_row.font,
             style=title_row.style,
             color=title_row.color,
@@ -523,7 +534,7 @@ def compose_focal_point(
             fit="autoHeight",
             role="main_headline",
         )
-        if "\n" not in title_row.text and estimate_text_width(title_row.text, title_row.size, font=title_row.font) <= h_box_w * 0.88:
+        if "\n" not in title_row.text and estimate_text_width(title_row.text, h_size, font=title_row.font) <= h_box_w * 0.88:
             vc.fit_headline()
         # Advance curr_y strictly past the measured headline box + breathing room
         curr_y += h_block_h + height * 0.025
@@ -777,12 +788,13 @@ def compose_z_pattern(
             line1 = title_row.text
             line2 = ""
 
-        l1_h = estimate_headline_height(line1, headline_size, h_box_w, title_row.font)
+        l1_w = min(h_box_w, estimate_text_width(line1, headline_size, title_row.font) + 20)
+        l1_h = estimate_headline_height(line1, headline_size, l1_w, title_row.font)
         vc.area_text(
             text=line1,
             x=margin,
             y=title_y,
-            width=h_box_w,
+            width=l1_w,
             height=l1_h + 8,
             size=headline_size,
             font=title_row.font,
@@ -796,7 +808,7 @@ def compose_z_pattern(
         if line2:
             l2_x = margin + width * 0.16
             l2_max_w = (width - margin) - l2_x
-            l2_y = title_y + headline_size * 0.55
+            l2_y = title_y + max(headline_size * 0.90, l1_h + 4)
             l2_size = headline_size
 
             # Width clamp
