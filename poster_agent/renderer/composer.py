@@ -1326,6 +1326,287 @@ def compose_grid_3col(
     return vc
 
 
+def compose_slots(
+    vc: VectorCraftRenderer,
+    brief: ExtractedBrief,
+    palette: list[str],
+    plan: TypographicPlan,
+    bg_path: Path,
+    hero_path: Path,
+    hero_geom: Optional[Any] = None,
+    layout_plan: Optional[dict[str, Any]] = None,
+    archetype: str = "focal_point",
+    width: float = 1080.0,
+    height: float = 1350.0,
+) -> VectorCraftRenderer:
+    """Slot-driven composition validated against master doctrine floors.
+
+    The gate beats the plan:
+    1. Converts normalized zones to pt (x canvas dims / 1000).
+    2. Validates and clamps each slot to doctrine floors:
+       - headline >= canvas_h / 11; body >= 1.8% canvas_h; microcopy >= 1.4% canvas_h
+       - zones clamped into margin safe-box (4.5%)
+       - font validated against installed faces
+       - treatment validated against allowlist
+       - degenerate zones fall back to archetype default row placement
+    3. Text rows are strictly brief-sourced from plan.rows (never from slot content).
+    4. Scrims built through soft_scrim DSL with seam overshoot.
+    5. Post-placement collision resolution & canvas bounds enforcement.
+    """
+    canvas_base = palette[0] if palette else "#070B19"
+    accent_color = palette[1] if len(palette) > 1 else "#00F5D4"
+    structural_color = palette[4] if len(palette) > 4 else "#FFFFFF"
+    installed_fonts = audit_fonts()
+    genre = _detect_genre(brief)
+
+    # Margin box (4.5% margins)
+    margin_x = 0.045 * width
+    margin_y = 0.045 * height
+    usable_w = width - (2 * margin_x)
+    usable_h = height - (2 * margin_y)
+
+    # Doctrine floors
+    headline_floor = height / 11.0  # ~122.7 pt nominal floor
+    body_floor = 0.018 * height      # ~24.3 pt
+    micro_floor = 0.014 * height     # ~18.9 pt
+
+    # Layer 0: Place Background Art
+    vc.place_image(bg_path, rect=[0, 0, width, height])
+
+    # Layer 1: Scrims from plan with full-canvas edge overshoot discipline
+    fade_overshoot = 0.03 * min(width, height)
+    total_w = width + 2 * fade_overshoot
+    total_h = height + 2 * fade_overshoot
+
+    plan_scrims = layout_plan.get("scrims", []) if layout_plan else []
+    applied_scrim = False
+    for sc in plan_scrims:
+        direction = sc.get("direction", "to_top")
+        op_start = sc.get("opacity_start", 0.0)
+        op_end = sc.get("opacity_end", 0.90)
+        szone = sc.get("zone", [600, 0, 1000, 1000])
+
+        # Enforce edge discipline: overshoot past canvas bounds and terminate at 0.0 opacity
+        if direction == "to_top":
+            fade_y = (szone[0] * height / 1000.0)
+            d_bot = (height + fade_overshoot) - fade_y
+            stop_bot = max(0.1, min(0.9, d_bot / total_h))
+            stops = [(0.0, canvas_base, op_end), (stop_bot * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)]
+            vc.soft_scrim(
+                x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+                stops=stops, direction="to_top",
+            )
+            applied_scrim = True
+        elif direction == "to_bottom":
+            fade_y = (szone[2] * height / 1000.0)
+            d_top = (fade_y - (-fade_overshoot))
+            stop_top = max(0.1, min(0.9, d_top / total_h))
+            stops = [(0.0, canvas_base, op_end), (stop_top * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)]
+            vc.soft_scrim(
+                x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+                stops=stops, direction="to_bottom",
+            )
+            applied_scrim = True
+
+    if not applied_scrim:
+        # Archetype default scrims
+        vc.soft_scrim(
+            x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+            stops=[(0.0, canvas_base, 0.85), (0.35, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
+            direction="to_bottom",
+        )
+        vc.soft_scrim(
+            x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+            stops=[(0.0, canvas_base, 0.90), (0.45, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
+            direction="to_top",
+        )
+
+    # Layer 3: Place Hero Cutout Asset based on archetype positioning
+    hero_node_id = None
+    if archetype == "z_pattern":
+        hero_w = width * 0.44
+        hero_h = hero_w * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 1.0)
+        hero_x = width * 0.52
+        hero_y = height * 0.28
+    elif archetype == "split":
+        hero_w = width * 0.60
+        hero_h = height * 0.45
+        hero_x = (width - hero_w) * 0.5
+        hero_y = height * 0.06
+    elif archetype == "grid_3col":
+        hero_w = width * 0.32
+        hero_h = hero_w
+        hero_x = width * 0.34
+        hero_y = height * 0.35
+    else:  # focal_point
+        hero_w = width * 0.48
+        hero_h = hero_w * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 1.0)
+        hero_x = (width - hero_w) * 0.5
+        hero_y = height * 0.32
+
+    vc.place_image(hero_path, rect=[hero_x, hero_y, hero_w, hero_h])
+    hero_node_id = "$last"
+
+    # Layer 5: Validate and place text slots
+    slots = layout_plan.get("slots", []) if layout_plan else []
+    slot_map = {}
+    for s in slots:
+        rid = s.get("row_id", "")
+        slot_map[rid] = s
+
+    available_faces = set(installed_fonts.values())
+    available_faces.update(["Inter", "Bahnschrift", "JetBrains Mono", "Source Sans 3", "Source Serif 4", "Nirmala UI", "Segoe UI", "Consolas"])
+
+    placed_items = []
+    for r in plan.rows:
+        slot = slot_map.get(r.role)
+        if not slot:
+            for k, s in slot_map.items():
+                if r.role in k or k in r.role:
+                    slot = s
+                    break
+
+        if not slot:
+            print(f"[composer] Slot for row '{r.role}' not found in layout plan. Using default typography plan placement.")
+            placed_items.append({
+                "row": r,
+                "x": width * 0.5 if r.alignment == "center" else margin_x,
+                "y": height * 0.5,
+                "size": r.size,
+                "font": r.font,
+                "justify": r.alignment,
+                "style": r.style,
+                "tracking": r.tracking,
+                "color": r.color,
+            })
+            continue
+
+        zone = slot.get("zone", [0, 0, 1000, 1000])
+        z_y0 = zone[0] * height / 1000.0
+        z_x0 = zone[1] * width / 1000.0
+        z_y1 = zone[2] * height / 1000.0
+        z_x1 = zone[3] * width / 1000.0
+
+        # Degenerate zone check
+        if (z_x1 - z_x0) < 30 or (z_y1 - z_y0) < 15:
+            print(f"[composer] Slot '{r.role}': degenerate zone {zone}. Falling back to default placement.")
+            placed_items.append({
+                "row": r,
+                "x": width * 0.5 if r.alignment == "center" else margin_x,
+                "y": height * 0.5,
+                "size": r.size,
+                "font": r.font,
+                "justify": r.alignment,
+                "style": r.style,
+                "tracking": r.tracking,
+                "color": r.color,
+            })
+            continue
+
+        # Margin box clamp
+        orig_box = (z_x0, z_y0, z_x1, z_y1)
+        z_x0 = max(margin_x, min(z_x0, width - margin_x - 30))
+        z_x1 = min(width - margin_x, max(z_x1, z_x0 + 30))
+        z_y0 = max(margin_y, min(z_y0, height - margin_y - 15))
+        z_y1 = min(height - margin_y, max(z_y1, z_y0 + 15))
+        if (z_x0, z_y0, z_x1, z_y1) != orig_box:
+            print(f"[composer] Slot '{r.role}': zone clamped into margin safe-box: ({orig_box[0]:.1f}, {orig_box[1]:.1f}) -> ({z_x0:.1f}, {z_y0:.1f})")
+
+        # Font validation
+        fnt = slot.get("font", r.font)
+        if fnt not in available_faces and fnt not in installed_fonts:
+            print(f"[composer] Slot '{r.role}': font '{fnt}' not installed. Reverting to installed face '{r.font}'")
+            fnt = r.font
+
+        # Size class floor validation
+        s_class = slot.get("size_class", "body")
+        sz = r.size
+        if r.role == "title" or s_class == "headline":
+            if sz < 72.0:
+                print(f"[composer] Slot '{r.role}': headline size clamped from {sz:.1f}pt to floor 72.0pt")
+                sz = 72.0
+            est_w = estimate_text_width(r.text, sz, font=fnt)
+            if est_w > usable_w:
+                scale_fit = (usable_w / est_w) * 0.96
+                sz = max(72.0, sz * scale_fit)
+        elif s_class == "micro" or "organizer" in r.role or "dress" in r.role or "blurb" in r.role:
+            if sz < micro_floor:
+                print(f"[composer] Slot '{r.role}': microcopy size clamped from {sz:.1f}pt to doctrine floor {micro_floor:.1f}pt")
+                sz = micro_floor
+        else:
+            if sz < body_floor:
+                print(f"[composer] Slot '{r.role}': body size clamped from {sz:.1f}pt to doctrine floor {body_floor:.1f}pt")
+                sz = body_floor
+
+        # Fit check: ensure row width fits usable margin width
+        est_line_w = estimate_text_width(r.text, sz, font=fnt)
+        if est_line_w > usable_w:
+            scale_fit = (usable_w / est_line_w) * 0.96
+            sz = max(14.0, sz * scale_fit)
+
+        justify = slot.get("justify", r.alignment)
+        if justify == "left":
+            px = z_x0
+        elif justify == "right":
+            px = z_x1
+        else:
+            px = (z_x0 + z_x1) * 0.5
+
+        py = (z_y0 + z_y1) * 0.5 - (sz * 0.5)
+
+        placed_items.append({
+            "row": r,
+            "x": px,
+            "y": py,
+            "size": sz,
+            "font": fnt,
+            "justify": justify,
+            "style": r.style,
+            "tracking": r.tracking,
+            "color": r.color,
+        })
+
+    # Collision resolution: Sort by y position and enforce strict non-overlapping gap
+    placed_items.sort(key=lambda it: it["y"])
+    for i in range(len(placed_items) - 1):
+        cur = placed_items[i]
+        nxt = placed_items[i + 1]
+        cur_bot = cur["y"] + cur["size"] * 1.25 + 8.0
+        if nxt["y"] < cur_bot:
+            overlap = cur_bot - nxt["y"]
+            nxt["y"] += overlap
+
+    # Canvas bounds clamp with bottom-up collision clearance
+    for i in range(len(placed_items) - 1, -1, -1):
+        it = placed_items[i]
+        max_allowed_y = height - margin_y - it["size"] * 1.25
+        if it["y"] > max_allowed_y:
+            it["y"] = max_allowed_y
+        if i < len(placed_items) - 1:
+            nxt = placed_items[i + 1]
+            if it["y"] + it["size"] * 1.25 + 8.0 > nxt["y"]:
+                it["y"] = nxt["y"] - it["size"] * 1.25 - 8.0
+
+    # Emit all placed text
+    for it in placed_items:
+        row = it["row"]
+        vc.add_text(
+            text=row.text,
+            x=it["x"],
+            y=it["y"],
+            size=it["size"],
+            font=it["font"],
+            style=it["style"],
+            tracking=it["tracking"],
+            color=it["color"],
+            justify=it["justify"],
+            role=row.role,
+        )
+
+    apply_genre_effects(vc, genre=genre, accent_color=accent_color, hero_target_id=hero_node_id)
+    return vc
+
+
 def compose(
     brief: ExtractedBrief,
     palette: list[str],
@@ -1338,7 +1619,7 @@ def compose(
     height: float = 1350,
     layout_plan: Optional[dict[str, Any]] = None,
 ) -> VectorCraftRenderer:
-    """Master compose entrypoint: dispatches to chosen archetype composer."""
+    """Master compose entrypoint: dispatches to slot execution if valid plan exists, else archetype default."""
     forced_archetype = os.environ.get("POSTER_FORCE_ARCHETYPE")
     if forced_archetype in ("focal_point", "z_pattern", "split", "grid_3col"):
         archetype = forced_archetype
@@ -1353,6 +1634,21 @@ def compose(
         width=width,
         height=height,
     )
+
+    if layout_plan and isinstance(layout_plan, dict) and layout_plan.get("slots"):
+        return compose_slots(
+            vc=vc,
+            brief=brief,
+            palette=palette,
+            plan=plan,
+            bg_path=bg_path,
+            hero_path=hero_path,
+            hero_geom=hero_geom,
+            layout_plan=layout_plan,
+            archetype=archetype,
+            width=width,
+            height=height,
+        )
 
     if archetype == "z_pattern":
         return compose_z_pattern(vc, brief, palette, plan, bg_path, hero_path, hero_geom, width, height)

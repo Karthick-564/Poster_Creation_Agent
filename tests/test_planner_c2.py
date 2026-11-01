@@ -243,6 +243,88 @@ def test_pipeline_planning_fallback_in_mock_mode():
     assert plan_file.exists()
 
 
+# 3. Composer slot execution: undersized slot clamped, unknown font & degenerate zone fallback
+def test_composer_slot_execution_floors_and_fallbacks(capsys, tmp_path):
+    from poster_agent.renderer.composer import compose_slots, build_typography_plan
+    from poster_agent.renderer.vectorcraft_renderer import VectorCraftRenderer
+    from poster_agent.ingestion.extractor import ExtractedBrief, VerbatimField
+
+    brief = ExtractedBrief(
+        fields={
+            "title": VerbatimField(key="title", text="ROBO CONVERGENCE", source="brief"),
+            "date": VerbatimField(key="date", text="OCTOBER 24", source="brief"),
+            "venue": VerbatimField(key="venue", text="CENTRAL HUB", source="brief"),
+        }
+    )
+    plan = build_typography_plan(
+        brief=brief,
+        palette=["#070B19", "#00F5D4", "#FEE440", "#C8553D", "#FFFFFF"],
+        width=1080,
+        height=1350,
+    )
+    # Manually make title row undersized
+    for r in plan.rows:
+        if r.role == "title":
+            r.size = 35.0  # severely undersized < 72pt floor
+
+    layout_plan = {
+        "slots": [
+            {
+                "row_id": "title",
+                "role": "headline",
+                "zone": [100, 50, 300, 950],
+                "justify": "center",
+                "align": "middle",
+                "size_class": "headline",
+                "font": "AlienFontXYZ",  # Unknown font
+                "treatment": "none",
+                "max_lines": 1,
+            },
+            {
+                "row_id": "date_time",
+                "role": "body",
+                "zone": [500, 500, 505, 505],  # Degenerate zone (<30px width, <15px height)
+                "justify": "center",
+                "align": "middle",
+                "size_class": "body",
+                "font": "Inter",
+                "treatment": "none",
+                "max_lines": 1,
+            },
+        ],
+        "scrims": [],
+    }
+
+    # Synthetic dummy images for paths
+    bg_p = tmp_path / "bg.png"
+    hero_p = tmp_path / "hero.png"
+    Image.new("RGB", (100, 100), "#070B19").save(bg_p)
+    Image.new("RGBA", (100, 100), (0, 0, 0, 0)).save(hero_p)
+
+    vc = VectorCraftRenderer()
+    vc.new_document(width=1080, height=1350, units="Points", color_mode="rgb", raster_resolution=300)
+
+    composed_vc = compose_slots(
+        vc=vc,
+        brief=brief,
+        palette=["#070B19", "#00F5D4", "#FEE440", "#C8553D", "#FFFFFF"],
+        plan=plan,
+        bg_path=bg_p,
+        hero_path=hero_p,
+        layout_plan=layout_plan,
+        archetype="focal_point",
+        width=1080,
+        height=1350,
+    )
+    assert composed_vc is not None
+    out, err = capsys.readouterr()
+
+    # Verify logging of doctrine floor clamp, unknown font, and degenerate zone
+    assert "headline size clamped" in out or "clamped to floor" in out
+    assert "not installed" in out or "AlienFontXYZ" in out
+    assert "degenerate zone" in out
+
+
 # 4. Zone -> pt conversion identity at boundaries
 def test_zone_to_pt_conversion_identity():
     canvas_w = 1080.0

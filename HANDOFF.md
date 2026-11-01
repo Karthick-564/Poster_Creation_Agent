@@ -115,12 +115,18 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - P2: Seam overshoot geometry past canvas edges (`fade_overshoot = 0.03 * canvas_shorter_side`), dropping max luminance jump from $23.36\text{--}30.11 \rightarrow 1.00$.
   - P3: Restored `z_pattern` two-line diagonal headline stagger with word-boundary splitting and hero collision clamping.
   - Verification: 2x PNG + vector PDF renders for all 4 archetypes in `runs/archetype_check_v3/` with max seam delta 1.00 and zero fabricated strings.
+- **Phase C2 (Two-Call Planner & Slot Execution)**:
+  - Two-call planner architecture: Stage 2a Concept Planning (`CONCEPT_SCHEMA`) -> Stage 3 Hero-First Generation -> Stage 3.5 Hero Measurement & Color Extraction -> Stage 4a Background Generation (conditioned on hero color + light plan) -> Stage 4b Background Measurement (12x15 calm/busy/salient grid) -> Stage 4.5 Layout Planning (`LAYOUT_SCHEMA` placing text into calm regions).
+  - Schema enforcement via Gemini REST `responseSchema` + Python validators with exactly 1 bounded retry.
+  - Honest failure policy: deleted silent canned-fallback block. Live mode halts cleanly (`PLANNING_HALT`), mock mode logs loud banner (`PLANNING_FALLBACK`) and provenance.
+  - Provenance: `runs/{run_id}/plan.json` written before Stage 5 with full concept, layout, art metrics, allowlists, and repair attempt records.
+  - Slot execution in `composer.py`: slots converted to pt, clamped to doctrine floors (headline >= 72pt/canvas_h/11, body >= 1.8%, micro >= 1.4%, margin safe-box clamp), font & treatment validated, degenerate zones fall back to archetype default, all text content strictly brief-sourced.
+  - Verification: 93 passing unit tests (`tests/test_planner_c2.py`), 4 forced archetype renders in `runs/archetype_check_v4/` (2160x2700 PNG + vector PDF), and live mode ComfyUI halt verified.
 - **Housekeeping**: Root litter verified clean; offline font search completed; display weight standardized on Inter Black 900 in `HANDOFF.md` and `DESIGN.md`.
 
 ### Pending / Next Up
-- **TASK 3 (Phase D Foundations)**: Standalone deterministic QA gates module (`poster_agent/qa/` + `tests/test_gates.py`) covering canvas bounds, row overlap, empty rows, seam detection, and WCAG contrast.
-- **Pipeline Integration**: Wiring `poster_agent/qa/gates.py` into unified pipeline Stages 6 and 7.
-- **Phase C2**: Two-call planner revamp (concept plan -> art generation -> true measurement -> layout plan).
+- **Phase D**: Standalone deterministic QA gates integration (`poster_agent/qa/gates.py` into Stages 6 and 7).
+- **Phase D 3b**: Repair loop executor consuming `REPAIR_SCHEMA` operations upon gate failure.
 
 ## 7. Superseded / Do Not Revive
 

@@ -518,9 +518,18 @@ Output strictly valid JSON conforming to the schema.
 
         text_rows_to_place = []
         for r in typo_plan.rows:
+            rid = r.role
+            if rid == "title":
+                role = "headline"
+            elif "subtitle" in rid:
+                role = "subhead"
+            elif "cta" in rid:
+                role = "cta"
+            else:
+                role = "body"
             text_rows_to_place.append({
-                "row_id": r.role,
-                "role": "headline" if "title" in r.role else ("subhead" if "subtitle" in r.role else ("cta" if "cta" in r.role else "body")),
+                "row_id": rid,
+                "role": role,
                 "text_preview": r.text[:40],
             })
 
@@ -553,7 +562,7 @@ Output strictly valid JSON conforming to the schema.
             mock_slots = []
             for r in typo_plan.rows:
                 rid = r.role
-                if "title" in rid:
+                if rid == "title":
                     zone = [100, 60, 240, 940]
                     role = "headline"
                     s_class = "headline"
