@@ -1552,7 +1552,12 @@ def compose_slots(
         else:
             px = (z_x0 + z_x1) * 0.5
 
-        py = (z_y0 + z_y1) * 0.5 - (sz * 0.5)
+        # Baseline vertical positioning: VectorCraft y is baseline.
+        # Optical text center is ~ y - (sz * 0.3), so baseline y = center + (sz * 0.3)
+        py = (z_y0 + z_y1) * 0.5 + (sz * 0.3)
+        min_allowed_y = margin_y + (sz * 0.88)
+        if py < min_allowed_y:
+            py = min_allowed_y
 
         placed_items.append({
             "row": r,
@@ -1566,26 +1571,38 @@ def compose_slots(
             "color": r.color,
         })
 
-    # Collision resolution: Sort by y position and enforce strict non-overlapping gap
+    # Collision resolution: Sort by baseline y position and enforce strict non-overlapping gap
     placed_items.sort(key=lambda it: it["y"])
     for i in range(len(placed_items) - 1):
         cur = placed_items[i]
         nxt = placed_items[i + 1]
-        cur_bot = cur["y"] + cur["size"] * 1.25 + 8.0
-        if nxt["y"] < cur_bot:
-            overlap = cur_bot - nxt["y"]
-            nxt["y"] += overlap
+        req_gap = (cur["size"] * 0.25) + (nxt["size"] * 0.88) + 8.0
+        if nxt["y"] < cur["y"] + req_gap:
+            nxt["y"] = cur["y"] + req_gap
 
     # Canvas bounds clamp with bottom-up collision clearance
     for i in range(len(placed_items) - 1, -1, -1):
         it = placed_items[i]
-        max_allowed_y = height - margin_y - it["size"] * 1.25
+        max_allowed_y = height - margin_y - (it["size"] * 0.25)
         if it["y"] > max_allowed_y:
             it["y"] = max_allowed_y
+        if i > 0:
+            prev = placed_items[i - 1]
+            req_gap = (prev["size"] * 0.25) + (it["size"] * 0.88) + 8.0
+            if prev["y"] > it["y"] - req_gap:
+                prev["y"] = it["y"] - req_gap
+
+    # Top margin safe clamp with forward gap propagation
+    for i in range(len(placed_items)):
+        it = placed_items[i]
+        min_allowed_y = margin_y + (it["size"] * 0.88)
+        if it["y"] < min_allowed_y:
+            it["y"] = min_allowed_y
         if i < len(placed_items) - 1:
             nxt = placed_items[i + 1]
-            if it["y"] + it["size"] * 1.25 + 8.0 > nxt["y"]:
-                it["y"] = nxt["y"] - it["size"] * 1.25 - 8.0
+            req_gap = (it["size"] * 0.25) + (nxt["size"] * 0.88) + 8.0
+            if nxt["y"] < it["y"] + req_gap:
+                nxt["y"] = it["y"] + req_gap
 
     # Emit all placed text
     for it in placed_items:
