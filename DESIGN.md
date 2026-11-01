@@ -65,7 +65,7 @@ The AI Planner must analyze the brief's text density and mood, then select exact
 ## 3. Strict Typographic Constraints (Hard Rules)
 
 1. **Max 2 Typeface Families per Poster**:
-   - Primary: Display font for headline (`OFL-Display` or `OFL-Sans`).
+   - Primary: Display font for headline (`OFL-Display` or `OFL-Sans`, standardized on **Inter Black 900**; Outfit is absent offline).
    - Secondary: Structural text for body, metadata, logistics (`OFL-Sans` or `OFL-Mono`).
    - *Never* mix 3 or 4 unrelated fonts.
 2. **Mathematical Scale**:

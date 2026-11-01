@@ -16,7 +16,7 @@
 - Prior planner used **Groq** (`GROQ_API_KEY` still in `.env`) — now legacy. Gemini is the live planner.
 - Stage 2 injects poster-design-craft (was: ideogram-prompting + poster-graphic-design).
 - Canvas: 1080×1350 (4:5) rendered at scale 2.0 → gate requires exactly **2160×2700** PNG.
-- Fonts used: `Bahnschrift`, `Segoe UI`, `Nirmala UI` (Windows system fonts; Tamil venue block relies on Nirmala UI complex-script shaping — unverified inside VectorCraft).
+- Fonts used: Display typography standardized on **Inter Black 900** (or `Bahnschrift` fallback; Outfit is absent offline). Structural/body fonts: `Segoe UI`, `JetBrains Mono`, `Nirmala UI` (Tamil venue block relies on Nirmala UI complex-script shaping — unverified inside VectorCraft).
 
 ## 2. Environment Prerequisites
 
@@ -102,7 +102,25 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - `transparency.set`: Supports all 16 PDF blend modes (`screen`, `multiply`, `overlay`, etc.) and object/layer opacity.
   - `document.rasterEffectsSettings`: Live pixel effects (drop shadow, blur) render at print resolution via `resolution: 300`.
   - `text.fitHeadline`: Natively tracks area text line to fill frame width.
-  - Shared fonts: Programmatically resolved at `<exe_dir>/VectorCraftData/Fonts` (portable) or platform prefs without hardcoded user paths. Available TTFs audited at runtime: Inter, JetBrainsMono, SourceSans3, SourceSerif4. Note: Outfit font is NOT installed; composer degrades gracefully to Inter/Segoe UI/Arial.
+  - Shared fonts: Programmatically resolved at `<exe_dir>/VectorCraftData/Fonts` (portable) or platform prefs without hardcoded user paths. Available TTFs audited at runtime: Inter, JetBrainsMono, SourceSans3, SourceSerif4. Note: Outfit font is NOT installed offline; display weight standardized on Inter Black 900 (or Bahnschrift fallback).
+
+## 6. Task Status & Today's Progress (2026-11-01)
+
+### Completed
+- **Phase A & B**: Paint-ordering foundation bug fixed (`select.none` + pre-create paint emit) & Rich VectorCraft DSL (`soft_scrim`, `radial_light`, `orbital_text`, `add_effect`, `fit_headline`).
+- **Phase C**: Archetype-native composer (`poster_agent/renderer/composer.py`) dispatching 4 archetypes (`focal_point`, `z_pattern`, `split`, `grid_3col`).
+- **Phase C Fix-Up**: Canvas bounds protection, row collision prevention, headline height tracking, vertical rebalancing.
+- **Phase C Repair**:
+  - P1: Microcopy allowlist boundary (`MICROCOPY_ALLOWLIST`) and complete elimination of fabricated copy.
+  - P2: Seam overshoot geometry past canvas edges (`fade_overshoot = 0.03 * canvas_shorter_side`), dropping max luminance jump from $23.36\text{--}30.11 \rightarrow 1.00$.
+  - P3: Restored `z_pattern` two-line diagonal headline stagger with word-boundary splitting and hero collision clamping.
+  - Verification: 2x PNG + vector PDF renders for all 4 archetypes in `runs/archetype_check_v3/` with max seam delta 1.00 and zero fabricated strings.
+- **Housekeeping**: Root litter verified clean; offline font search completed; display weight standardized on Inter Black 900 in `HANDOFF.md` and `DESIGN.md`.
+
+### Pending / Next Up
+- **TASK 3 (Phase D Foundations)**: Standalone deterministic QA gates module (`poster_agent/qa/` + `tests/test_gates.py`) covering canvas bounds, row overlap, empty rows, seam detection, and WCAG contrast.
+- **Pipeline Integration**: Wiring `poster_agent/qa/gates.py` into unified pipeline Stages 6 and 7.
+- **Phase C2**: Two-call planner revamp (concept plan -> art generation -> true measurement -> layout plan).
 
 ## 7. Superseded / Do Not Revive
 
