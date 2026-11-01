@@ -68,19 +68,23 @@ class ComfyUIClient:
             "style_description": {
                 "aesthetics": "Rich, high-impact poster background art with deep atmospheric depth and luminous lighting.",
                 "medium": "digital_illustration",
-                "art_style": "cinematic digital painting, smooth atmospheric gradients, ethereal lighting.",
+                "art_style": "cinematic digital painting, smooth atmospheric gradients, ethereal lighting. Contemporary atmospheric background key visual with clean calm negative space. PURE NON-TEXT BACKGROUND ARTWORK: ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO SIGNAGE, NO LABELS, NO WATERMARKS, NO NUMBERS.",
                 "color_palette": palette[:5] if palette else ["#1B1040", "#7AE7C7", "#FF4D6D", "#FFB703"],
             },
             "compositional_deconstruction": {
-                "background": f"{description}. Deep background atmosphere leaving space for floating hero elements.",
+                "background": f"{description}. Deep ambient background with soft atmospheric lighting, leaving clean negative space for overlays. NO EMBEDDED TEXT, NO LABELS, NO WATERMARKS.",
                 "elements": [],
             },
         }
 
         wf["98:24"]["inputs"]["text"] = json.dumps(ideogram_prompt, indent=2)
         wf["158"]["inputs"]["filename_prefix"] = prefix
-        if "37" in wf and "inputs" in wf["37"]:
-            wf["37"]["inputs"]["resolution"] = "1080x1350 (4:5)"
+        
+        # Enforce exact 4:5 poster aspect ratio (896x1120, 1MP, multiples of 16)
+        if "98:27" in wf and "inputs" in wf["98:27"]:
+            wf["98:27"]["inputs"]["value"] = 896
+        if "98:28" in wf and "inputs" in wf["98:28"]:
+            wf["98:28"]["inputs"]["value"] = 1120
 
         payload = json.dumps({"prompt": wf}).encode("utf-8")
         req = urllib.request.Request(f"{self.endpoint}/prompt", data=payload, headers={"Content-Type": "application/json"})

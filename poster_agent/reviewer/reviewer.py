@@ -210,7 +210,7 @@ class PosterReviewer:
 
             # Optional thinking mode toggle
             if self.thinking_mode:
-                kwargs["thinking"] = True
+                kwargs["extra_body"] = {"thinking": True}
 
             if client is not None:
                 resp = client.chat.completions.create(**kwargs)

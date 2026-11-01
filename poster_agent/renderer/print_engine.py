@@ -183,7 +183,15 @@ class PrintEngine:
         
         # Convert to CMYK color mode
         cmyk_img = trimmed_img.convert("CMYK")
-        cmyk_img.save(cmyk_tiff_path, "TIFF", dpi=(300, 300), compression="raw")
+        if cmyk_tiff_path.exists():
+            try:
+                cmyk_tiff_path.unlink()
+            except Exception:
+                pass
+        try:
+            cmyk_img.save(cmyk_tiff_path, "TIFF", dpi=(300, 300), compression="raw")
+        except Exception:
+            cmyk_img.save(cmyk_tiff_path, "TIFF", dpi=(300, 300))
 
         if temp_screenshot.exists():
             temp_screenshot.unlink()

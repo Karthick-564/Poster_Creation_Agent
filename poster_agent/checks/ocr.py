@@ -35,7 +35,20 @@ def get_ocr_engine():
     if _OCR_ENGINE_INSTANCE is not None:
         return _OCR_ENGINE_INSTANCE
 
+    # Try local site-packages
     try:
+        from rapidocr_onnxruntime import RapidOCR
+        _OCR_ENGINE_INSTANCE = RapidOCR()
+        return _OCR_ENGINE_INSTANCE
+    except Exception:
+        pass
+
+    # Try ComfyUI venv site-packages
+    try:
+        import sys
+        comfy_site = Path(__file__).resolve().parent.parent.parent / "ComfyUI/venv/Lib/site-packages"
+        if comfy_site.exists() and str(comfy_site) not in sys.path:
+            sys.path.insert(0, str(comfy_site))
         from rapidocr_onnxruntime import RapidOCR
         _OCR_ENGINE_INSTANCE = RapidOCR()
         return _OCR_ENGINE_INSTANCE

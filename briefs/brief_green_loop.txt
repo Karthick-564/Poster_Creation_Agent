@@ -1,0 +1,16 @@
+POSTER BRIEF: GREEN LOOP 2027
+Format: 1080 x 1920 px (9:16 story)
+Title: GREEN LOOP 2027
+Tagline: Waste less. Build more.
+Subtitle: NATIONAL SUSTAINABILITY HACKATHON & EXPO
+Date: 5-6 MARCH 2027
+Time: 9:30 AM - 5:30 PM
+Venue: RIVERSIDE CONVENTION CENTRE, KOCHI
+Events: IDEATHON / CLEAN-TECH DEMO / STARTUP PITCH / SEED STALLS
+Prize: PRIZES WORTH ₹3,50,000
+CTA: REGISTER: greenloop27.example/apply
+Organizer: Presented by the Eco Club & Innovation Cell
+Dress code: SMART CASUAL
+Mood: warm daylight, earthy, hopeful, paper-cut layers of leaves and a river
+Palette: #F4EBD0 #2F5D50 #E9A23B #C8553D #1F2A24
+

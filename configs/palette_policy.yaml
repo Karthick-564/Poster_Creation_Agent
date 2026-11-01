@@ -1,0 +1,42 @@
+palette:
+  max_accent_hues: 1
+  role_targets:
+    canvas_base: 0.60
+    structural: 0.30
+    accent: 0.10
+  role_tolerance: 0.15
+  contrast_thresholds:
+    body: 4.5
+    large_display: 3.0
+  allow_near_monochrome_brief: true
+
+genre_presets:
+  cyber_ctf:
+    canvas_base: "#0A0E1A"
+    structural: "#F0F4F8"
+    accent: "#00F5D4"
+    secondary_accent: "#00BBF9"
+    surface: "#111827"
+    title_treatment: "generative_3d"
+  aurora:
+    canvas_base: "#0F0C29"
+    structural: "#FFFFFF"
+    accent: "#FF4D6D"
+    secondary_accent: "#7AE7C7"
+    surface: "#24243E"
+    title_treatment: "css_gradient_glow"
+  green_loop:
+    canvas_base: "#061A14"
+    structural: "#F2F7F4"
+    accent: "#10B981"
+    secondary_accent: "#34D399"
+    surface: "#0A2E23"
+    title_treatment: "flat"
+  default:
+    canvas_base: "#0B132B"
+    structural: "#FFFFFF"
+    accent: "#00F5D4"
+    secondary_accent: "#FEE440"
+    surface: "#1C2541"
+    title_treatment: "css_gradient_glow"
+

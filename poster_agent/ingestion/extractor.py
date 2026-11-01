@@ -49,6 +49,11 @@ class BriefExtractor:
         "contact": [r"contact", r"email", r"queries", r"phone"],
         "hashtag": [r"hashtag", r"tag"],
         "organizer": [r"organizer", r"presented\s*by", r"organized\s*by", r"club", r"host"],
+        "dress_code": [r"dress\s*code", r"attire"],
+        "venue_tamil": [r"venue\s*\(tamil\)", r"venue_tamil", r"location\s*\(tamil\)"],
+        "blurb": [r"blurb", r"description", r"about", r"story"],
+        "palette": [r"palette", r"colors", r"color\s+palette", r"hex\s+palette"],
+        "mood": [r"mood", r"aesthetic", r"visual\s+style", r"style"],
     }
 
     def __init__(self, required_keys: list[str] | None = None):

@@ -1,0 +1,16 @@
+POSTER BRIEF: CYBER MATRIX 2027
+Canvas: 1080 x 1350 px (4:5). Export PNG at 2x (2160 x 2700) and PDF.
+
+Title: CYBER MATRIX 2027
+Tagline: Defend. Exploit. Evolve.
+Subtitle: ANNUAL NATIONAL CYBERSECURITY CONCLAVE
+Date: 14-16 APRIL 2027
+Time: 9:30 AM - 6:00 PM DAILY
+Venue: MAHALINGAM VIGYAN BHAVAN, COIMBATORE
+Venue (Tamil): கோயம்புத்தூர்
+Events: CTF 48-HR CHALLENGE / ZERO-DAY EXPLOIT / BINARY REVERSING / HARDWARE HACKING
+Prize: TOTAL PRIZE POOL ₹2,50,000
+CTA: REGISTER: cybermatrix.kct.ac.in
+Organizer: Presented by Information Security & Ethical Hacking Society
+Blurb: National offensive and defensive cyber tournament testing elite network defenders, reverse engineers and cryptographers.
+

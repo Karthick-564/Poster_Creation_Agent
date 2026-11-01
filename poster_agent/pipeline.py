@@ -2,19 +2,22 @@
 import os
 import re
 import time
+import difflib
 from pathlib import Path
 from typing import Any
 
 from poster_agent.ingestion.extractor import BriefExtractor, ExtractedBrief
 from poster_agent.vision.art_measurer import ArtMeasurer, MeasuredArtBundle
 from poster_agent.renderer.theme_renderer import ThemePackRenderer, ThemeRenderResult
-from poster_agent.checks.pixel_verifier import PixelVerifier, VerificationReport
+from poster_agent.checks.pixel_verifier import PixelVerifier, VerificationReport, CheckIssue
 from poster_agent.reviewer.probes import VisualInspector, VisualAuditReport
 from poster_agent.planner.gemini_planner import GeminiPlanner
 from poster_agent.reviewer.gemini_probes import GeminiVisualInspector
 from poster_agent.loop.typed_patcher import TypedLayoutPatcher, LoopSummary
 from poster_agent.reporting.audit_logger import AuditLogger
 from poster_agent.renderer.print_engine import PrintEngine
+from poster_agent.palette_policy import PalettePolicy, ResolvedPalette
+from poster_agent.checks.ocr import extract_text_from_image, normalize_str
 
 
 class PosterPipeline:
@@ -35,6 +38,7 @@ class PosterPipeline:
         title_3d_path: str | Path = "",
         accent_image_path: str | Path = "",
         theme_name: str = "cyber_ctf",
+        title_treatment: str = "",
         format_name: str = "A2",
         use_gemini: bool = True,
     ) -> tuple[Path, Path, Path, Path]:
@@ -145,6 +149,55 @@ class PosterPipeline:
         # -------------------------------------------------------------
         # STAGE 4: PASS-2 RE-PLAN & THEME RENDERING
         # -------------------------------------------------------------
+        palette_policy = PalettePolicy("configs/palette_policy.yaml")
+        raw_brief_palette = brief.get_text("palette")
+        resolved_palette = palette_policy.resolve_palette(
+            brief_palette=raw_brief_palette if raw_brief_palette else None,
+            hero_image_path=hero_image_path if hero_image_path else None,
+            genre_hint=theme_name,
+        )
+        palette_vars_css = palette_policy.generate_css_variables(resolved_palette)
+        role_colors = palette_policy.assign_role_colors(resolved_palette)
+
+        effective_title_treatment = title_treatment or resolved_palette.title_treatment or "css_gradient_glow"
+        ocr_fallback_triggered = False
+        ocr_details: dict[str, Any] = {}
+
+        if effective_title_treatment == "generative_3d":
+            if not title_3d_path or not Path(title_3d_path).exists():
+                effective_title_treatment = "css_gradient_glow"
+                ocr_fallback_triggered = True
+                ocr_details = {"reason": "title_3d_path does not exist or empty"}
+            else:
+                ocr_res = extract_text_from_image(title_3d_path)
+                expected_title = brief.get_text("title")
+                norm_expected = normalize_str(expected_title)
+                norm_detected = normalize_str(ocr_res.full_text)
+                ratio = difflib.SequenceMatcher(None, norm_expected, norm_detected).ratio()
+                avg_conf = (
+                    sum(l.confidence for l in ocr_res.lines) / len(ocr_res.lines)
+                    if ocr_res.lines
+                    else 0.0
+                )
+                if ratio < 0.70 or avg_conf < 0.75:
+                    effective_title_treatment = "css_gradient_glow"
+                    ocr_fallback_triggered = True
+                    ocr_details = {
+                        "expected": expected_title,
+                        "detected": ocr_res.full_text,
+                        "ratio": round(ratio, 3),
+                        "confidence": round(avg_conf, 3),
+                        "reason": "OCR mismatch or confidence < 0.75",
+                    }
+                else:
+                    ocr_details = {
+                        "expected": expected_title,
+                        "detected": ocr_res.full_text,
+                        "ratio": round(ratio, 3),
+                        "confidence": round(avg_conf, 3),
+                        "status": "OCR match verified",
+                    }
+
         renderer = ThemePackRenderer(theme_name=theme_name)
         render_res = renderer.render(
             brief=brief,
@@ -155,17 +208,32 @@ class PosterPipeline:
             hero_path=hero_image_path,
             title_3d_path=title_3d_path,
             accent_path=accent_image_path,
+            palette_vars_css=palette_vars_css,
+            title_treatment=effective_title_treatment,
         )
 
         self.logger.record_stage(
             stage_number=4,
             stage_name="Pass-2 Re-Plan & Theme Rendering",
             status="PASSED",
-            summary=f"Rendered initial composite and text-alone occlusion layers with {len(render_res.dom_boxes)} stable DOM boxes.",
+            summary=f"Rendered initial composite with {len(render_res.dom_boxes)} DOM boxes using '{resolved_palette.source}' palette.",
             details={
                 "html_path": str(render_res.html_path),
                 "full_png_path": str(render_res.full_png_path),
                 "dom_elements_tracked": list(render_res.dom_boxes.keys()),
+                "palette_source": resolved_palette.source,
+                "palette_tones": {
+                    "canvas_base": resolved_palette.canvas_base,
+                    "structural": resolved_palette.structural,
+                    "accent": resolved_palette.accent,
+                    "secondary_accent": resolved_palette.secondary_accent,
+                    "surface": resolved_palette.surface,
+                },
+                "role_colors": role_colors,
+                "title_treatment": effective_title_treatment,
+                "title_treatment_requested": title_treatment or resolved_palette.title_treatment,
+                "ocr_fallback_triggered": ocr_fallback_triggered,
+                "ocr_details": ocr_details,
             },
         )
 
@@ -179,6 +247,39 @@ class PosterPipeline:
             canvas_w=canvas_w,
             canvas_h=canvas_h,
         )
+
+        # Chromatic Palette & Contrast Validation
+        rendered_elements = []
+        for sid, box in render_res.dom_boxes.items():
+            role = sid.split("_")[0]
+            col = role_colors.get(role, resolved_palette.structural)
+            rendered_elements.append({
+                "id": sid,
+                "role": role,
+                "color": col,
+                "bg_color": resolved_palette.canvas_base,
+            })
+
+        palette_report = palette_policy.validate_rendered_palette(
+            palette=resolved_palette,
+            rendered_elements=rendered_elements,
+            canvas_bg=resolved_palette.canvas_base,
+        )
+
+        for p_issue in palette_report.issues:
+            report.issues.append(CheckIssue(
+                check_name=p_issue.issue_type,
+                severity=p_issue.severity if p_issue.severity in ("blocking", "warning") else "warning",
+                element_id=p_issue.element_id or "canvas",
+                detail=p_issue.message,
+                fix_hint="Adjust color token for role" if p_issue.suggested_patch else "Refine palette assignment",
+                recommended_op="swap_token",
+            ))
+            if p_issue.severity == "blocking":
+                report.blocking_count += 1
+                report.passed = False
+            elif p_issue.severity == "warning":
+                report.warning_count += 1
 
         s5_status = "PASSED" if report.passed else "WARNING"
         s5_summary = f"Physical checks: {report.blocking_count} blocking errors, {report.warning_count} warnings."

@@ -139,7 +139,7 @@ def run_art_first_pipeline(
     accent_path = run_assets_dir / "accent_rgba.png"
     title_path = run_assets_dir / "title_3d_rgba.png"
 
-    # Check if pre-existing assets can be reused (e.g. from brain directory)
+    # Check if pre-existing assets can be reused (e.g. from existing_assets_dir)
     if existing_assets_dir and Path(existing_assets_dir).exists():
         e_dir = Path(existing_assets_dir)
         for f in e_dir.glob("*.png"):
@@ -268,7 +268,7 @@ Palette: #1B1040, #FF4D6D, #FFB703, #FFF3E0, #7AE7C7, #C9B8FF"""
             brief_text=brief_text,
             output_dir=args.output_dir or "runs/exports",
             title_mode="path2_3d",
-            existing_assets_dir=args.assets_dir or r"C:\Users\iQube\.gemini\antigravity\brain\98f40bc9-b037-4830-8e36-54702f37f83a",
+            existing_assets_dir=args.assets_dir,
         )
         return
 

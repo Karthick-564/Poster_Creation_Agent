@@ -57,43 +57,85 @@ class ThemePackRenderer:
         title_3d_uri: str = "",
         accent_uri: str = "",
         hide_art: bool = False,
+        palette_vars_css: str = "",
+        title_treatment: str = "css_gradient_glow",
     ) -> str:
         art_visibility = "hidden" if hide_art else "visible"
 
         # Brief Strings (Verbatim)
-        title = brief.get_text("title", "NOVA CTF 2026")
-        tagline = brief.get_text("tagline", "Capture the flag. Break it. Fix it.")
-        subtitle = brief.get_text("subtitle", "24-HOUR CYBERSECURITY TOURNAMENT")
-        date_str = brief.get_text("date", "15-16 NOVEMBER 2026")
-        time_str = brief.get_text("time", "9:00 AM ONWARDS")
-        venue_str = brief.get_text("venue", "Main Computer Lab, Block C")
-        events_str = brief.get_text("events", "WEB | CRYPTO | FORENSICS | REVERSING")
-        prize_str = brief.get_text("prize", "₹50,000 Total Prize Pool")
-        cta_str = brief.get_text("cta", "Register free at nova-ctf.example")
-        organizer_str = brief.get_text("organizer", "Presented by NOVA Security Club")
-        team_size_str = brief.get_text("team_size", "Teams of 2-4")
+        title = brief.get_text("title", "EVENT 2027")
+        tagline = brief.get_text("tagline", "")
+        subtitle = brief.get_text("subtitle", "")
+        date_str = brief.get_text("date", "")
+        time_str = brief.get_text("time", "")
+        venue_str = brief.get_text("venue", "")
+        events_str = brief.get_text("events", "")
+        prize_str = brief.get_text("prize", "")
+        cta_str = brief.get_text("cta", "")
+        organizer_str = brief.get_text("organizer", "")
+        team_size_str = brief.get_text("team_size", "")
+        dress_code_str = brief.get_text("dress_code", "")
 
-        # Clean prize string for HUD pill
         prize_display = prize_str if "PRIZE" in prize_str.upper() else f"PRIZE POOL {prize_str}"
+
+        # Resolve font paths (OFL open fonts)
+        font_dir = Path(__file__).resolve().parent.parent.parent / "assets/fonts"
+        inter_semi = (font_dir / "Inter-SemiBold.ttf").as_uri() if (font_dir / "Inter-SemiBold.ttf").exists() else ""
+        inter_reg = (font_dir / "Inter-Regular.ttf").as_uri() if (font_dir / "Inter-Regular.ttf").exists() else ""
+        mono_reg = (font_dir / "JetBrainsMono-Regular.ttf").as_uri() if (font_dir / "JetBrainsMono-Regular.ttf").exists() else ""
+        sans_bold = (font_dir / "SourceSans3-Bold.ttf").as_uri() if (font_dir / "SourceSans3-Bold.ttf").exists() else ""
+
+        # Title HTML block based on title_treatment
+        if title_treatment == "generative_3d" and title_3d_uri:
+            title_html = f'<img id="headline_3d_img" class="title-3d-asset" src="{title_3d_uri}" alt="{title}" /><h1 id="headline_text_fallback" class="visually-hidden">{title}</h1>'
+        elif title_treatment == "flat":
+            title_html = f'<h1 id="headline_text_fallback" class="main-title-flat">{title}</h1>'
+        else:  # css_gradient_glow
+            title_html = f'<h1 id="headline_text_fallback" class="main-title-glow">{title}</h1>'
 
         html_doc = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>{title} - Master Path 3 Blended HUD Poster</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@600;700;800&family=Syne:wght@800;900&display=swap" rel="stylesheet">
+  <title>{title}</title>
   <style>
+    /* Open-License OFL Fonts Loaded Locally via @font-face */
+    @font-face {{
+      font-family: 'OFL-Sans';
+      src: url('{inter_reg}') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }}
+    @font-face {{
+      font-family: 'OFL-Sans';
+      src: url('{inter_semi}') format('truetype');
+      font-weight: 600;
+      font-style: normal;
+    }}
+    @font-face {{
+      font-family: 'OFL-Display';
+      src: url('{sans_bold}') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+    }}
+    @font-face {{
+      font-family: 'OFL-Mono';
+      src: url('{mono_reg}') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }}
+
+    {palette_vars_css}
+
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     
     body {{
-      background: #000000;
+      background: var(--color-canvas-base, #0A0E17);
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      font-family: 'Space Grotesk', sans-serif;
+      font-family: 'OFL-Sans', sans-serif;
       -webkit-font-smoothing: antialiased;
       overflow: hidden;
       width: {art_bundle.canvas_w}px;
@@ -106,12 +148,8 @@ class ThemePackRenderer:
       position: relative;
       width: {art_bundle.canvas_w}px;
       height: {art_bundle.canvas_h}px;
-      background-color: #0A0E17;
-      background-image: 
-        radial-gradient(circle at 50% 35%, rgba(0, 255, 156, 0.16) 0%, transparent 60%),
-        radial-gradient(circle at 85% 15%, rgba(0, 209, 255, 0.20) 0%, transparent 50%),
-        linear-gradient(180deg, rgba(10, 14, 23, 0.45) 0%, rgba(10, 14, 23, 0.15) 30%, rgba(10, 14, 23, 0.60) 70%, rgba(10, 14, 23, 0.95) 100%),
-        url('{bg_uri}');
+      background-color: var(--color-canvas-base, #0A0E17);
+      background-image: url('{bg_uri}');
       background-size: cover;
       background-position: center;
       overflow: hidden;
@@ -119,52 +157,26 @@ class ThemePackRenderer:
       flex-direction: column;
       justify-content: space-between;
       padding: 68px;
-      color: #FFFFFF;
+      color: var(--color-structural, #FFFFFF);
     }}
 
     .art-layer {{
       visibility: {art_visibility};
     }}
 
-    /* TACTICAL GRID OVERLAY */
-    .circuit-grid {{
+    .visually-hidden {{
       position: absolute;
-      inset: 0;
-      background-size: 54px 54px;
-      background-image: 
-        linear-gradient(to right, rgba(0, 255, 156, 0.04) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(0, 209, 255, 0.04) 1px, transparent 1px);
-      pointer-events: none;
-      z-index: 1;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }}
 
-    .grain {{
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0.14;
-      pointer-events: none;
-      z-index: 20;
-      mix-blend-mode: overlay;
-    }}
-
-    /* HOLOGRAPHIC CYBER FLAG */
-    .cyber-flag {{
-      position: absolute;
-      top: 25px;
-      right: 25px;
-      width: 250px;
-      height: 250px;
-      object-fit: contain;
-      z-index: 15;
-      transform: rotate(-4deg);
-      mix-blend-mode: screen;
-      filter: drop-shadow(0 0 25px rgba(0, 255, 156, 0.65)) drop-shadow(0 0 35px rgba(0, 209, 255, 0.45));
-      pointer-events: none;
-    }}
-
-    /* TOP SECTION: PATH 3 GENERATIVE CIRCUIT INFILL TITLE */
+    /* TOP SECTION */
     .section-title {{
       position: relative;
       z-index: 10;
@@ -185,51 +197,47 @@ class ThemePackRenderer:
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'OFL-Mono', monospace;
       font-size: 14px;
       font-weight: 700;
-      letter-spacing: 0.18em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      color: #00FF9C;
-      background: rgba(0, 255, 156, 0.08);
+      color: var(--role-organizer-color, var(--color-secondary-accent, #00FF9C));
+      background: rgba(0, 0, 0, 0.25);
       padding: 6px 14px;
       border-radius: 4px;
-      border: 1px solid rgba(0, 255, 156, 0.28);
-    }}
-    .top-badge::before {{
-      content: "";
-      width: 7px;
-      height: 7px;
-      background: #00FF9C;
-      border-radius: 50%;
-      box-shadow: 0 0 8px #00FF9C;
+      border: 1px solid var(--role-organizer-color, var(--color-secondary-accent, #00FF9C));
     }}
 
-    .terminal-status {{
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
-      font-weight: 600;
-      color: #8A94A6;
-      letter-spacing: 0.12em;
-    }}
-
-    /* PATH 3 GENERATIVE CIRCUIT MASK INFILL TITLE */
-    .main-title-path3 {{
-      font-family: 'Syne', sans-serif;
-      font-size: 102px;
+    .main-title-glow {{
+      font-family: 'OFL-Display', sans-serif;
+      font-size: 96px;
       font-weight: 900;
       line-height: 0.95;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.01em;
       text-transform: uppercase;
-      background-image: url('{bg_uri}');
-      background-size: 750px;
-      background-position: center;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      -webkit-text-stroke: 2px #00FF9C;
-      filter: drop-shadow(0 0 25px rgba(0, 255, 156, 0.75)) drop-shadow(0 0 50px rgba(0, 209, 255, 0.50));
+      color: var(--role-title-color, var(--color-structural, #FFFFFF));
+      text-shadow: 0 0 35px var(--color-accent, #00FF9C);
       margin-bottom: 14px;
-      white-space: nowrap;
+    }}
+
+    .main-title-flat {{
+      font-family: 'OFL-Display', sans-serif;
+      font-size: 96px;
+      font-weight: 900;
+      line-height: 0.95;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      color: var(--role-title-color, var(--color-structural, #1F2A24));
+      margin-bottom: 14px;
+    }}
+
+    .title-3d-asset {{
+      max-width: 900px;
+      max-height: 220px;
+      object-fit: contain;
+      filter: drop-shadow(0 15px 30px rgba(0, 0, 0, 0.8));
+      margin-bottom: 14px;
     }}
 
     .tagline-row {{
@@ -237,212 +245,168 @@ class ThemePackRenderer:
       align-items: center;
       gap: 12px;
     }}
-    .tagline-slash {{
-      color: #00D1FF;
-      font-weight: 800;
-      font-size: 26px;
-    }}
     .tagline {{
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 27px;
+      font-family: 'OFL-Sans', sans-serif;
+      font-size: 24px;
       font-weight: 600;
-      letter-spacing: -0.01em;
-      color: #00FF9C;
-      text-shadow: 0 0 16px rgba(0, 255, 156, 0.40);
+      letter-spacing: 0.02em;
+      color: var(--role-tagline-color, var(--color-secondary-accent, #00D1FF));
     }}
 
-    /* CENTER HERO SHIELD WITH VOLUMETRIC BACKGLOW */
-    .cyber-shield-container {{
+    /* HERO ASSET - COMMANDING VISUAL PRESENCE */
+    .hero-container {{
       position: absolute;
-      top: 350px;
+      top: 380px;
       left: 50%;
       transform: translateX(-50%);
-      width: 680px;
-      height: 680px;
-      z-index: 25;
+      width: 820px;
+      height: 820px;
+      z-index: 20;
       display: flex;
       justify-content: center;
       align-items: center;
       pointer-events: none;
     }}
 
-    .shield-backglow {{
-      position: absolute;
-      width: 580px;
-      height: 580px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(0, 255, 156, 0.24) 0%, rgba(0, 209, 255, 0.12) 50%, transparent 72%);
-      filter: blur(45px);
-    }}
-
-    .cyber-shield-img {{
+    .hero-img {{
       position: relative;
-      max-width: 650px;
-      max-height: 650px;
+      max-width: 800px;
+      max-height: 800px;
       object-fit: contain;
-      filter: drop-shadow(0 30px 65px rgba(0, 0, 0, 0.98)) drop-shadow(0 0 45px rgba(0, 255, 156, 0.65));
+      filter: drop-shadow(0 25px 50px rgba(0, 0, 0, 0.45));
     }}
 
-    /* BOTTOM METADATA: UNIFIED GRAPHIC DESIGN HUD PANEL */
+    /* LOWER METADATA - EDITORIAL TYPOGRAPHY, ZERO AMATEUR BOXES */
     .section-lower {{
       position: relative;
       z-index: 30;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 20px;
+      padding: 30px 36px;
+      background: var(--scrim-gradient, linear-gradient(to top, rgba(10, 14, 23, 0.92) 0%, rgba(10, 14, 23, 0.75) 60%, transparent 100%));
+      border-radius: 0;
+      backdrop-filter: blur(8px);
     }}
 
     .hud-panel {{
-      background: rgba(10, 14, 23, 0.78);
-      border: 1px solid rgba(0, 255, 156, 0.28);
-      border-radius: 12px;
-      padding: 24px 28px;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      backdrop-filter: blur(18px);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), 0 0 35px rgba(0, 255, 156, 0.15);
+      gap: 18px;
+      box-shadow: none !important;
     }}
 
     .hud-main-grid {{
       display: grid;
-      grid-template-columns: 1.15fr 1.35fr;
-      gap: 32px;
+      grid-template-columns: 1fr 1.3fr;
+      gap: 36px;
       align-items: start;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--role-divider-color, rgba(255, 255, 255, 0.18));
     }}
 
     .micro-label {{
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'OFL-Mono', monospace;
       font-size: 13px;
       font-weight: 700;
-      letter-spacing: 0.16em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      color: #8A94A6;
+      color: var(--role-tagline-color, var(--color-secondary-accent, #8A94A6));
       margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }}
-    .micro-label::before {{
-      content: "//";
-      color: #00D1FF;
     }}
 
     .date-display {{
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 38px;
+      font-family: 'OFL-Display', sans-serif;
+      font-size: 36px;
       font-weight: 800;
-      letter-spacing: -0.01em;
-      color: #00D1FF;
+      color: var(--role-date-color, var(--color-structural, #FFFFFF));
       line-height: 1.1;
-      text-shadow: 0 0 22px rgba(0, 209, 255, 0.35);
+      letter-spacing: -0.01em;
     }}
 
     .venue-display {{
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 26px;
-      font-weight: 700;
-      color: #FFFFFF;
+      font-family: 'OFL-Sans', sans-serif;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--role-venue-color, var(--color-structural, #FFFFFF));
       line-height: 1.25;
-      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
     }}
 
     .hud-banner-row {{
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      background: rgba(0, 255, 156, 0.05);
-      border: 1px solid rgba(0, 255, 156, 0.22);
-      border-radius: 8px;
-      padding: 14px 20px;
-      gap: 16px;
-    }}
-
-    .subtitle-text {{
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 23px;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      color: #FFFFFF;
-      line-height: 1.2;
-    }}
-
-    .bounty-pill {{
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-      color: #00FF9C;
-      white-space: nowrap;
-      text-shadow: 0 0 16px rgba(0, 255, 156, 0.50);
-      background: rgba(0, 255, 156, 0.12);
-      padding: 8px 20px;
-      border-radius: 6px;
-      border: 1px solid #00FF9C;
-      box-shadow: 0 0 22px rgba(0, 255, 156, 0.25);
-    }}
-
-    .hud-tracks-row {{
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      align-items: baseline;
+      background: transparent;
+      border: none;
+      padding: 0;
       gap: 20px;
     }}
 
-    .tracks-content {{
-      font-family: 'JetBrains Mono', monospace;
+    .subtitle-text {{
+      font-family: 'OFL-Sans', sans-serif;
       font-size: 20px;
       font-weight: 700;
-      letter-spacing: 0.06em;
-      color: #00D1FF;
-      white-space: nowrap;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--role-subtitle-color, var(--color-structural, #FFFFFF));
     }}
 
-    .meta-specs {{
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 15px;
-      font-weight: 600;
-      color: #8A94A6;
-      display: flex;
-      gap: 24px;
+    .bounty-pill {{
+      font-family: 'OFL-Display', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      color: var(--role-prize-color, var(--color-accent, #E9A23B));
       white-space: nowrap;
+      padding: 0;
+      border: none;
+      background: transparent;
     }}
-    .meta-specs span {{
-      color: #FFFFFF;
+
+    .tracks-content {{
+      font-family: 'OFL-Mono', monospace;
+      font-size: 16px;
       font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--role-events-color, var(--color-structural, #FFFFFF));
+      padding-top: 14px;
+      border-top: 1px solid var(--role-divider-color, rgba(255, 255, 255, 0.15));
+      opacity: 0.95;
     }}
 
     .section-footer {{
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-top: 8px;
-      border-top: 1px solid rgba(255, 255, 255, 0.10);
+      padding-top: 16px;
+      border-top: 1px solid var(--role-divider-color, rgba(255, 255, 255, 0.2));
     }}
 
     .cta-pill {{
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 21px;
+      font-family: 'OFL-Mono', monospace;
+      font-size: 20px;
       font-weight: 800;
-      color: #0A0E17;
-      background: #00FF9C;
-      letter-spacing: 0.02em;
-      padding: 12px 28px;
-      border-radius: 6px;
-      box-shadow: 0 0 28px rgba(0, 255, 156, 0.45);
+      color: var(--role-cta-color, var(--color-accent, #E9A23B));
+      background: transparent !important;
+      letter-spacing: 0.08em;
+      padding: 0 !important;
+      border: none !important;
+      border-radius: 0 !important;
       text-transform: uppercase;
       white-space: nowrap;
     }}
 
     .organizer-pill {{
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 18px;
+      font-family: 'OFL-Sans', sans-serif;
+      font-size: 15px;
       font-weight: 600;
-      color: #8A94A6;
-      letter-spacing: 0.02em;
+      color: var(--role-organizer-color, var(--color-secondary-accent, #8A94A6));
+      letter-spacing: 0.03em;
       white-space: nowrap;
     }}
   </style>
@@ -450,32 +414,18 @@ class ThemePackRenderer:
 <body>
 
   <div class="poster-canvas">
-    <div class="circuit-grid art-layer"></div>
-    <svg class="grain art-layer" xmlns="http://www.w3.org/2000/svg">
-      <filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="3" stitchTiles="stitch"/></filter>
-      <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
-    </svg>
-
-    <!-- FLAG -->
-    {f'<img id="accent_art_1" class="cyber-flag art-layer" src="{accent_uri}" alt="Cyber Flag" />' if accent_uri else ''}
-
-    <!-- TOP SECTION: PATH 3 GENERATIVE CIRCUIT INFILL TITLE -->
+    <!-- TOP SECTION -->
     <div id="title_zone" class="section-title">
       <div class="top-meta-bar">
-        <div class="top-badge">CTF_CHALLENGE // 2026</div>
-        <div class="terminal-status">SYS_STATUS: ONLINE</div>
+        <div class="top-badge">{organizer_str or 'PRESENTED ANNOUNCEMENT'}</div>
       </div>
-      <h1 id="headline_text_fallback" class="main-title-path3">{title}</h1>
-      <div class="tagline-row">
-        <span class="tagline-slash">&gt;</span>
-        <div id="tagline_1" class="tagline">{tagline}</div>
-      </div>
+      {title_html}
+      {f'<div class="tagline-row"><div id="tagline_1" class="tagline">{tagline}</div></div>' if tagline else ''}
     </div>
 
-    <!-- SHIELD -->
-    <div class="cyber-shield-container">
-      <div class="shield-backglow art-layer"></div>
-      {f'<img id="hero_art_1" class="cyber-shield-img art-layer" src="{hero_uri}" alt="Cyber Shield Motif" />' if hero_uri else ''}
+    <!-- HERO -->
+    <div class="hero-container">
+      {f'<img id="hero_art_1" class="hero-img art-layer" src="{hero_uri}" alt="Hero Motif" />' if hero_uri else ''}
     </div>
 
     <!-- HUD -->
@@ -484,31 +434,22 @@ class ThemePackRenderer:
         <div class="hud-main-grid">
           <div>
             <div class="micro-label">EVENT TIMEFRAME</div>
-            <div id="date_1" class="date-display">{date_str}</div>
+            <div id="date_1" class="date-display">{date_str}{f'<span style="display:block;font-size:18px;font-weight:600;opacity:0.88;margin-top:4px;">{time_str}</span>' if time_str else ''}</div>
           </div>
           <div>
-            <div class="micro-label">COORDINATES & VENUE</div>
-            <div id="venue_1" class="venue-display">{venue_str}</div>
+            <div class="micro-label">LOCATION & VENUE</div>
+            <div id="venue_1" class="venue-display">{venue_str}{f'<div id="dress_code_1" class="micro-label" style="margin-top:6px;opacity:0.85;">DRESS CODE: {dress_code_str}</div>' if dress_code_str else ''}</div>
           </div>
         </div>
 
-        <div id="subhead_prize_row" class="hud-banner-row">
-          <div id="subhead_1" class="subtitle-text">{subtitle}</div>
-          <div id="prize_1" class="bounty-pill">{prize_display}</div>
-        </div>
+        {f'<div id="subhead_prize_row" class="hud-banner-row"><div id="subhead_1" class="subtitle-text">{subtitle}</div><div id="prize_1" class="bounty-pill">{prize_display}</div></div>' if subtitle or prize_str else ''}
 
-        <div id="tracks_belt" class="hud-tracks-row">
-          <div class="tracks-content">{events_str}</div>
-          <div class="meta-specs">
-            {f'<div>TEAM: <span id="team_size_1">{team_size_str}</span></div>' if team_size_str else ''}
-            {f'<div>TIME: <span id="time_1">{time_str}</span></div>' if time_str else ''}
-          </div>
-        </div>
+        {f'<div id="tracks_belt" class="tracks-content">{events_str}</div>' if events_str else ''}
       </div>
 
       <div id="cta_footer_row" class="section-footer">
-        <div id="cta_1" class="cta-pill">{cta_str}</div>
-        <div id="organizer_1" class="organizer-pill">{organizer_str}</div>
+        {f'<div id="cta_1" class="cta-pill">{cta_str}</div>' if cta_str else ''}
+        {f'<div id="organizer_1" class="organizer-pill">{organizer_str}</div>' if organizer_str else ''}
       </div>
     </div>
   </div>
@@ -529,6 +470,8 @@ class ThemePackRenderer:
         title_3d_path: str | Path = "",
         accent_path: str | Path = "",
         html_override: str | None = None,
+        palette_vars_css: str = "",
+        title_treatment: str = "css_gradient_glow",
     ) -> ThemeRenderResult:
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -551,8 +494,14 @@ class ThemePackRenderer:
             else:
                 html_text_only = f"{hide_style}{html_override}"
         else:
-            html_full = self.compose_html(brief, art_bundle, bg_uri, hero_uri, title_uri, accent_uri, hide_art=False)
-            html_text_only = self.compose_html(brief, art_bundle, bg_uri, hero_uri, title_uri, accent_uri, hide_art=True)
+            html_full = self.compose_html(
+                brief, art_bundle, bg_uri, hero_uri, title_uri, accent_uri,
+                hide_art=False, palette_vars_css=palette_vars_css, title_treatment=title_treatment
+            )
+            html_text_only = self.compose_html(
+                brief, art_bundle, bg_uri, hero_uri, title_uri, accent_uri,
+                hide_art=True, palette_vars_css=palette_vars_css, title_treatment=title_treatment
+            )
 
         full_html_path = out_dir / f"{base_slug}.html"
         full_html_path.write_text(html_full, encoding="utf-8")
@@ -573,9 +522,10 @@ class ThemePackRenderer:
                 device_scale_factor=2.0,
             )
 
-            # Capture Full Render
+            # Wait for document and local fonts to be fully loaded and rendered
             page.goto(full_html_path.resolve().as_uri(), wait_until="networkidle")
-            page.wait_for_timeout(500)
+            page.evaluate("() => document.fonts.ready")
+            page.wait_for_timeout(400)
             canvas = page.locator(".poster-canvas")
             canvas.screenshot(path=str(full_png_path))
 
