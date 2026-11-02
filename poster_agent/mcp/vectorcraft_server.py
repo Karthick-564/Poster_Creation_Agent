@@ -185,11 +185,16 @@ class VectorCraftMCPServer:
                 "error": f"VerbatimValidationError: '{text}' does not appear in loaded brief"
             }
 
+        # In layout systems y represents the top-left of the text bounding box.
+        # VectorCraft CLI engine text.create places text by baseline.
+        # Translating y (top) -> baseline_y ensures raster glyphs sit exactly within geometric bounds.
+        baseline_y = float(y) + float(size) * 0.78
+
         # Append command to VectorCraft renderer
         self.renderer.add_text(
             text=text_clean,
             x=float(x),
-            y=float(y),
+            y=baseline_y,
             size=float(size),
             font=font,
             style=style,
