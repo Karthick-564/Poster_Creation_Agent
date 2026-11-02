@@ -788,3 +788,89 @@ def run_stage6_gates(
         })
 
     return gate_records
+
+
+def check_refusal_free(image_input: Union[Path, str, Image.Image]) -> list[GateFailure]:
+    """Scan generated raster image for AI safety filter refusal text or characteristic blocked-image artifacts."""
+    failures: list[GateFailure] = []
+
+    if isinstance(image_input, (str, Path)):
+        p = Path(image_input)
+        if not p.exists():
+            return failures
+        try:
+            im = Image.open(p).convert("RGB")
+        except Exception:
+            return failures
+        target_name = str(p.name)
+    else:
+        im = image_input.convert("RGB")
+        target_name = "image_layer"
+
+    # 1. OCR scan if pytesseract is installed
+    try:
+        import pytesseract
+        ocr_text = pytesseract.image_to_string(im).lower()
+        refusal_keywords = [
+            "blocked by safety filter",
+            "safety filter",
+            "blocked by safety",
+            "content policy",
+            "safety violation",
+            "image blocked",
+            "refusal",
+        ]
+        for kw in refusal_keywords:
+            if kw in ocr_text:
+                failures.append(GateFailure(
+                    kind="refusal",
+                    target=target_name,
+                    detail=f"Safety filter refusal text detected via OCR: '{kw}'",
+                    measured={"ocr_match": kw, "source": "pytesseract"},
+                ))
+                return failures
+    except Exception:
+        pass
+
+    # 2. Deterministic heuristic scan for refusal artifacts
+    # Characteristic safety filter artifact:
+    # A mostly flat/solid canvas with a narrow horizontal bar of high-contrast text in the central band.
+    arr = np.array(im, dtype=np.float32)
+    h, w, _ = arr.shape
+    if h < 50 or w < 50:
+        return failures
+
+    gray = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+
+    # Check top/bottom strip flatness (top 20% and bottom 20%)
+    top_strip = gray[:int(h * 0.2), :]
+    bot_strip = gray[int(h * 0.8):, :]
+    top_std = float(np.std(top_strip))
+    bot_std = float(np.std(bot_strip))
+
+    # Center zone (30% to 70%)
+    center_strip = gray[int(h * 0.3):int(h * 0.7), :]
+    center_diff = np.abs(np.diff(center_strip, axis=1))
+    center_edge_max = float(np.max(center_diff)) if center_diff.size > 0 else 0.0
+
+    # If top and bottom strips are flat (< 4.0 std dev) and identical in mean (abs diff < 3.0)
+    if top_std < 4.0 and bot_std < 4.0 and abs(float(np.mean(top_strip)) - float(np.mean(bot_strip))) < 3.0:
+        if center_edge_max > 120.0:
+            row_stds = np.std(center_strip, axis=1)
+            high_std_rows = int(np.sum(row_stds > 20.0))
+            if 3 <= high_std_rows <= max(120, int(h * 0.15)):
+                failures.append(GateFailure(
+                    kind="refusal",
+                    target=target_name,
+                    detail="Deterministic heuristic detected safety filter refusal banner (flat canvas with high-contrast text strip)",
+                    measured={
+                        "top_std": round(top_std, 2),
+                        "bot_std": round(bot_std, 2),
+                        "center_edge_max": round(center_edge_max, 2),
+                        "high_std_rows": high_std_rows,
+                    },
+                ))
+                return failures
+
+    return failures
+

@@ -1,0 +1,29 @@
+POSTER BRIEF: KCT ROBOTICS CLUB DEMO DAY
+Format: 1080 x 1920 px (9:16 story)
+Date: Friday, 20 November 2026, 09:30 AM
+Venue: Tech Park Auditorium, Kumaraguru College of Technology
+Title: ROBOTICS DEMO DAY 2026
+Eyebrow: KCT ROBOTICS CLUB
+Tagline: BUILD IT. TEST IT. SHOW IT OFF.
+Subtitle: Twelve student teams put their machines on the line. Live demos, teardowns, and the rulebook for season 3.
+Section: PROGRAM SCHEDULE
+Position 1: Live Demos
+Position 1 tagline: Teams field their builds on the main floor
+Position 1 point 1: Battle-bots arena round 10:00 AM
+Position 1 point 2: Maze solver challenge 11:30 AM
+Position 1 point 3: Line-follower relay 01:00 PM
+Position 2: Teardown Sessions
+Position 2 tagline: Open the chassis. Ask the builders anything.
+Position 2 point 1: Drivetrain teardown 02:30 PM
+Position 2 point 2: Sensor suite deep dive 03:15 PM
+Position 2 point 3: North-wall inspection corner 04:00 PM
+Deadline label: SEATS CLOSE
+Deadline: Monday, 16 November 2026
+Call to action: Register Now
+Closing line: BRING YOUR QUESTIONS. WITNESS THE MACHINES.
+Contact: robotics@kct.ac.in | +91 95000 11223
+QR Link: https://kct.ac.in/robotics-demoday
+Art: photoreal matte studio photograph of a mid-size wheeled robot arm on a plain concrete workshop floor holding a steel ball joint, cool diffuse north-window light, shallow depth of field, muted slate-grey and navy tones, unpolished brushed-aluminium surfaces, absolutely matte lighting, zero glow, zero neon, zero reflective highlight bloom, no lens flares, no rim light bursts, natural laboratory background with plain corrugated panels
+Mood: engineered, precise, honest workshop daylight, calm confidence
+Organizer: KCT Robotics Club
+Partner: Department of Mechatronics Engineering, KCT

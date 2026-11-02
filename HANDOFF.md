@@ -192,8 +192,19 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - **Corpus Protection**: `skills/poster-design-craft/SKILL.md` citations verified untouched.
   - Full test suite: **133 passed**, 3 warnings in 63.56s on Windows.
 
+- **Phase D Commit 3 (Repair Executor + Editable VCS Sessions + Payload v2 & Refusal Gate)**:
+  - **Ideogram Payload v2**: Canonical builder `poster_agent/generators/ideogram_v2.py` replaces all ad-hoc dictionary construction and double word-purge logic. Guarantees 1–2 concrete bounding-box elements, flat `style_description` string with inline hexes, plain descriptive prose without negative incantations ("NO TEXT", "NO WORDS"), and aspect ratio synchronization matching ComfyUI `ResolutionSelector` node 37 (`9:16 (Portrait Widescreen)` for 1080×1920).
+  - **Refusal-Free Gate (`check_refusal_free`)**: Scans generated raster layers (Layer 0 background, Layer 3 hero) via OCR (if pytesseract available) and deterministic variance/edge heuristics to detect safety-filter blocked banners. Automatic 1-attempt sanitized retry before honest halt. Refusal artifacts never enter layout measurement or print packaging.
+  - **Critique Prompt De-bias & Mock Branding**: Replaced hardcoded example score `"overall_score": 9` in Gemini Stage 7 prompt with neutral `<integer 1-10>` and strict rubric instructions. Mock Stage 7 reports are explicitly branded as `MOCK (canned fixture), score 9` across console logs and report deliverables.
+  - **Archetype Diversity Check**: Enforced structural distinction between `focal_point` (centered optical radiance) and `z_pattern` (left-aligned diagonal flow with offset hero at $x=0.52$). Verified with $\ge 4$ divergent row coordinates in `tests/test_archetype_diversity.py`.
+  - **Footer Baseline Margin Clearance**: Closing-line text baseline in `emit_footer_bar_row` strictly respects bottom safe margin ($y + h \le \text{canvas\_h} - \text{margin\_px}$).
+  - **Repair Executor (`poster_agent/repair/executor.py`)**: Consumes Stage-6 deterministic QA gate failures and applies typed repair operations (`shrink_text`, `wrap_text`, `move_row`, `swap_contrast`, `drop_duplicate`) across $\le 2$ cycles. Every attempt logged to `plan.json` under `repairs: [{gate, op, applied, outcome}]`. If unrepairable in live mode, triggers honest `PIPELINE_HALT`.
+  - **Editable VCS Session Files (`session_poster.vcs`)**: Full VectorCraft command streams serialized per run as `runs/{run_id}/session_poster.vcs`. Re-loadable via `VectorCraftRenderer.load_session(...)` with 100% manifest and raster output parity, providing a human-editable and re-renderable design artifact.
+  - **Broken-Scenario Harness (`briefs/brief_broken_dense.txt`)**: Stress-test brief featuring a 44-character single-word headline and 9 dense positions, verified end-to-end in `tests/test_repair_broken_scenario.py`.
+  - Full test suite: **144 passed**, 3 warnings on Windows.
+
 ### Pending / Next Up
-- **Phase D Commit 3**: Repair executor (`poster_agent/repair/executor.py`) consuming typed operations within a 2-cycle budget, pathological broken-scenario harness, and live acceptance run.
+- **Live Acceptance Run**: Run live production pipeline with real Gemini API on `briefs/brief_c4_demo.txt` and `briefs/brief_robotics_demoday.txt` to verify end-to-end asset generation, QA gates, repair executor, and editable `.vcs` deliverables.
 
 ## 7. Superseded / Do Not Revive
 

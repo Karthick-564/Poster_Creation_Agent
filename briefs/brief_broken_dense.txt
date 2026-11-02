@@ -1,0 +1,42 @@
+POSTER BRIEF: BROKEN DENSE BENCHMARK
+Format: 1080 x 1920 px (9:16 story)
+Date: Friday, 28 November 2026, 08:30 AM
+Venue: Grand Auditorium, Building 4B
+Title: SUPERINTELLECTUALIZATIONROBOTICSAUTONOMATION
+Eyebrow: EXTREME DENSITY BENCHMARK
+Tagline: MAXIMUM LOAD REPAIR STRESS TEST
+Subtitle: Stress testing automated repair loop against extreme headline width overflow and tight vertical stacking.
+Section: CORE POSITIONS
+Position 1: Autonomous Systems Lead
+Position 1 tagline: Multi-agent coordination and motion control
+Position 1 point 1: Neural path planning
+Position 2: Vision Research Engineer
+Position 2 tagline: High-speed edge perception systems
+Position 2 point 1: Optical flow tracking
+Position 3: Embedded Firmware Lead
+Position 3 tagline: Real-time RTOS microkernel architecture
+Position 3 point 1: CAN-FD and SPI bus protocols
+Position 4: Hardware Design Engineer
+Position 4 tagline: High-density PCB layout and thermals
+Position 4 point 1: Power electronics routing
+Position 5: Simulation Lead
+Position 5 tagline: High-fidelity physics digital twins
+Position 5 point 1: MuJoCo environment tuning
+Position 6: Mechatronics Specialist
+Position 6 tagline: Actuator sizing and precision gearheads
+Position 6 point 1: Harmonic drive integration
+Position 7: Safety Systems Lead
+Position 7 tagline: Certified fail-safe hardware watchdogs
+Position 7 point 1: ISO 26262 compliance
+Position 8: Test Automation Engineer
+Position 8 tagline: Hardware-in-the-loop validation
+Position 8 point 1: Continuous regression suites
+Position 9: Operations Coordinator
+Position 9 tagline: Fleet logistics and field deployment
+Position 9 point 1: Staging and recovery ops
+Deadline: Monday, 24 November 2026
+Call to action: Submit Dossier
+Closing line: THE MACHINES ARE TESTED. WILL YOU BE READY?
+Contact: stress@testbench.org | +1 555 0199
+QR Link: https://testbench.org/stress
+Mood: intense, industrial, high-density, technical

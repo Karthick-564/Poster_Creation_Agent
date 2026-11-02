@@ -869,3 +869,64 @@ class VectorCraftRenderer:
                 except OSError:
                     pass
 
+    def save_session(
+        self,
+        output_path: Path | str,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> Path:
+        """Save full VectorCraft command stream as editable .vcs session file.
+
+        The .vcs format contains a metadata header and the raw JSON command sequence,
+        enabling human hand-editing and programmatic reloading via load_session().
+        """
+        p = Path(output_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        session_data = {
+            "vcs_version": "1.0",
+            "metadata": metadata or {},
+            "doc_width": self.doc_width,
+            "doc_height": self.doc_height,
+            "queued_texts": self._queued_texts,
+            "hero_rect": getattr(self, "hero_rect", None),
+            "command_count": len(self.commands),
+            "commands": self.commands,
+        }
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, indent=2)
+        return p
+
+    @classmethod
+    def load_session(
+        cls,
+        session_path: Path | str,
+        cli_path: Optional[str | Path] = None,
+    ) -> "VectorCraftRenderer":
+        """Load an editable .vcs session file into a fresh VectorCraftRenderer instance."""
+        p = Path(session_path)
+        if not p.exists():
+            raise FileNotFoundError(f"VCS session file not found: {p}")
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        renderer = cls(cli_path=cli_path)
+        renderer.doc_width = data.get("doc_width")
+        renderer.doc_height = data.get("doc_height")
+        renderer.hero_rect = data.get("hero_rect")
+        renderer._queued_texts = list(data.get("queued_texts", []))
+        renderer.commands = list(data.get("commands", []))
+
+        # Re-derive queued_texts if not present
+        if not renderer._queued_texts:
+            for cmd in renderer.commands:
+                if cmd.get("command") == "text.create":
+                    params = cmd.get("params", {})
+                    renderer._queued_texts.append({
+                        "text": params.get("text", ""),
+                        "font": params.get("font", "Inter"),
+                        "size": params.get("size", 12.0),
+                        "role": params.get("role", "text"),
+                        "style": params.get("style", "Regular"),
+                    })
+        return renderer
+
+

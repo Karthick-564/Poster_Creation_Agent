@@ -12,6 +12,13 @@ import time
 import urllib.request
 import urllib.error
 from pathlib import Path
+from typing import Any, Optional
+
+
+from poster_agent.generators.ideogram_v2 import (
+    build_ideogram_v2_payload,
+    resolve_aspect_ratio_and_resolution,
+)
 
 
 class ComfyUIClient:
@@ -58,8 +65,11 @@ class ComfyUIClient:
         palette: list[str],
         output_path: Path | str,
         prefix: str = "auto_bg",
+        canvas_w: float = 1080.0,
+        canvas_h: float = 1920.0,
+        payload: Optional[dict[str, Any]] = None,
     ) -> Path:
-        """Generate full atmospheric poster background via Ideogram 4.0."""
+        """Generate full atmospheric poster background via Ideogram 4.0 using canonical payload v2."""
         wf_path = Path(__file__).resolve().parent / "ideogram_workflow_api.json"
         with open(wf_path, "r", encoding="utf-8") as f:
             wf = json.load(f)
@@ -68,32 +78,29 @@ class ComfyUIClient:
         if "98:18" in wf and "inputs" in wf["98:18"]:
             wf["98:18"]["inputs"]["noise_seed"] = int(time.time() * 1000) % 1000000000000000
 
-        # Clean structured Ideogram prompt without safety filter trigger words or text glyph triggers
-        palette_list = palette[:5] if palette else ["#FFFFFF", "#0B2A5B", "#4285F4"]
-        clean_desc = re.split(r"(?:pure non-text|strictly zero|absolutely no|no text)", description, flags=re.IGNORECASE)[0]
-        clean_desc = re.sub(r"\b(vector|typography|letters?|words?|font|text|labels?|signage|watermarks?|numbers?)\b", "", clean_desc, flags=re.IGNORECASE)
-        clean_desc = re.sub(r"[,\s:-]+$", "", clean_desc).strip()
-        if len(clean_desc) < 15:
-            clean_desc = "Modern clean university campus atrium with soft daylight reflections, subtle minimalist architecture, and smooth pastel gradient shadows"
-        clean_desc = re.sub(r"\s+", " ", clean_desc).strip(" ,.:;")
-        ideogram_prompt = {
-            "high_level_description": clean_desc,
-            "style_description": f"Clean modern graphic illustration, architectural photography with soft ambient lighting and smooth subtle gradients. Color palette: {', '.join(palette_list)}.",
-            "compositional_deconstruction": {
-                "background": f"{clean_desc}. Spacious calm negative space with subtle architectural lines.",
-                "elements": [],
-            },
-            "aspect_ratio": "4:5",
-        }
+        # Canonical Ideogram v2 structured prompt payload
+        if payload is not None:
+            ideogram_prompt = payload
+        else:
+            ideogram_prompt = build_ideogram_v2_payload(
+                description=description,
+                palette=palette,
+                canvas_w=canvas_w,
+                canvas_h=canvas_h,
+            )
+
+        aspect_ratio, comfy_aspect_label, width_px, height_px = resolve_aspect_ratio_and_resolution(canvas_w, canvas_h)
 
         wf["98:24"]["inputs"]["text"] = json.dumps(ideogram_prompt, indent=2)
         wf["158"]["inputs"]["filename_prefix"] = prefix
-        
-        # Enforce exact 4:5 poster aspect ratio (896x1120, 1MP, multiples of 16)
+
+        # Synchronize ResolutionSelector (node 37) and dimension inputs
+        if "37" in wf and "inputs" in wf["37"]:
+            wf["37"]["inputs"]["aspect_ratio"] = comfy_aspect_label
         if "98:27" in wf and "inputs" in wf["98:27"]:
-            wf["98:27"]["inputs"]["value"] = 896
+            wf["98:27"]["inputs"]["value"] = width_px
         if "98:28" in wf and "inputs" in wf["98:28"]:
-            wf["98:28"]["inputs"]["value"] = 1120
+            wf["98:28"]["inputs"]["value"] = height_px
 
         payload = json.dumps({"prompt": wf}).encode("utf-8")
         req = urllib.request.Request(f"{self.endpoint}/prompt", data=payload, headers={"Content-Type": "application/json"})

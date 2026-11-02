@@ -512,7 +512,7 @@ def emit_footer_bar_row(
     vc.add_shape_rectangle(x=0.0, y=bar_y, width=width, height=bar_h, fill=fill_color)
     safe_m = max(40.0, width * 0.045)
     text_sz = max(11.0, min(14.0, bar_h * 0.25))
-    text_y = min(bar_y + (bar_h * 0.38), height - safe_m - (text_sz * 0.75))
+    text_y = min(bar_y + (bar_h * 0.38), height - safe_m - (text_sz * 0.40))
     vc.add_text(
         text=text,
         x=width * 0.5,
@@ -2335,33 +2335,73 @@ def compose_slots(
             if py < min_allowed_y:
                 py = min_allowed_y
         else:
-            px = width * 0.5 if r.alignment == "center" else margin_x
-            justify = r.alignment
-            # 5-band vertical rhythm default anchors for 9:16 layout
-            if r.role == "eyebrow":
-                py = margin_y + (sz * 0.88)
-            elif r.role == "organizer":
-                py = margin_y + 40.0 + (sz * 0.88)
-            elif r.role == "title":
-                py = height * 0.17
-            elif r.role == "subtitle":
-                py = height * 0.25
-            elif r.role == "tagline":
-                py = height * 0.29
-            elif r.role == "section":
-                py = height * 0.54
-            elif r.role in ("date", "date_time"):
-                py = height * 0.76
-            elif r.role == "venue":
-                py = height * 0.80
-            elif r.role in ("deadline", "deadline_note"):
-                py = height * 0.84
-            elif r.role == "cta":
-                py = height * 0.88
-            elif r.role == "contact":
-                py = height * 0.92
+            if archetype == "z_pattern":
+                if r.role in ("eyebrow", "organizer", "title", "subtitle", "tagline"):
+                    px = margin_x
+                    justify = "left"
+                elif r.role in ("cta", "deadline", "deadline_note"):
+                    px = margin_x
+                    justify = "left"
+                elif r.alignment == "center":
+                    px = width * 0.5
+                    justify = "center"
+                else:
+                    px = margin_x
+                    justify = "left"
+
+                # z-pattern vertical rhythm anchors: dynamic diagonal scan
+                if r.role == "eyebrow":
+                    py = margin_y + (sz * 0.88)
+                elif r.role == "organizer":
+                    py = margin_y + 36.0 + (sz * 0.88)
+                elif r.role == "title":
+                    py = height * 0.14
+                elif r.role == "subtitle":
+                    py = height * 0.22
+                elif r.role == "tagline":
+                    py = height * 0.26
+                elif r.role == "section":
+                    py = height * 0.50
+                elif r.role in ("date", "date_time"):
+                    py = height * 0.72
+                elif r.role == "venue":
+                    py = height * 0.77
+                elif r.role in ("deadline", "deadline_note"):
+                    py = height * 0.82
+                elif r.role == "cta":
+                    py = height * 0.86
+                elif r.role == "contact":
+                    py = height * 0.90
+                else:
+                    py = height * 0.48
             else:
-                py = height * 0.50
+                px = width * 0.5 if r.alignment == "center" else margin_x
+                justify = r.alignment
+                # 5-band vertical rhythm default anchors for 9:16 layout
+                if r.role == "eyebrow":
+                    py = margin_y + (sz * 0.88)
+                elif r.role == "organizer":
+                    py = margin_y + 40.0 + (sz * 0.88)
+                elif r.role == "title":
+                    py = height * 0.17
+                elif r.role == "subtitle":
+                    py = height * 0.25
+                elif r.role == "tagline":
+                    py = height * 0.29
+                elif r.role == "section":
+                    py = height * 0.54
+                elif r.role in ("date", "date_time"):
+                    py = height * 0.76
+                elif r.role == "venue":
+                    py = height * 0.80
+                elif r.role in ("deadline", "deadline_note"):
+                    py = height * 0.84
+                elif r.role == "cta":
+                    py = height * 0.88
+                elif r.role == "contact":
+                    py = height * 0.92
+                else:
+                    py = height * 0.50
 
         # Hero reserve check for header items: must finish before hero starts
         if hero_rect and r.role in ("eyebrow", "organizer", "subtitle", "title", "tagline"):
@@ -2461,7 +2501,7 @@ def compose_slots(
                     style="Bold",
                     tracking=25.0,
                     color="#0B2A5B" if is_light else it["color"],
-                    justify="center",
+                    justify=it["justify"],
                     role=row.role,
                 )
                 # Second line
@@ -2474,7 +2514,7 @@ def compose_slots(
                     style="Bold",
                     tracking=25.0,
                     color="#4285F4" if (is_light and "RECRUITING" in lines[1].upper()) else it["color"],
-                    justify="center",
+                    justify=it["justify"],
                     role=row.role,
                 )
             else:

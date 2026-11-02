@@ -42,11 +42,13 @@ from poster_agent.house_style import (
     format_exemplars_for_prompt,
 )
 from poster_agent.generators.comfyui_client import ComfyUIClient
+from poster_agent.generators.ideogram_v2 import build_ideogram_v2_payload
 from poster_agent.vision.art_measurer import ArtMeasurer
 from poster_agent.vision.bg_measurer import measure_background
 from poster_agent.renderer.vectorcraft_renderer import VectorCraftRenderer, get_vectorcraft_fonts_dir
-from poster_agent.renderer.composer import MICROCOPY_ALLOWLIST, build_typography_plan
-from poster_agent.qa.gates import run_stage6_gates
+from poster_agent.renderer.composer import MICROCOPY_ALLOWLIST, build_typography_plan, compose_slots
+from poster_agent.qa.gates import check_refusal_free, run_stage6_gates
+from poster_agent.repair.executor import RepairExecutor
 from poster_agent.gemini_client import (
     GeminiClient,
     CONCEPT_SCHEMA,
@@ -401,6 +403,11 @@ class UnifiedPosterPipeline:
                             height=768,
                         )
                         if hero_path.exists() and hero_path.stat().st_size >= min_size:
+                            refusals = check_refusal_free(hero_path)
+                            if refusals:
+                                print(f">>> [Stage 3] Refusal detected on hero attempt {attempt + 1}: {refusals[0].detail}")
+                                hero_path.unlink(missing_ok=True)
+                                continue
                             success = True
                             break
                     except Exception as e:
@@ -479,39 +486,19 @@ class UnifiedPosterPipeline:
         if bg_res.source == "generated":
             bg_caption = concept_plan.get("assets", {}).get("background", {}).get("ideogram_caption", "Atmospheric background")
 
-            # Strict text purge: ensure background description contains zero event names/titles
-            for key in ["title", "tagline", "subtitle", "venue", "events", "prize", "cta"]:
-                val = brief.get_text(key)
-                if val and len(val) > 2 and val.lower() in bg_caption.lower():
-                    bg_caption = re.sub(re.escape(val), "atmospheric environment", bg_caption, flags=re.IGNORECASE)
-
-            # Purge Ideogram 4.0 safety refusal and text trigger phrases
-            for trigger in [
-                "PURE NON-TEXT BACKGROUND ARTWORK:", "PURE NON-TEXT BACKGROUND ARTWORK",
-                "ABSOLUTELY NO TEXT", "NO WORDS", "NO LETTERS", "NO SIGNAGE",
-                "NO LABELS", "NO WATERMARKS", "NO NUMBERS", "WATERMARKS", "WATERMARK",
-                "vector typography", "typography", "letters", "words",
-            ]:
-                bg_caption = re.sub(re.escape(trigger), "", bg_caption, flags=re.IGNORECASE)
-            bg_caption = re.sub(r"\s+", " ", bg_caption).strip(" ,.:;")
-            if not bg_caption or len(bg_caption) < 15:
-                brief_mood = brief.get_text("mood") or "clean modern university tech community"
-                bg_caption = f"Modern university campus atrium with clean architectural surfaces, soft daylight and gradient shadows matching {brief_mood}, vast calm negative space"
-
-            ideogram_prompt = {
-                "high_level_description": f"{bg_caption}. Volumetric lighting from {light_plan.get('key_direction', 'top_left')}, harmonious with {hero_measured_color} accents.",
-                "style_description": {
-                    "aesthetics": f"Contemporary poster art, {concept_plan.get('movement', 'atmospheric')}, deep negative space",
-                    "lighting": f"Key light from {light_plan.get('key_direction', 'top_left')}, intensity {light_plan.get('key_intensity', 80)}%, fill {light_plan.get('fill_intensity', 40)}%",
-                    "medium": "digital_illustration",
-                    "art_style": "contemporary architectural background with clean calm negative space, high-key ambient lighting, smooth subtle gradients.",
-                    "color_palette": composed_palette,
-                },
-                "compositional_deconstruction": {
-                    "background": f"Clean ambient background in tones of {composed_palette[0]} with soft atmospheric light spill, spacious calm negative space.",
-                    "elements": [],
-                },
-            }
+            # Build canonical Ideogram v2 structured prompt payload (1-2 concrete elements, flat style, matched aspect)
+            ideogram_prompt = build_ideogram_v2_payload(
+                description=bg_caption,
+                palette=composed_palette,
+                canvas_w=canvas_w,
+                canvas_h=canvas_h,
+                light_direction=light_plan.get("key_direction", "top_left"),
+                mood=brief.get_text("mood"),
+            )
+            # Record canonical payload request
+            req_json_path = self.run_dir / "ideogram_request.json"
+            with open(req_json_path, "w", encoding="utf-8") as rf:
+                json.dump(ideogram_prompt, rf, indent=2)
 
             if self.use_mock:
                 print(">>> [Mock Mode] Synthesizing mock background art locally...")
@@ -525,7 +512,7 @@ class UnifiedPosterPipeline:
             else:
                 if not self.comfy.is_alive():
                     self.log_gate(4, "Generative Background Generation", "FAILED", "PLANNING_HALT: ComfyUI server offline on http://127.0.0.1:8188")
-                print(">>> Generating Layer 0 Background via Ideogram 4.0...")
+                print(">>> Generating Layer 0 Background via Ideogram 4.0 (Payload v2)...")
                 success = False
                 for attempt in range(2):
                     try:
@@ -534,14 +521,30 @@ class UnifiedPosterPipeline:
                             palette=composed_palette,
                             output_path=bg_path,
                             prefix=f"{self.run_id}_ideogram_bg",
+                            canvas_w=canvas_w,
+                            canvas_h=canvas_h,
+                            payload=ideogram_prompt,
                         )
                         if bg_path.exists() and bg_path.stat().st_size >= min_size:
+                            refusals = check_refusal_free(bg_path)
+                            if refusals:
+                                print(f">>> [Stage 4a] Refusal detected on attempt {attempt + 1}: {refusals[0].detail}")
+                                bg_path.unlink(missing_ok=True)
+                                # 1 sanitized retry with plain minimal caption
+                                ideogram_prompt = build_ideogram_v2_payload(
+                                    description="A contemporary atmospheric background key visual for an institutional poster with vast clean negative space",
+                                    palette=composed_palette,
+                                    canvas_w=canvas_w,
+                                    canvas_h=canvas_h,
+                                    light_direction="top_left",
+                                )
+                                continue
                             success = True
                             break
                     except Exception as e:
                         print(f">>> Background generation attempt {attempt + 1} failed: {e}")
                 if not success or not bg_path.exists() or bg_path.stat().st_size < min_size:
-                    self.log_gate(4, "Generative Background Generation", "FAILED", f"PLANNING_HALT: Background art corrupted or missing after retry: {bg_path}")
+                    self.log_gate(4, "Generative Background Generation", "FAILED", f"PLANNING_HALT: Background art generation failed or refused: {bg_path}")
 
             # Lanczos resize to canvas dimensions
             bg_img = cv2.imread(str(bg_path), cv2.IMREAD_UNCHANGED)
@@ -885,9 +888,100 @@ Output strictly valid JSON conforming to the schema.
         )
 
         failed_gates = [g for g in qa_gates if g["verdict"] == "FAIL"]
+        repairs_record: list[dict[str, Any]] = []
 
-        # Record QA gate suite in plan.json
+        # Closed-loop deterministic repair executor (budget: <=2 cycles)
+        if failed_gates:
+            print(f">>> [Stage 6 Repair Loop] Initiating automated repairs for {len(failed_gates)} gate failure(s)...")
+            repair_executor = RepairExecutor(
+                canvas_w=canvas_w,
+                canvas_h=canvas_h,
+                margin_px=margin_px,
+                max_cycles=2,
+            )
+            current_failures = list(failed_gates)
+            for cycle in range(1, 3):
+                attempts = repair_executor.plan_repairs_for_failures(
+                    cycle=cycle,
+                    failed_gates=current_failures,
+                    plan=typo_plan,
+                    hero_rect=hero_rect,
+                )
+                if not attempts:
+                    print(f">>> [Stage 6 Repair Loop] Cycle {cycle}: No viable typed repair operations planned.")
+                    break
+
+                repair_executor.apply_repairs(attempts, typo_plan, layout_plan)
+
+                # Re-compose and re-render
+                vc_repaired = VectorCraftRenderer()
+                vc_repaired.new_document(width=canvas_w, height=canvas_h, units="Points", color_mode="rgb", raster_resolution=300)
+                vc_repaired = compose_slots(
+                    vc=vc_repaired,
+                    brief=brief,
+                    palette=composed_palette,
+                    plan=typo_plan,
+                    bg_path=feathered_bg_path,
+                    hero_path=hero_path,
+                    hero_geom=hero_geom,
+                    layout_plan=layout_plan,
+                    archetype=archetype,
+                    width=canvas_w,
+                    height=canvas_h,
+                )
+                try:
+                    re_res = vc_repaired.execute(
+                        output_pdf=pdf_out,
+                        output_png=png_2x_out,
+                        work_dir=self.run_dir / f"repair_cycle_{cycle}",
+                        scale=2.0,
+                    )
+                except Exception as ex:
+                    print(f">>> [Stage 6 Repair Loop] Render failed in cycle {cycle}: {ex}")
+                    break
+
+                if not re_res.success:
+                    print(f">>> [Stage 6 Repair Loop] Render returned error in cycle {cycle}: {re_res.error_message}")
+                    break
+
+                vc_res = re_res
+                # Save updated session
+                session_file = self.run_dir / "session_poster.vcs"
+                vc_repaired.save_session(
+                    output_path=session_file,
+                    metadata={
+                        "run_id": self.run_id,
+                        "title": brief.get_text("title"),
+                        "archetype": archetype,
+                        "palette": composed_palette,
+                    },
+                )
+
+                qa_gates = run_stage6_gates(
+                    rows=vc_res.text_manifest,
+                    canvas_w=canvas_w,
+                    canvas_h=canvas_h,
+                    margin_px=margin_px,
+                    image=png_2x_out,
+                    hero_rect=hero_rect,
+                    brief=brief,
+                    scale=2.0,
+                )
+                current_failures = [g for g in qa_gates if g["verdict"] == "FAIL"]
+                for att in attempts:
+                    att.outcome = "PASS" if not current_failures else "REPAIRED"
+                    repairs_record.append(att.to_dict())
+
+                if not current_failures:
+                    print(f">>> [Stage 6 Repair Loop] Cycle {cycle} SUCCESS: All QA gates cleared!")
+                    failed_gates = []
+                    break
+                else:
+                    print(f">>> [Stage 6 Repair Loop] Cycle {cycle}: {len(current_failures)} failure(s) remain.")
+
+        # Record QA gate suite and repair attempts in plan.json
         plan_provenance["gates"] = qa_gates
+        plan_provenance["repairs"] = repairs_record
         if failed_gates:
             plan_provenance["gate_failures"] = failed_gates
         with open(plan_json_path, "w", encoding="utf-8") as pf:
@@ -899,7 +993,7 @@ Output strictly valid JSON conforming to the schema.
             fail_summary = ", ".join(f"{g['name']} ({g['detail']})" for g in failed_gates)
             if self.use_mock:
                 print("=" * 80)
-                print(">>> [STAGE 6 QA GATE BANNER] Gates failed in mock mode:")
+                print(">>> [STAGE 6 QA GATE BANNER] Gates failed in mock mode (post-repair):")
                 for g in failed_gates:
                     print(f"    • {g['name']}: {g['detail']}")
                 print("=" * 80)
@@ -908,7 +1002,7 @@ Output strictly valid JSON conforming to the schema.
                     f"Physical verified in {s6_duration:.3f}s with mock warnings: {fail_summary}"
                 )
             else:
-                self.log_gate(6, "Deterministic Physical Quality Gates", "FAILED", f"QA gate failure(s): {fail_summary}")
+                self.log_gate(6, "Deterministic Physical Quality Gates", "FAILED", f"QA gate failure(s) after repair budget: {fail_summary}")
         else:
             self.log_gate(
                 6, "Deterministic Physical Quality Gates", "PASSED",
@@ -916,6 +1010,7 @@ Output strictly valid JSON conforming to the schema.
                 f"  • Dimensions: {pw} x {ph} px (Certified 2x Print Raster)\n" +
                 f"  • Safe Margins: >= {margin_px:.1f} pt\n" +
                 f"  • QA Suite (6/6 PASS): text_bounds, hero_overlap, structure_contrast, required_content, dedupe, v_band_coverage\n" +
+                f"  • Repair Cycles: {len(repairs_record)} ops applied\n" +
                 f"  • Blocking Issues: 0"
             )
 
@@ -957,9 +1052,11 @@ Output strictly valid JSON with this schema:
     "depth_layering_effective": true,
     "critique": "string"
   }},
-  "overall_score": 9,
+  "overall_score": <integer 1-10>,
   "verdict": "READY_FOR_PRINT | NEEDS_REPAIR"
 }}
+
+Note: Score strictly per rubric (integer from 1 to 10). Do not default to high scores. Deduct points for clipping, awkward spacing, or poor contrast.
 """
         if self.use_mock:
             vlm_res = {
@@ -975,12 +1072,13 @@ Output strictly valid JSON with this schema:
                     "is_editorial_poster": True,
                     "zero_web_button_cards": True,
                     "depth_layering_effective": True,
-                    "critique": "Mock verification passed: high-impact editorial poster layout with zero web buttons.",
+                    "critique": "Mock verification fixture: editorial poster layout verified.",
                 },
                 "overall_score": 9,
-                "verdict": "READY_FOR_PRINT",
+                "verdict": "MOCK (canned fixture), score 9",
             }
             vlm_score = 9
+            vlm_verdict = "MOCK (canned fixture), score 9"
         else:
             try:
                 vlm_res = self.gemini.critique_image(image_input=png_2x_out, prompt=critique_prompt)
@@ -1027,11 +1125,25 @@ Output strictly valid JSON with this schema:
         s8_t0 = time.time()
         title_slug = re.sub(r"[^\w\s-]", "", brief.get_text("title")).strip().lower().replace(" ", "_")
 
+        # Editable session file (.vcs) packaging
+        session_file = self.run_dir / "session_poster.vcs"
+        if not session_file.exists() and hasattr(vc_res, "renderer") and vc_res.renderer:
+            vc_res.renderer.save_session(
+                output_path=session_file,
+                metadata={
+                    "run_id": self.run_id,
+                    "title": brief.get_text("title"),
+                    "archetype": archetype,
+                    "palette": composed_palette,
+                },
+            )
+
         if self.artifact_dir:
             dest_pdf = self.artifact_dir / f"{title_slug}_print_master.pdf"
             dest_png = self.artifact_dir / f"{title_slug}_master_render_2x.png"
             dest_bg = self.artifact_dir / f"{title_slug}_layer0_bg.png"
             dest_hero = self.artifact_dir / f"{title_slug}_layer3_hero.png" if hero_path else None
+            dest_session = self.artifact_dir / f"{title_slug}_session_poster.vcs"
 
             shutil.copy2(pdf_out, dest_pdf)
             shutil.copy2(png_2x_out, dest_png)
@@ -1039,12 +1151,15 @@ Output strictly valid JSON with this schema:
                 shutil.copy2(feathered_bg_path, dest_bg)
             if hero_path and hero_path.exists() and dest_hero:
                 shutil.copy2(hero_path, dest_hero)
+            if session_file.exists():
+                shutil.copy2(session_file, dest_session)
             report_md = self.artifact_dir / f"{title_slug}_master_pipeline_report.md"
         else:
             dest_pdf = pdf_out
             dest_png = png_2x_out
             dest_bg = feathered_bg_path
             dest_hero = hero_path
+            dest_session = session_file
             report_md = self.run_dir / f"{title_slug}_master_pipeline_report.md"
 
         # Build Stage 6 QA Gates table
@@ -1057,14 +1172,15 @@ Output strictly valid JSON with this schema:
             gates_rows.append(f"| **{name}** | {verdict} | `{measured_str}` | {g.get('detail', '')} |")
         gates_table = "\n".join(gates_rows)
 
-        score_display = f"{vlm_score} / 10 (`{vlm_verdict}`)" if vlm_score is not None else "`N/A` (`REVIEW_UNAVAILABLE` — VLM not evaluated)"
+        score_display = "MOCK (canned fixture), score 9" if self.use_mock else (f"{vlm_score} / 10 (`{vlm_verdict}`)" if vlm_score is not None else "`N/A` (`REVIEW_UNAVAILABLE` — VLM not evaluated)")
         s7_status_badge = "`PASSED`" if (vlm_score is not None and vlm_score >= 8) else ("`REVIEW_UNAVAILABLE`" if vlm_score is None else "`FAILED`")
-        s7_detail = f"OCR verified verbatim, score {vlm_score}/10 (threshold: 8)" if vlm_score is not None else "REVIEW_UNAVAILABLE, score N/A"
+        s7_detail = "MOCK (canned fixture), score 9" if self.use_mock else (f"OCR verified verbatim, score {vlm_score}/10 (threshold: 8)" if vlm_score is not None else "REVIEW_UNAVAILABLE, score N/A")
 
         total_runtime = time.time() - total_t0
         _posix = lambda p: str(p).replace("\\", "/")  # noqa: E731 — file:/// links
         fallback_notice = f"\n**PLANNING_FALLBACK ACTIVE**: `{self.planning_fallback}`\n" if self.planning_fallback else ""
         hero_line = f"- **Layer 3 Hero Cutout**: [{dest_hero.name}](file:///{_posix(dest_hero)})" if dest_hero and dest_hero.exists() else f"- **Layer 3 Hero Cutout**: Native/None ({hero_res.source})"
+        session_line = f"- **Editable Session File (.vcs)**: [{dest_session.name}](file:///{_posix(dest_session)})" if dest_session.exists() else f"- **Editable Session File (.vcs)**: [{session_file.name}](file:///{_posix(session_file)})"
         report_text = f"""# {brief.get_text('title')} — Autonomous Master Pipeline Report
 
 **Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}  
@@ -1114,6 +1230,7 @@ Output strictly valid JSON with this schema:
 - **Print Master Vector PDF**: [{dest_pdf.name}](file:///{_posix(dest_pdf)})
 - **2x High-Res Render ({target_2x_w} x {target_2x_h} px)**: [{dest_png.name}](file:///{_posix(dest_png)})
 - **Layer 0 Background Art**: [{dest_bg.name}](file:///{_posix(dest_bg)})
+{session_line}
 {hero_line}
 """
         report_md.write_text(report_text, encoding="utf-8")
@@ -1168,4 +1285,17 @@ Output strictly valid JSON with this schema:
         vc_res = vc.execute(output_png=png_out, output_pdf=pdf_out, scale=2.0, work_dir=self.run_dir)
         if not vc_res.success:
             raise RuntimeError(f"VectorCraft render error: {vc_res.error_message}")
+
+        # Save session file (.vcs)
+        session_file = self.run_dir / "session_poster.vcs"
+        vc.save_session(
+            output_path=session_file,
+            metadata={
+                "run_id": self.run_id,
+                "title": brief.get_text("title"),
+                "archetype": archetype,
+                "palette": palette,
+            },
+        )
+        vc_res.renderer = vc
         return vc_res

@@ -3,6 +3,7 @@ from poster_agent.qa.gates import (
     GateFailure,
     check_canvas_bounds,
     check_empty_rows,
+    check_refusal_free,
     check_row_overlap,
     check_seams,
     run_all_gates,
@@ -21,5 +22,6 @@ __all__ = [
     "run_all_manifest_gates",
     "run_all_pixel_gates",
     "run_all_gates",
+    "check_refusal_free",
 ]
 
