@@ -365,6 +365,23 @@ class UnifiedPosterPipeline:
             f"  • Background: {bg_res.source} ({bg_res.path}) - {bg_res.why}"
         )
 
+        # Early plan.json provenance checkpoint (ensures record persistence if downstream halts)
+        plan_provenance = {
+            "run_id": self.run_id,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "concept": concept_plan,
+            "resolved_assets": {
+                "hero": {"source": hero_res.source, "path": hero_res.path, "why": hero_res.why},
+                "background": {"source": bg_res.source, "path": bg_res.path, "why": bg_res.why},
+            },
+            "mock_used": self.use_mock,
+            "gates": [],
+            "repairs": [],
+        }
+        plan_json_path = self.run_dir / "plan.json"
+        with open(plan_json_path, "w", encoding="utf-8") as pf:
+            json.dump(plan_provenance, pf, indent=2)
+
         # -------------------------------------------------------------
         # STAGE 3: HERO ASSET RESOLUTION / GENERATION
         # -------------------------------------------------------------

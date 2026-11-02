@@ -25,3 +25,4 @@ Call to action: Apply Online
 Closing line: BE THE CHANGE. JOIN GDG KCT!
 Contact: hello@gdgkct.in | +91 98765 43210
 QR Link: https://gdgkct.in/apply
+Art: native

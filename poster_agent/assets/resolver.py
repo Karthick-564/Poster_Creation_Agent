@@ -102,7 +102,8 @@ class AssetResolver:
 
         # Check if concept or brief explicitly forbids art / requests plain native
         art_desc = (brief.get_text("art") or brief.get_text("mood") or "").lower()
-        forbid_art = any(w in art_desc for w in ["no art", "no image", "plain text", "plain wishes", "commemorative wishes", "forbid art"])
+        slot_text = (brief.get_text(slot) or "").lower()
+        forbid_art = any(w in art_desc for w in ["no art", "no image", "plain text", "plain wishes", "commemorative wishes", "forbid art", "native"]) or slot_text == "native"
         if declared_source == "native" or forbid_art:
             self._log(f"[Ladder Step 3: native] Chosen directly: declared={declared_source}, forbid_art={forbid_art}")
             return ResolvedAsset(
