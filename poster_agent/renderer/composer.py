@@ -2165,6 +2165,18 @@ def compose_slots(
         hero_rect = (hero_x, hero_y, hero_w, hero_h)
 
     if hero_path and str(hero_path).lower() not in ("none", "native", ""):
+        # Radial glow behind the hero: the art layer is free to deliver dark
+        # subjects (crowd silhouettes, shadowed DJs) — on a dark canvas those
+        # vanish. A measured accent glow restores the focal point's presence
+        # without retouching the asset (paint order: glow lands under hero).
+        _glow_radius = max(hero_w, hero_h) * 0.75
+        vc.radial_light(
+            cx=hero_x + hero_w * 0.5, cy=hero_y + hero_h * 0.5,
+            radius=_glow_radius,
+            color=accent_color,
+            alpha_stop_inner=0.32, alpha_stop_outer=0.0,
+            blend_mode="screen",
+        )
         vc.place_image(hero_path, rect=[hero_x, hero_y, hero_w, hero_h])
         hero_node_id = "$last"
     else:
