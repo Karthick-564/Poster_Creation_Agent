@@ -108,9 +108,13 @@ def build_ideogram_v2_payload(
     )
 
     # 3. Compositional deconstruction: background + 1-2 non-empty elements
+    # NB: never mention "text"/"typography" ("prepared for a typographic overlay"
+    # reads as an instruction to render a wordmark — the failure seen in
+    # runs/noir_beats_live, where "Clomailioka" + "2030" were baked into art).
+    # Describe silence positively: blank, unbroken, quiet surfaces.
     comp_bg = (
         f"Deep ambient background in tones of {bg_color} with soft atmospheric light spill from the {light_direction}, "
-        f"spacious calm negative space, top header band and bottom footer band completely dark, flat and matte for typographic overlays."
+        f"spacious calm negative space, top zone and bottom zone completely dark, flat and matte, quiet unbroken surfaces."
     )
 
     # Elements: concrete bounding boxes (normalized 0..1000)
@@ -124,7 +128,7 @@ def build_ideogram_v2_payload(
         {
             "type": "obj",
             "bbox": [650, 0, 1000, 1000],
-            "desc": f"Calm flat {bg_color} lower band with barely varied tone prepared for typographic overlay, matte finish.",
+            "desc": f"Calm flat {bg_color} lower band with barely varied tone, smooth matte finish, blank unbroken surfaces.",
             "color_palette": palette_hexes[:2],
         },
     ]

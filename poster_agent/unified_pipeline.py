@@ -314,6 +314,7 @@ class UnifiedPosterPipeline:
                     schema=CONCEPT_SCHEMA,
                     system_instruction="You are the art director. You make design decisions and emit strict JSON. You never invent facts absent from the brief.",
                     validator=validate_concept_plan,
+                    timeout=120,
                 )
             except Exception as e:
                 concept_plan = {"error": str(e)}
@@ -486,6 +487,19 @@ class UnifiedPosterPipeline:
             measurer = ArtMeasurer(target_w=int(canvas_w), target_h=int(canvas_h))
             hero_geom, hero_halo = measurer.measure_alpha_cutout(hero_path)
             hero_measured_color = _extract_dominant_hero_color(hero_path)
+            # Contrast-qualify the measured tone before it enters the composed
+            # palette as an accent/structural color. A dark hero (silhouette DJ,
+            # crowd) measures near-black; feeding that in as palette[1] produced
+            # a 1.05:1 prize row in runs/noir_beats_v3. Fall back to the concept
+            # hero tone, and finally to a guaranteed-contrast color.
+            from poster_agent.renderer.composer import get_contrast_ratio, ensure_contrast_color
+            _bg_tone = palette_dict_now = concept_plan.get("palette", {}).get("bg_60", "#070B19")
+            if get_contrast_ratio(_bg_tone, hero_measured_color) < 4.5:
+                _concept_hero = concept_plan.get("palette", {}).get("hero_30", "#00F5D4")
+                _fallback = _concept_hero if get_contrast_ratio(_bg_tone, _concept_hero) >= 4.5 else ensure_contrast_color(_bg_tone, "#FFFFFF", 4.5)
+                print(f">>> [Stage 3.5] Measured hero tone {hero_measured_color} fails 4.5:1 contrast vs canvas base; "
+                      f"palette falls back to {_fallback}")
+                hero_measured_color = _fallback
             s35_duration = time.time() - s35_t0
             self.log_gate(
                 3.5, "Hero Measurement & Color Profile", "PASSED",
@@ -768,6 +782,7 @@ Output strictly valid JSON conforming to the schema.
                     schema=LAYOUT_SCHEMA,
                     system_instruction="You are the lead compositor and typography planner. Place text rows strictly into calm zones. Never invent copy.",
                     validator=lambda p: validate_layout_plan(p, available_fonts=available_fonts),
+                    timeout=120,
                 )
             except Exception as e:
                 layout_plan = {"error": str(e)}

@@ -175,7 +175,11 @@ def is_light_context(brief: ExtractedBrief, palette: list[str]) -> bool:
     """Detect if the design brief or palette dictates a light-background poster."""
     mood = brief.get_text("mood").lower()
     palette_use = brief.get_text("palette_use").lower()
-    if "light background" in mood or "light" in mood or "navy for text" in palette_use:
+    # Only an explicit "light background" directive triggers light mode;
+    # a bare "light" in mood ("laser light cuts", "light show") must NOT,
+    # otherwise a dark poster is silently designed for a white canvas
+    # and structural navy rows land on dark art (CR ~1.4:1).
+    if "light background" in mood or "navy for text" in palette_use:
         return True
     if palette:
         bg_col = palette[0].lstrip("#")
@@ -250,6 +254,21 @@ def ensure_contrast_color(bg_hex: str, preferred_fg: str = "#FFFFFF", min_contra
     cr_white = get_contrast_ratio(bg_hex, "#FFFFFF")
     cr_navy = get_contrast_ratio(bg_hex, "#0B2A5B")
     return "#FFFFFF" if cr_white >= cr_navy else "#0B2A5B"
+
+
+def pick_structural_text_color(palette: list[str]) -> str:
+    """Dark-background structural text color.
+
+    Uses the palette's designated bright structural tone when present, then
+    verifies it against the canvas base (palette[0]) with the same WCAG floor
+    the Stage 6 gate enforces — a structural color the gate would fail is
+    garbage in; this returns the gate-passing fallback instead.
+    """
+    canvas_base = palette[0] if palette else "#070B19"
+    candidate = palette[4] if len(palette) > 4 else "#FFFFFF"
+    if get_contrast_ratio(canvas_base, candidate) >= 4.5:
+        return candidate
+    return ensure_contrast_color(canvas_base, "#FFFFFF", 4.5)
 
 
 def _wrap_to_two_lines(text: str) -> tuple[str, str]:
@@ -617,7 +636,7 @@ def build_typography_plan(
         micro_color = "#475569"       # Legible slate
         subhead_color = "#1E293B"     # Slate navy
     else:
-        structural_color = palette[4] if len(palette) > 4 else "#FFFFFF"
+        structural_color = pick_structural_text_color(palette)
         accent_color = palette[1] if len(palette) > 1 else "#00F5D4"
         secondary_accent = palette[2] if len(palette) > 2 else "#00BBF9"
         micro_color = "#DCE5F5"
@@ -1044,7 +1063,7 @@ def compose_focal_point(
     """Focal Point Archetype: Centered optical radiance with orbital text under hero."""
     canvas_base = palette[0] if palette else "#070B19"
     accent_color = palette[1] if len(palette) > 1 else "#00F5D4"
-    structural_color = palette[4] if len(palette) > 4 else "#FFFFFF"
+    structural_color = pick_structural_text_color(palette)
     margin = plan.margin
     fonts = audit_fonts()
     genre = _detect_genre(brief)
@@ -1300,7 +1319,7 @@ def compose_z_pattern(
     """Z-Pattern Archetype: Dynamic diagonal scan with collision-free vertical slotting."""
     canvas_base = palette[0] if palette else "#070B19"
     accent_color = palette[1] if len(palette) > 1 else "#00F5D4"
-    structural_color = palette[4] if len(palette) > 4 else "#FFFFFF"
+    structural_color = pick_structural_text_color(palette)
     margin = plan.margin
     fonts = audit_fonts()
     genre = _detect_genre(brief)
@@ -1540,7 +1559,7 @@ def compose_split(
     """Split Layout Archetype: Seamless upper art zone into solid lower field (ZERO horizontal seam lines)."""
     canvas_base = palette[0] if palette else "#070B19"
     accent_color = palette[1] if len(palette) > 1 else "#00F5D4"
-    structural_color = palette[4] if len(palette) > 4 else "#FFFFFF"
+    structural_color = pick_structural_text_color(palette)
     margin = plan.margin
     fonts = audit_fonts()
     genre = _detect_genre(brief)
@@ -1690,7 +1709,7 @@ def compose_grid_3col(
     """3-Column Grid Archetype: Balanced vertical distribution with bounded columns."""
     canvas_base = palette[0] if palette else "#070B19"
     accent_color = palette[1] if len(palette) > 1 else "#00F5D4"
-    structural_color = palette[4] if len(palette) > 4 else "#FFFFFF"
+    structural_color = pick_structural_text_color(palette)
     margin = plan.margin
     fonts = audit_fonts()
     genre = _detect_genre(brief)
@@ -1981,7 +2000,7 @@ def compose_slots(
     is_light = is_light_context(brief, palette)
     canvas_base = "#FFFFFF" if is_light else (palette[0] if palette else "#070B19")
     accent_color = "#4285F4" if is_light else (palette[1] if len(palette) > 1 else "#00F5D4")
-    structural_color = "#0B2A5B" if is_light else (palette[4] if len(palette) > 4 else "#FFFFFF")
+    structural_color = "#0B2A5B" if is_light else pick_structural_text_color(palette)
     installed_fonts = audit_fonts(school=school_name)
     genre = _detect_genre(brief)
 
@@ -2122,6 +2141,27 @@ def compose_slots(
         hero_h = hero_w * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 1.0)
         hero_x = (width - hero_w) * 0.5
         hero_y = height * 0.35
+        # Budget the hero rect against the lowest planned slot below it.
+        # The layout planner doesn't know the hero band; without this budget a
+        # square hero (0.48 * width) swallows the body/logistics band and the
+        # collision cascades then shove rows INTO the hero (v3 failure mode).
+        _hero_aspect = (hero_geom.height / hero_geom.width) if hero_geom and hero_geom.width > 0 else 1.0
+        _below_roles = ("events", "prize", "date_time", "date", "venue", "cta", "deadline", "deadline_note", "contact", "closing")
+        _layout_slots = layout_plan.get("slots", []) if layout_plan else []
+        _below_tops = []
+        for _s in _layout_slots:
+            _z = _s.get("zone", [0, 0, 1000, 1000])
+            _z_y0 = _z[0] * height / 1000.0
+            _rid = _s.get("row_id", "")
+            if _rid in _below_roles and _z_y0 > hero_y:
+                _below_tops.append(_z_y0)
+        if _below_tops:
+            _hero_budget = max(height * 0.22, min(_below_tops) - 40.0 - hero_y)
+            if hero_h > _hero_budget:
+                print(f"[composer] Hero budget: shrinking hero from {hero_h:.0f} pt to {_hero_budget:.0f} pt to stay clear of slot at y={min(_below_tops):.0f}")
+                hero_h = _hero_budget
+                hero_w = hero_h / max(_hero_aspect, 0.05)
+                hero_x = (width - hero_w) * 0.5
         hero_rect = (hero_x, hero_y, hero_w, hero_h)
 
     if hero_path and str(hero_path).lower() not in ("none", "native", ""):
@@ -2461,6 +2501,45 @@ def compose_slots(
             req_gap = (it_h * 0.3) + (nxt_h * 0.7) + 8.0
             if nxt["y"] < it["y"] + req_gap:
                 nxt["y"] = it["y"] + req_gap
+
+    # Hero exclusion pass: the hero rect is a hard reservation (Stage 6
+    # hero_overlap gate). Collision cascades can still shove rows into the
+    # band from above or below; relocate offenders deterministically and
+    # re-apply gap constraints until stable (bounded iterations).
+    if hero_rect:
+        _hx, _hy, _hw, _hh = hero_rect
+        _hero_y1 = _hy + _hh
+        _header_roles = ("eyebrow", "organizer", "subtitle", "title", "tagline")
+        for _pass in range(6):
+            placed_items.sort(key=lambda it: it["y"])
+            _offenders = []
+            for it in placed_items:
+                t_lines = it.get("lines", [it["row"].text])
+                sz = it["size"]
+                lw = max(estimate_text_width(l, sz, it["font"], it.get("tracking", 0.0)) for l in t_lines)
+                lx = it["x"] - (lw * 0.5) if it["justify"] == "center" else (it["x"] - lw if it["justify"] == "right" else it["x"])
+                ly_top = it["y"] - sz * 0.88
+                ly_bot = it["y"] + sz * 0.88 + (sz * 1.15 * (len(t_lines) - 1) if len(t_lines) > 1 else 0.0)
+                row_rect = (lx, ly_top, lw, max(1.0, ly_bot - ly_top))
+                if row_rect[1] >= _hy + _hh or row_rect[1] + row_rect[3] <= _hy or row_rect[0] >= _hx + _hw or row_rect[0] + row_rect[2] <= _hx:
+                    continue
+                _offenders.append(it)
+            if not _offenders:
+                break
+            for it in _offenders:
+                sz = it["size"]
+                if it["row"].role in _header_roles:
+                    it["y"] = _hy - 15.0 - (sz * 0.88)
+                else:
+                    it["y"] = _hero_y1 + 15.0
+            # Re-apply forward gap propagation after relocation
+            for i in range(len(placed_items) - 1):
+                cur, nxt = placed_items[i], placed_items[i + 1]
+                cur_h = cur["size"] * (2.15 if len(cur.get("lines", [])) > 1 else 1.15)
+                nxt_h = nxt["size"] * (2.15 if len(nxt.get("lines", [])) > 1 else 1.15)
+                req_gap = (cur_h * 0.3) + (nxt_h * 0.7) + 8.0
+                if nxt["y"] < cur["y"] + req_gap:
+                    nxt["y"] = cur["y"] + req_gap
 
     # Verify hero reserve & report hero occlusion status
     hero_occlusion_offenders = []
