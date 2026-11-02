@@ -2528,10 +2528,16 @@ def compose_slots(
                 break
             for it in _offenders:
                 sz = it["size"]
+                n_lines = len(it.get("lines", [it["row"].text]))
+                # Bounds-aware: a y anchor is the first line's baseline-center;
+                # multi-line blocks extend (n-1)*1.15*size below it. Relocating
+                # by the first line alone leaves later lines inside the hero
+                # rect (v5 failure: same 3 offenders every pass, zero progress).
+                below_extra = sz * 1.15 * (n_lines - 1)
                 if it["row"].role in _header_roles:
-                    it["y"] = _hy - 15.0 - (sz * 0.88)
+                    it["y"] = _hy - 15.0 - (sz * 0.88) - below_extra
                 else:
-                    it["y"] = _hero_y1 + 15.0
+                    it["y"] = _hero_y1 + 15.0 + (sz * 0.88)
             # Re-apply forward gap propagation after relocation
             for i in range(len(placed_items) - 1):
                 cur, nxt = placed_items[i], placed_items[i + 1]
