@@ -874,3 +874,94 @@ def check_refusal_free(image_input: Union[Path, str, Image.Image]) -> list[GateF
 
     return failures
 
+
+def check_background_ocr(
+    image_input: Union[Path, str, Image.Image],
+    allowed_words: Optional[Sequence[str]] = None,
+) -> list[GateFailure]:
+    """Scan background / hero raster layers for baked pseudo-text or unmapped lettering."""
+    failures: list[GateFailure] = []
+
+    if isinstance(image_input, (str, Path)):
+        p = Path(image_input)
+        if not p.exists():
+            return failures
+        try:
+            im = Image.open(p).convert("RGB")
+        except Exception:
+            return failures
+        target_name = str(p.name)
+    else:
+        im = image_input.convert("RGB")
+        target_name = "raster_layer"
+
+    allowed_set = set()
+    if allowed_words:
+        for w in allowed_words:
+            tokens = re.findall(r"[A-Za-z0-9]+", str(w).lower())
+            allowed_set.update(tokens)
+
+    # 1. OCR scan with pytesseract if available
+    try:
+        import pytesseract
+        ocr_text = pytesseract.image_to_string(im)
+        tokens = [t.lower() for t in re.findall(r"[A-Za-z0-9]{3,}", ocr_text)]
+        unmapped = [t for t in tokens if t not in allowed_set]
+        if unmapped:
+            failures.append(GateFailure(
+                kind="background_ocr",
+                target=target_name,
+                detail=f"Baked background pseudo-text detected via OCR: {sorted(list(set(unmapped)))}",
+                measured={
+                    "detected_tokens": sorted(list(set(unmapped))),
+                    "source": "pytesseract",
+                },
+            ))
+            return failures
+    except Exception:
+        pass
+
+    # 2. Deterministic heuristic scan for high-frequency character-like edge clusters
+    arr = np.array(im, dtype=np.float32)
+    h, w, _ = arr.shape
+    if h < 60 or w < 60:
+        return failures
+
+    gray = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+
+    # Calculate horizontal and vertical edge gradients (aligned to (h-1, w-1))
+    dx = np.abs(np.diff(gray, axis=1))[:-1, :]
+    dy = np.abs(np.diff(gray, axis=0))[:, :-1]
+
+    edge_map = (dx > 45.0) | (dy > 45.0)
+
+    # Divide canvas into 16x16 grid and inspect edge density and stroke alternation
+    h_edge, w_edge = edge_map.shape
+    grid_rows, grid_cols = 16, 16
+    block_h = h_edge // grid_rows
+    block_w = w_edge // grid_cols
+
+    suspicious_blocks = 0
+    for r in range(grid_rows):
+        for c in range(grid_cols):
+            blk = edge_map[r * block_h : (r + 1) * block_h, c * block_w : (c + 1) * block_w]
+            density = np.mean(blk)
+            if 0.10 < density < 0.70:
+                blk_dx = dx[r * block_h : (r + 1) * block_h, c * block_w : (c + 1) * block_w]
+                row_crossings = np.sum(blk_dx > 45.0, axis=1)
+                if np.mean(row_crossings) >= 2.0:
+                    suspicious_blocks += 1
+
+    if suspicious_blocks >= 6:
+        failures.append(GateFailure(
+            kind="background_ocr",
+            target=target_name,
+            detail=f"Deterministic heuristic detected high-frequency character-like edge clusters in {suspicious_blocks} blocks",
+            measured={
+                "suspicious_blocks": suspicious_blocks,
+                "source": "heuristic_edge_crossings",
+            },
+        ))
+
+    return failures
+
