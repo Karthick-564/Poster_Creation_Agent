@@ -2155,6 +2155,18 @@ def compose_slots(
             _rid = _s.get("row_id", "")
             if _rid in _below_roles and _z_y0 > hero_y:
                 _below_tops.append(_z_y0)
+        # Adaptive vertical anchor: if the planned header stack (organizer →
+        # title → tagline zones) runs lower than 0.35H, drop the hero band
+        # (bounded at 0.48H) so a doctrine-floored headline isn't crushed
+        # against the hero top (v7 squeeze).
+        _hdr_bottom = None
+        _hdr_roles = ("eyebrow", "organizer", "subtitle", "title", "tagline")
+        for _s in _layout_slots:
+            if _s.get("row_id") in _hdr_roles:
+                _z_y1 = _s.get("zone", [0, 0, 1000, 1000])[2] * height / 1000.0
+                _hdr_bottom = max(_hdr_bottom or 0.0, _z_y1)
+        if _hdr_bottom:
+            hero_y = min(max(hero_y, _hdr_bottom + 0.08 * height), 0.48 * height)
         if _below_tops:
             _hero_budget = max(height * 0.22, min(_below_tops) - 40.0 - hero_y)
             if hero_h > _hero_budget:
@@ -2526,13 +2538,17 @@ def compose_slots(
             placed_items.sort(key=lambda it: it["y"])
             _offenders = []
             for it in placed_items:
+                # Row block extent — EXACTLY the audit's per-line math below
+                # (two formulas asserting two geometries is how v5/v7 stalled).
                 t_lines = it.get("lines", [it["row"].text])
                 sz = it["size"]
+                n = len(t_lines)
+                _gap_line = sz * 1.15
                 lw = max(estimate_text_width(l, sz, it["font"], it.get("tracking", 0.0)) for l in t_lines)
                 lx = it["x"] - (lw * 0.5) if it["justify"] == "center" else (it["x"] - lw if it["justify"] == "right" else it["x"])
-                ly_top = it["y"] - sz * 0.88
-                ly_bot = it["y"] + sz * 0.88 + (sz * 1.15 * (len(t_lines) - 1) if len(t_lines) > 1 else 0.0)
-                row_rect = (lx, ly_top, lw, max(1.0, ly_bot - ly_top))
+                _top = it["y"] - 0.88 * sz - 0.5 * (n - 1) * _gap_line
+                _bot = it["y"] + 0.5 * (n - 1) * _gap_line + 0.27 * sz
+                row_rect = (lx, _top, lw, max(1.0, _bot - _top))
                 if row_rect[1] >= _hy + _hh or row_rect[1] + row_rect[3] <= _hy or row_rect[0] >= _hx + _hw or row_rect[0] + row_rect[2] <= _hx:
                     continue
                 _offenders.append(it)
@@ -2540,16 +2556,13 @@ def compose_slots(
                 break
             for it in _offenders:
                 sz = it["size"]
-                n_lines = len(it.get("lines", [it["row"].text]))
-                # Bounds-aware: a y anchor is the first line's baseline-center;
-                # multi-line blocks extend (n-1)*1.15*size below it. Relocating
-                # by the first line alone leaves later lines inside the hero
-                # rect (v5 failure: same 3 offenders every pass, zero progress).
-                below_extra = sz * 1.15 * (n_lines - 1)
+                n = len(it.get("lines", [it["row"].text]))
+                _gap_line = sz * 1.15
                 if it["row"].role in _header_roles:
-                    it["y"] = _hy - 15.0 - (sz * 0.88) - below_extra
+                    # Anchor so the LAST line's bottom clears the hero top
+                    it["y"] = _hy - 15.0 - 0.27 * sz - 0.5 * (n - 1) * _gap_line
                 else:
-                    it["y"] = _hero_y1 + 15.0 + (sz * 0.88)
+                    it["y"] = _hero_y1 + 15.0 + 0.88 * sz + 0.5 * (n - 1) * _gap_line
             # Re-apply forward gap propagation after relocation
             for i in range(len(placed_items) - 1):
                 cur, nxt = placed_items[i], placed_items[i + 1]
