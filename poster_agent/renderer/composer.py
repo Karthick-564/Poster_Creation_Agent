@@ -160,6 +160,25 @@ def estimate_headline_height(text: str, size: float, max_width: float, font: str
     return max(size, lines * line_height)
 
 
+def is_light_context(brief: ExtractedBrief, palette: list[str]) -> bool:
+    """Detect if the design brief or palette dictates a light-background poster."""
+    mood = brief.get_text("mood").lower()
+    palette_use = brief.get_text("palette_use").lower()
+    if "light background" in mood or "light" in mood or "navy for text" in palette_use:
+        return True
+    if palette:
+        bg_col = palette[0].lstrip("#")
+        if len(bg_col) == 6:
+            try:
+                r, g, b = int(bg_col[0:2], 16), int(bg_col[2:4], 16), int(bg_col[4:6], 16)
+                lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+                if lum > 0.6:
+                    return True
+            except ValueError:
+                pass
+    return False
+
+
 def build_typography_plan(
     brief: ExtractedBrief,
     palette: list[str],
@@ -180,10 +199,20 @@ def build_typography_plan(
     body_size = max(18.0, height * 0.018)  # >= 1.8% of canvas height
     microcopy_size = max(14.0, height * 0.014)  # >= 1.4% of canvas height (min 14pt)
 
-    # Palette role assignments
-    structural_color = palette[4] if len(palette) > 4 else "#FFFFFF"
-    accent_color = palette[1] if len(palette) > 1 else "#00F5D4"
-    secondary_accent = palette[2] if len(palette) > 2 else "#00BBF9"
+    # Palette role assignments with light-background awareness
+    is_light = is_light_context(brief, palette)
+    if is_light:
+        structural_color = "#0B2A5B"  # Primary deep navy per brief
+        accent_color = "#4285F4"      # Google blue
+        secondary_accent = "#4285F4"  # Google blue
+        micro_color = "#475569"       # Legible slate
+        subhead_color = "#1E293B"     # Slate navy
+    else:
+        structural_color = palette[4] if len(palette) > 4 else "#FFFFFF"
+        accent_color = palette[1] if len(palette) > 1 else "#00F5D4"
+        secondary_accent = palette[2] if len(palette) > 2 else "#00BBF9"
+        micro_color = "#DCE5F5"
+        subhead_color = structural_color
 
     plan = TypographicPlan(canvas_width=width, canvas_height=height, margin=margin)
     usable_w = width - (2 * margin)
@@ -203,19 +232,39 @@ def build_typography_plan(
             headline_size -= 4.0
             est_h = estimate_headline_height(title_text, headline_size, usable_w, fonts["display"])
 
-    # 1. Organizer / Presenter
+    # 0. Eyebrow (if provided)
+    eyebrow_text = brief.get_text("eyebrow")
+    if eyebrow_text:
+        eyebrow_sz = _clamp_size(eyebrow_text.upper(), microcopy_size * 1.15, fonts["sans"], 35.0)
+        plan.rows.append(
+            TypographicRow(
+                role="eyebrow",
+                text=eyebrow_text.upper(),
+                zone="header",
+                size=eyebrow_sz,
+                style="Bold",
+                tracking=35.0,
+                color=accent_color,
+                alignment="center",
+                font=fonts["sans"],
+            )
+        )
+
+    # 1. Organizer / Presenter / Partner
     organizer_text = brief.get_text("organizer")
-    if organizer_text:
-        org_sz = _clamp_size(organizer_text.upper(), microcopy_size, fonts["sans"], 30.0)
+    partner_text = brief.get_text("partner")
+    if organizer_text or partner_text:
+        full_org = f"{organizer_text.upper()}  •  {partner_text.upper()}" if (organizer_text and partner_text) else (organizer_text or partner_text).upper()
+        org_sz = _clamp_size(full_org, microcopy_size, fonts["sans"], 25.0)
         plan.rows.append(
             TypographicRow(
                 role="organizer",
-                text=organizer_text.upper(),
+                text=full_org,
                 zone="header",
                 size=org_sz,
                 style="SemiBold",
-                tracking=30.0,
-                color=secondary_accent,
+                tracking=25.0,
+                color=micro_color if is_light else secondary_accent,
                 alignment="center",
                 font=fonts["sans"],
             )
@@ -268,7 +317,7 @@ def build_typography_plan(
                 size=tag_sz,
                 style="Regular",
                 tracking=25.0,
-                color=secondary_accent,
+                color=secondary_accent if not is_light else accent_color,
                 alignment="center",
                 font=fonts["sans"],
             )
@@ -285,11 +334,74 @@ def build_typography_plan(
                 size=microcopy_size,
                 style="Regular",
                 tracking=10.0,
-                color="#DCE5F5",
+                color="#DCE5F5" if not is_light else micro_color,
                 alignment="center",
                 font=fonts["sans"],
             )
         )
+
+    # 5b. Section Heading & Positions
+    section_text = brief.get_text("section")
+    if section_text:
+        sec_sz = _clamp_size(f"—   {section_text.upper()}   —", subheadline_size * 0.85, fonts["display"], 30.0)
+        plan.rows.append(
+            TypographicRow(
+                role="section",
+                text=f"—   {section_text.upper()}   —",
+                zone="positions",
+                size=sec_sz,
+                style="Bold",
+                tracking=30.0,
+                color=accent_color,
+                alignment="center",
+                font=fonts["display"],
+            )
+        )
+
+    positions = brief.get_positions()
+    for pos in positions:
+        p_idx = pos["index"]
+        plan.rows.append(
+            TypographicRow(
+                role=f"position_{p_idx}_title",
+                text=pos["title"].upper(),
+                zone="positions",
+                size=body_size * 1.15,
+                style="Bold",
+                tracking=15.0,
+                color=structural_color,
+                alignment="left",
+                font=fonts["sans"],
+            )
+        )
+        if pos.get("tagline"):
+            plan.rows.append(
+                TypographicRow(
+                    role=f"position_{p_idx}_tagline",
+                    text=pos["tagline"],
+                    zone="positions",
+                    size=microcopy_size,
+                    style="Regular",
+                    tracking=10.0,
+                    color=micro_color,
+                    alignment="left",
+                    font=fonts["sans"],
+                )
+            )
+        for pt_i, pt in enumerate(pos["points"], 1):
+            plan.rows.append(
+                TypographicRow(
+                    role=f"position_{p_idx}_point_{pt_i}",
+                    text=f"•  {pt}",
+                    zone="positions",
+                    size=microcopy_size * 0.95,
+                    style="Regular",
+                    tracking=5.0,
+                    color=subhead_color,
+                    alignment="left",
+                    font=fonts["sans"],
+                )
+            )
 
     # 6. Events / Tracks
     events_text = brief.get_text("events")
@@ -391,6 +503,62 @@ def build_typography_plan(
             )
         )
 
+    # 11. Deadline & Deadline Note
+    deadline_label = brief.get_text("deadline_label")
+    deadline_val = brief.get_text("deadline")
+    deadline_date = brief.get_text("date")
+    deadline_note = brief.get_text("deadline_note")
+    if deadline_label or deadline_val:
+        dl_str = f"{deadline_label}: {deadline_val}" if (deadline_label and deadline_val) else (deadline_label or deadline_val)
+        if deadline_date:
+            dl_str = f"{dl_str} ({deadline_date})"
+        dl_sz = _clamp_size(dl_str.upper(), 18.0, fonts["sans"], 15.0)
+        plan.rows.append(
+            TypographicRow(
+                role="deadline",
+                text=dl_str.upper(),
+                zone="action",
+                size=dl_sz,
+                style="Bold",
+                tracking=15.0,
+                color="#EA4335" if is_light else accent_color,
+                alignment="center",
+                font=fonts["sans"],
+            )
+        )
+    if deadline_note:
+        plan.rows.append(
+            TypographicRow(
+                role="deadline_note",
+                text=deadline_note,
+                zone="action",
+                size=microcopy_size * 0.9,
+                style="Regular",
+                tracking=5.0,
+                color=micro_color,
+                alignment="center",
+                font=fonts["sans"],
+            )
+        )
+
+    # 12. Closing Line
+    closing_text = brief.get_text("closing") or brief.get_text("closing_line")
+    if closing_text:
+        cl_sz = _clamp_size(closing_text.upper(), body_size * 1.05, fonts["sans"], 25.0)
+        plan.rows.append(
+            TypographicRow(
+                role="closing",
+                text=closing_text.upper(),
+                zone="footer",
+                size=cl_sz,
+                style="Bold",
+                tracking=25.0,
+                color=structural_color,
+                alignment="center",
+                font=fonts["sans"],
+            )
+        )
+
     return plan
 
 
@@ -417,8 +585,12 @@ def apply_genre_effects(
     accent_color: str,
     hero_target_id: Optional[str] = None,
     accent_target_id: Optional[str] = None,
+    is_light: bool = False,
 ) -> None:
     """Apply verified engine live effects matching poster genre without slop."""
+    if is_light:
+        # Keep light background designs clean, sharp and free of dark drop shadow artifacts
+        return
     if genre == "cyber_tech":
         if hero_target_id:
             vc.add_effect(
@@ -1353,9 +1525,10 @@ def compose_slots(
     4. Scrims built through soft_scrim DSL with seam overshoot.
     5. Post-placement collision resolution & canvas bounds enforcement.
     """
-    canvas_base = palette[0] if palette else "#070B19"
-    accent_color = palette[1] if len(palette) > 1 else "#00F5D4"
-    structural_color = palette[4] if len(palette) > 4 else "#FFFFFF"
+    is_light = is_light_context(brief, palette)
+    canvas_base = "#FFFFFF" if is_light else (palette[0] if palette else "#070B19")
+    accent_color = "#4285F4" if is_light else (palette[1] if len(palette) > 1 else "#00F5D4")
+    structural_color = "#0B2A5B" if is_light else (palette[4] if len(palette) > 4 else "#FFFFFF")
     installed_fonts = audit_fonts()
     genre = _detect_genre(brief)
 
@@ -1373,57 +1546,89 @@ def compose_slots(
     # Layer 0: Place Background Art
     vc.place_image(bg_path, rect=[0, 0, width, height])
 
-    # Layer 1: Scrims from plan with full-canvas edge overshoot discipline
-    fade_overshoot = 0.03 * min(width, height)
-    total_w = width + 2 * fade_overshoot
-    total_h = height + 2 * fade_overshoot
+    # Dual Header Logos (Kumaraguru left, GDG right)
+    logos_spec = brief.get_text("logos")
+    if logos_spec or Path("assets/logo_kumaraguru.png").exists():
+        kg_path = Path("assets/logo_kumaraguru.png")
+        gdg_path = Path("assets/logo_gdg_oncampus.png")
+        if kg_path.exists():
+            vc.place_image(kg_path, rect=[margin_x, margin_y + 8.0, 150.0, 50.0])
+        if gdg_path.exists():
+            vc.place_image(gdg_path, rect=[width - margin_x - 150.0, margin_y + 8.0, 150.0, 50.0])
 
-    plan_scrims = layout_plan.get("scrims", []) if layout_plan else []
-    applied_scrim = False
-    for sc in plan_scrims:
-        direction = sc.get("direction", "to_top")
-        op_start = sc.get("opacity_start", 0.0)
-        op_end = sc.get("opacity_end", 0.90)
-        szone = sc.get("zone", [600, 0, 1000, 1000])
+    # 4-color Google brand top stripe
+    if is_light or "navy for text" in brief.get_text("palette_use").lower():
+        stripe_w = 36.0
+        stripe_h = 4.0
+        start_x = (width - (stripe_w * 4)) * 0.5
+        stripe_y = margin_y + 10.0
+        g_stripe_cols = ["#4285F4", "#EA4335", "#FBBC05", "#34A853"]
+        for idx, col in enumerate(g_stripe_cols):
+            vc.add_shape_rectangle(
+                x=start_x + idx * stripe_w,
+                y=stripe_y,
+                width=stripe_w,
+                height=stripe_h,
+                fill=col,
+                radius=1.0,
+            )
 
-        # Enforce edge discipline: overshoot past canvas bounds and terminate at 0.0 opacity
-        if direction == "to_top":
-            fade_y = (szone[0] * height / 1000.0)
-            d_bot = (height + fade_overshoot) - fade_y
-            stop_bot = max(0.1, min(0.9, d_bot / total_h))
-            stops = [(0.0, canvas_base, op_end), (stop_bot * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)]
+    # Layer 1: Scrims (only on dark backgrounds to protect text, skip heavy opaque wipe on light designs)
+    if not is_light:
+        fade_overshoot = 0.03 * min(width, height)
+        total_w = width + 2 * fade_overshoot
+        total_h = height + 2 * fade_overshoot
+
+        plan_scrims = layout_plan.get("scrims", []) if layout_plan else []
+        applied_scrim = False
+        for sc in plan_scrims:
+            direction = sc.get("direction", "to_top")
+            op_start = sc.get("opacity_start", 0.0)
+            op_end = sc.get("opacity_end", 0.90)
+            szone = sc.get("zone", [600, 0, 1000, 1000])
+
+            if direction == "to_top":
+                fade_y = (szone[0] * height / 1000.0)
+                d_bot = (height + fade_overshoot) - fade_y
+                stop_bot = max(0.1, min(0.9, d_bot / total_h))
+                stops = [(0.0, canvas_base, op_end), (stop_bot * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)]
+                vc.soft_scrim(
+                    x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+                    stops=stops, direction="to_top",
+                )
+                applied_scrim = True
+            elif direction == "to_bottom":
+                fade_y = (szone[2] * height / 1000.0)
+                d_top = (fade_y - (-fade_overshoot))
+                stop_top = max(0.1, min(0.9, d_top / total_h))
+                stops = [(0.0, canvas_base, op_end), (stop_top * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)]
+                vc.soft_scrim(
+                    x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
+                    stops=stops, direction="to_bottom",
+                )
+                applied_scrim = True
+
+        if not applied_scrim:
             vc.soft_scrim(
                 x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
-                stops=stops, direction="to_top",
+                stops=[(0.0, canvas_base, 0.85), (0.35, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
+                direction="to_bottom",
             )
-            applied_scrim = True
-        elif direction == "to_bottom":
-            fade_y = (szone[2] * height / 1000.0)
-            d_top = (fade_y - (-fade_overshoot))
-            stop_top = max(0.1, min(0.9, d_top / total_h))
-            stops = [(0.0, canvas_base, op_end), (stop_top * 0.95, canvas_base, 0.0), (1.0, canvas_base, 0.0)]
             vc.soft_scrim(
                 x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
-                stops=stops, direction="to_bottom",
+                stops=[(0.0, canvas_base, 0.90), (0.45, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
+                direction="to_top",
             )
-            applied_scrim = True
-
-    if not applied_scrim:
-        # Archetype default scrims
-        vc.soft_scrim(
-            x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
-            stops=[(0.0, canvas_base, 0.85), (0.35, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
-            direction="to_bottom",
-        )
-        vc.soft_scrim(
-            x=-fade_overshoot, y=-fade_overshoot, width=total_w, height=total_h,
-            stops=[(0.0, canvas_base, 0.90), (0.45, canvas_base, 0.0), (1.0, canvas_base, 0.0)],
-            direction="to_top",
-        )
 
     # Layer 3: Place Hero Cutout Asset based on archetype positioning
     hero_node_id = None
-    if archetype == "z_pattern":
+    positions = brief.get_positions()
+    if positions:
+        hero_w = width * 0.44
+        hero_h = min(280.0, hero_w * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 0.75))
+        hero_x = (width - hero_w) * 0.5
+        hero_y = 350.0
+    elif archetype == "z_pattern":
         hero_w = width * 0.44
         hero_h = hero_w * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 1.0)
         hero_x = width * 0.52
@@ -1447,6 +1652,98 @@ def compose_slots(
     vc.place_image(hero_path, rect=[hero_x, hero_y, hero_w, hero_h])
     hero_node_id = "$last"
 
+    # Dedicated 2-Column Recruitment Block
+    if positions:
+        g_check_cols = ["#4285F4", "#EA4335", "#FBBC05", "#34A853"]
+        sec_y = 665.0
+        sec_title = brief.get_text("section") or "OPEN POSITIONS"
+        vc.add_text(
+            f"—  {sec_title.upper()}  —",
+            x=width * 0.5,
+            y=sec_y,
+            size=22.0,
+            font=installed_fonts["display"],
+            style="Bold",
+            tracking=30.0,
+            color=accent_color,
+            justify="center",
+            role="section",
+        )
+
+        col_y = 690.0
+        col_h = 285.0
+        col_w = (usable_w - 30.0) * 0.5
+
+        # Column 1 (Left: Team Members)
+        col1_x = margin_x
+        vc.add_shape_rectangle(x=col1_x, y=col_y, width=col_w, height=3.0, fill="#4285F4", radius=1.0)
+        vc.add_text(
+            positions[0]["title"].upper(),
+            x=col1_x, y=col_y + 36.0,
+            size=20.0, font=installed_fonts["sans"], style="Bold",
+            color=structural_color, justify="left", role="pos_title_1",
+        )
+        if positions[0].get("tagline"):
+            vc.add_text(
+                positions[0]["tagline"],
+                x=col1_x, y=col_y + 60.0,
+                size=13.0, font=installed_fonts["sans"], style="Regular",
+                color="#475569" if is_light else "#94A3B8", justify="left", role="pos_tagline_1",
+            )
+        for p_idx, pt in enumerate(positions[0]["points"]):
+            pt_y = col_y + 98.0 + (p_idx * 40.0)
+            vc.add_text(
+                "✓",
+                x=col1_x, y=pt_y,
+                size=15.0, font=installed_fonts["sans"], style="Bold",
+                color=g_check_cols[p_idx % 4], justify="left", role="bullet_check",
+            )
+            vc.add_text(
+                pt,
+                x=col1_x + 24.0, y=pt_y,
+                size=14.5, font=installed_fonts["sans"], style="Regular",
+                color=structural_color, justify="left", role="bullet_text",
+            )
+
+        # Hairline vertical column divider
+        vc.add_shape_rectangle(
+            x=margin_x + col_w + 14.5, y=col_y + 10.0,
+            width=1.0, height=col_h - 20.0,
+            fill="#CBD5E1" if is_light else "#334155",
+        )
+
+        # Column 2 (Right: Leads)
+        if len(positions) > 1:
+            col2_x = margin_x + col_w + 30.0
+            vc.add_shape_rectangle(x=col2_x, y=col_y, width=col_w, height=3.0, fill="#EA4335", radius=1.0)
+            vc.add_text(
+                positions[1]["title"].upper(),
+                x=col2_x, y=col_y + 36.0,
+                size=20.0, font=installed_fonts["sans"], style="Bold",
+                color=structural_color, justify="left", role="pos_title_2",
+            )
+            if positions[1].get("tagline"):
+                vc.add_text(
+                    positions[1]["tagline"],
+                    x=col2_x, y=col_y + 60.0,
+                    size=13.0, font=installed_fonts["sans"], style="Regular",
+                    color="#475569" if is_light else "#94A3B8", justify="left", role="pos_tagline_2",
+                )
+            for p_idx, pt in enumerate(positions[1]["points"]):
+                pt_y = col_y + 98.0 + (p_idx * 40.0)
+                vc.add_text(
+                    "✓",
+                    x=col2_x, y=pt_y,
+                    size=15.0, font=installed_fonts["sans"], style="Bold",
+                    color=g_check_cols[p_idx % 4], justify="left", role="bullet_check",
+                )
+                vc.add_text(
+                    pt,
+                    x=col2_x + 24.0, y=pt_y,
+                    size=14.5, font=installed_fonts["sans"], style="Regular",
+                    color=structural_color, justify="left", role="bullet_text",
+                )
+
     # Layer 5: Validate and place text slots
     slots = layout_plan.get("slots", []) if layout_plan else []
     slot_map = {}
@@ -1459,6 +1756,8 @@ def compose_slots(
 
     placed_items = []
     for r in plan.rows:
+        if positions and (r.role.startswith("position_") or r.role == "section"):
+            continue
         slot = slot_map.get(r.role)
         if not slot:
             for k, s in slot_map.items():
@@ -1521,31 +1820,48 @@ def compose_slots(
         # Size class floor validation
         s_class = slot.get("size_class", "body")
         sz = r.size
-        if r.role == "title" or s_class == "headline":
-            if sz < 72.0:
-                print(f"[composer] Slot '{r.role}': headline size clamped from {sz:.1f}pt to floor 72.0pt")
-                sz = 72.0
+        if r.role == "title":
+            if sz < headline_floor:
+                print(f"[composer] Slot '{r.role}': headline size clamped from {sz:.1f}pt to doctrine floor {headline_floor:.1f}pt")
+                sz = headline_floor
             est_w = estimate_text_width(r.text, sz, font=fnt)
             if est_w > usable_w:
                 scale_fit = (usable_w / est_w) * 0.96
-                sz = max(72.0, sz * scale_fit)
-        elif s_class == "micro" or "organizer" in r.role or "dress" in r.role or "blurb" in r.role:
+                sz = max(headline_floor, sz * scale_fit)
+        elif r.role == "cta":
+            sz = min(sz, 22.0)
+            sz = max(18.0, sz)
+        elif s_class == "headline":
+            if sz < headline_floor and r.role not in ("cta", "deadline", "events"):
+                print(f"[composer] Slot '{r.role}': headline-class size clamped from {sz:.1f}pt to doctrine floor {headline_floor:.1f}pt")
+                sz = headline_floor
+        elif s_class == "micro" or "organizer" in r.role or "dress" in r.role or "blurb" in r.role or "note" in r.role:
             if sz < micro_floor:
-                print(f"[composer] Slot '{r.role}': microcopy size clamped from {sz:.1f}pt to doctrine floor {micro_floor:.1f}pt")
                 sz = micro_floor
         else:
-            if sz < body_floor:
-                print(f"[composer] Slot '{r.role}': body size clamped from {sz:.1f}pt to doctrine floor {body_floor:.1f}pt")
+            if sz < body_floor and r.role not in ("deadline", "events"):
                 sz = body_floor
 
         # Fit check: ensure row width fits usable margin width
-        est_line_w = estimate_text_width(r.text, sz, font=fnt)
+        est_line_w = estimate_text_width(r.text, sz, font=fnt, tracking=r.tracking)
         if est_line_w > usable_w:
-            scale_fit = (usable_w / est_line_w) * 0.96
-            sz = max(14.0, sz * scale_fit)
+            scale_fit = (usable_w / est_line_w) * 0.95
+            sz = max(13.0, sz * scale_fit)
+
+        # Post-shrink floor re-application (fit must never undercut doctrine floors)
+        if r.role == "title" or (s_class == "headline" and r.role not in ("cta", "deadline", "events")):
+            sz = max(sz, headline_floor)
+        elif not (r.role in ("deadline", "events")):
+            if s_class == "micro" or "organizer" in r.role or "dress" in r.role or "blurb" in r.role or "note" in r.role:
+                sz = max(sz, micro_floor)
+            elif sz < body_floor:
+                sz = max(sz, body_floor)
 
         justify = slot.get("justify", r.alignment)
-        if justify == "left":
+        if r.alignment == "center":
+            px = width * 0.5
+            justify = "center"
+        elif justify == "left":
             px = z_x0
         elif justify == "right":
             px = z_x1
@@ -1607,20 +1923,67 @@ def compose_slots(
     # Emit all placed text
     for it in placed_items:
         row = it["row"]
-        vc.add_text(
-            text=row.text,
-            x=it["x"],
-            y=it["y"],
-            size=it["size"],
-            font=it["font"],
-            style=it["style"],
-            tracking=it["tracking"],
-            color=it["color"],
-            justify=it["justify"],
-            role=row.role,
-        )
+        if row.role == "title" and "RECRUITING" in row.text.upper() and is_light:
+            # Multi-color Google branding on the word Recruiting
+            # Render "WE ARE" in Navy centered
+            vc.add_text(
+                text="WE ARE",
+                x=width * 0.5,
+                y=it["y"] - 65.0,
+                size=62.0,
+                font=it["font"],
+                style="Bold",
+                tracking=35.0,
+                color="#0B2A5B",
+                justify="center",
+                role="title_lead",
+            )
+            # Render RECRUITING in Google Blue centered
+            vc.add_text(
+                text="RECRUITING",
+                x=width * 0.5,
+                y=it["y"] + 8.0,
+                size=76.0,
+                font=it["font"],
+                style="Bold",
+                tracking=25.0,
+                color="#4285F4",
+                justify="center",
+                role="title_recruiting",
+            )
+        elif row.role == "cta" and is_light:
+            # Pure editorial typography with subtle accent underline (ZERO web button containers)
+            vc.add_text(
+                text=row.text,
+                x=it["x"],
+                y=it["y"],
+                size=it["size"],
+                font=it["font"],
+                style="Bold",
+                tracking=it["tracking"],
+                color="#0B2A5B",
+                justify=it["justify"],
+                role=row.role,
+            )
+            text_w = estimate_text_width(row.text, it["size"], font=it["font"], tracking=it["tracking"])
+            line_w = min(usable_w, text_w + 24.0)
+            line_x = it["x"] - (line_w * 0.5) if it["justify"] == "center" else it["x"]
+            vc.add_shape_rectangle(x=line_x, y=it["y"] + 6.0, width=line_w, height=2.0, fill="#4285F4", radius=1.0)
+        else:
+            vc.add_text(
+                text=row.text,
+                x=it["x"],
+                y=it["y"],
+                size=it["size"],
+                font=it["font"],
+                style=it["style"],
+                tracking=it["tracking"],
+                color=it["color"],
+                justify=it["justify"],
+                role=row.role,
+            )
 
-    apply_genre_effects(vc, genre=genre, accent_color=accent_color, hero_target_id=hero_node_id)
+    apply_genre_effects(vc, genre=genre, accent_color=accent_color, hero_target_id=hero_node_id, is_light=is_light)
     return vc
 
 
