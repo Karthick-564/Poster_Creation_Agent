@@ -269,3 +269,28 @@ def test_jsonrpc_protocol_framing(mcp_server):
     assert resp4["id"] == 4
     assert "error" in resp4
     assert resp4["error"]["code"] == -32601
+
+
+def test_design_tools_dispatch(mcp_server):
+    mcp_server.create_doc(1080, 1350)
+    
+    # Test add_shape_ellipse
+    res_ell = mcp_server.add_shape_ellipse(100, 200, 50, 50, fill="#00F5D4")
+    assert res_ell["status"] == "ok"
+    assert res_ell["ellipse"] == [100.0, 200.0, 50.0, 50.0]
+
+    # Test add_path
+    res_path = mcp_server.add_path("M 0 0 L 100 100 Z", stroke="#FF3D68", stroke_width=2.0)
+    assert res_path["status"] == "ok"
+    assert res_path["d"] == "M 0 0 L 100 100 Z"
+
+    # Test set_transparency
+    res_tr = mcp_server.set_transparency(opacity=0.8, blend="screen")
+    assert res_tr["status"] == "ok"
+    assert res_tr["blend"] == "screen"
+
+    # Test add_effect
+    res_eff = mcp_server.add_effect("stylize.feather", params={"radius": 15.0})
+    assert res_eff["status"] == "ok"
+    assert res_eff["effect"] == "stylize.feather"
+

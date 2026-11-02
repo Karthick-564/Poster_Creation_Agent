@@ -272,6 +272,8 @@ class VectorCraftMCPServer:
         self,
         path: str,
         rect: Optional[list[float]] = None,
+        blend_mode: Optional[str] = None,
+        feather_radius: Optional[float] = None,
     ) -> dict[str, Any]:
         """Place image command and validate path is within project root."""
         p = Path(path)
@@ -288,6 +290,11 @@ class VectorCraftMCPServer:
             return {"error": f"FileNotFoundError: Image file not found at '{path}'"}
 
         self.renderer.place_image(path=str(p), rect=rect)
+        if blend_mode:
+            self.renderer.commands.append({"command": "transparency.set", "params": {"blend": blend_mode}})
+        if feather_radius and float(feather_radius) > 0:
+            self.renderer.add_effect(effect_name="stylize.feather", params={"radius": float(feather_radius)})
+
         if rect and len(rect) == 4:
             self.hero_rect = (float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3]))
 
@@ -296,6 +303,97 @@ class VectorCraftMCPServer:
             "status": "ok",
             "image_path": self._rel(p),
             "rect": rect,
+            "blend_mode": blend_mode,
+            "feather_radius": feather_radius,
+            "command_count": len(self.renderer.commands),
+        }
+
+    def add_shape_ellipse(
+        self,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        fill: Optional[str] = None,
+        stroke: Optional[str] = None,
+        stroke_width: float = 0.0,
+        rotation: float = 0.0,
+    ) -> dict[str, Any]:
+        """Add ellipse or circle shape with fill/stroke styling."""
+        self.renderer.add_shape_ellipse(
+            x=float(x),
+            y=float(y),
+            width=float(width),
+            height=float(height),
+            fill=fill,
+            stroke=stroke,
+            stroke_width=float(stroke_width),
+            rotation=float(rotation),
+        )
+        self.save_session()
+        return {
+            "status": "ok",
+            "ellipse": [float(x), float(y), float(width), float(height)],
+            "fill": fill,
+            "command_count": len(self.renderer.commands),
+        }
+
+    def add_path(
+        self,
+        d: str,
+        fill: Optional[str] = None,
+        stroke: Optional[str] = None,
+        stroke_width: float = 0.0,
+        closed: bool = True,
+    ) -> dict[str, Any]:
+        """Add custom vector path via SVG path data."""
+        self.renderer.add_path(
+            d=d,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=float(stroke_width),
+            closed=closed,
+        )
+        self.save_session()
+        return {
+            "status": "ok",
+            "d": d,
+            "fill": fill,
+            "command_count": len(self.renderer.commands),
+        }
+
+    def set_transparency(
+        self,
+        opacity: float = 1.0,
+        blend: str = "normal",
+        target_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Set opacity and blend mode on the active selection or target node."""
+        params: dict[str, Any] = {"opacity": float(opacity), "blend": blend}
+        if target_id is not None:
+            params["id"] = target_id
+        self.renderer.commands.append({"command": "transparency.set", "params": params})
+        self.save_session()
+        return {
+            "status": "ok",
+            "opacity": float(opacity),
+            "blend": blend,
+            "command_count": len(self.renderer.commands),
+        }
+
+    def add_effect(
+        self,
+        effect: str,
+        params: Optional[dict[str, Any]] = None,
+        target_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Attach a live raster or vector effect (e.g. stylize.dropShadow, stylize.feather, texture.grain)."""
+        self.renderer.add_effect(effect_name=effect, params=params, target_id=target_id)
+        self.save_session()
+        return {
+            "status": "ok",
+            "effect": effect,
+            "params": params or {},
             "command_count": len(self.renderer.commands),
         }
 
@@ -678,7 +776,7 @@ class VectorCraftMCPServer:
             },
             {
                 "name": "place_image",
-                "description": "Place a local raster or vector image asset onto the artboard.",
+                "description": "Place a local raster or vector image asset onto the artboard with optional blend mode and edge feathering.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -688,8 +786,74 @@ class VectorCraftMCPServer:
                             "items": {"type": "number"},
                             "description": "[x, y, width, height] destination bounding rectangle",
                         },
+                        "blend_mode": {
+                            "type": "string",
+                            "description": "Blend mode (screen, multiply, overlay, softLight, normal, etc.)",
+                        },
+                        "feather_radius": {
+                            "type": "number",
+                            "description": "Edge feathering radius in pixels to dissolve hard boundaries",
+                        },
                     },
                     "required": ["path"],
+                },
+            },
+            {
+                "name": "add_shape_ellipse",
+                "description": "Add an ellipse or circle shape with fill and stroke styling.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "x": {"type": "number"},
+                        "y": {"type": "number"},
+                        "width": {"type": "number"},
+                        "height": {"type": "number"},
+                        "fill": {"type": "string", "description": "Hex color string (e.g. #00F5D4)"},
+                        "stroke": {"type": "string", "description": "Hex color string"},
+                        "stroke_width": {"type": "number", "default": 0.0},
+                        "rotation": {"type": "number", "default": 0.0},
+                    },
+                    "required": ["x", "y", "width", "height"],
+                },
+            },
+            {
+                "name": "add_path",
+                "description": "Add a custom vector path via SVG path data string.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "d": {"type": "string", "description": "SVG path data (e.g. 'M 0 0 L 100 100 Z')"},
+                        "fill": {"type": "string"},
+                        "stroke": {"type": "string"},
+                        "stroke_width": {"type": "number", "default": 0.0},
+                        "closed": {"type": "boolean", "default": True},
+                    },
+                    "required": ["d"],
+                },
+            },
+            {
+                "name": "set_transparency",
+                "description": "Set opacity and blend mode on the active selection or target node.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "opacity": {"type": "number", "default": 1.0, "description": "Opacity from 0.0 to 1.0"},
+                        "blend": {"type": "string", "default": "normal", "description": "PDF blend mode"},
+                        "target_id": {"type": "string", "description": "Optional target node ID"},
+                    },
+                },
+            },
+            {
+                "name": "add_effect",
+                "description": "Attach a live raster or vector effect (e.g. stylize.dropShadow, stylize.feather, texture.grain).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "effect": {"type": "string", "description": "Effect identifier (e.g. stylize.feather, stylize.dropShadow)"},
+                        "params": {"type": "object", "description": "Effect parameters dictionary"},
+                        "target_id": {"type": "string", "description": "Optional target node ID"},
+                    },
+                    "required": ["effect"],
                 },
             },
             {
