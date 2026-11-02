@@ -65,6 +65,7 @@ class VectorCraftResult:
     text_manifest: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     error_message: Optional[str] = None
+    hero_rect: Optional[tuple[float, float, float, float]] = None
 
 
 class VectorCraftRenderer:
@@ -850,6 +851,7 @@ class VectorCraftRenderer:
                 command_count=len(self.commands),
                 step_results=step_results,
                 text_manifest=text_manifest,
+                hero_rect=getattr(self, "hero_rect", None),
             )
         except Exception as e:
             elapsed = time.time() - start_time

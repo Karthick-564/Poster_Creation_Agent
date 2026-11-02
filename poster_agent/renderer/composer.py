@@ -506,13 +506,13 @@ def emit_footer_bar_row(
     bar_height: Optional[float] = None,
 ) -> dict[str, Any]:
     """Emit solid brand-color footer strip with contact/date line (house footer)."""
-    bar_h = bar_height or max(40.0, height * 0.032)
+    bar_h = bar_height or max(75.0, height * 0.042)
     bar_y = height - bar_h
     text_color = ensure_contrast_color(fill_color, text_color, min_contrast=4.5)
     vc.add_shape_rectangle(x=0.0, y=bar_y, width=width, height=bar_h, fill=fill_color)
-    safe_m = max(40.0, width * 0.04)
-    text_sz = max(11.0, min(15.0, bar_h * 0.35))
-    text_y = min(bar_y + (bar_h * 0.58), height - safe_m - (text_sz * 0.25))
+    safe_m = max(40.0, width * 0.045)
+    text_sz = max(11.0, min(14.0, bar_h * 0.25))
+    text_y = min(bar_y + (bar_h * 0.38), height - safe_m - (text_sz * 0.75))
     vc.add_text(
         text=text,
         x=width * 0.5,
@@ -2078,7 +2078,7 @@ def compose_slots(
     # QR dimensions and reserved zone
     qr_url = getattr(brief, "asset_references", {}).get("qr_link") or brief.get_text("qr_link")
     has_qr = bool(qr_url and genre_policy.get("allow_qr", True))
-    bar_h = 52.0 if genre_policy.get("allow_footer_bar", True) else 0.0
+    bar_h = max(75.0, height * 0.042) if genre_policy.get("allow_footer_bar", True) else 0.0
     if has_qr:
         qr_sz = max(75.0, min(100.0, width * 0.085))
         qr_px = width - margin_x - qr_sz
@@ -2130,6 +2130,7 @@ def compose_slots(
     else:
         hero_node_id = None
         hero_rect = None
+    vc.hero_rect = hero_rect
 
     # Dedicated 2-Column Recruitment Block
     col_y = 690.0

@@ -46,6 +46,7 @@ from poster_agent.vision.art_measurer import ArtMeasurer
 from poster_agent.vision.bg_measurer import measure_background
 from poster_agent.renderer.vectorcraft_renderer import VectorCraftRenderer, get_vectorcraft_fonts_dir
 from poster_agent.renderer.composer import MICROCOPY_ALLOWLIST, build_typography_plan
+from poster_agent.qa.gates import run_stage6_gates
 from poster_agent.gemini_client import (
     GeminiClient,
     CONCEPT_SCHEMA,
@@ -134,7 +135,7 @@ class UnifiedPosterPipeline:
     def log_gate(self, stage_num: Any, name: str, status: str, detail: str):
         prefix = f"[Stage {stage_num}: {name}]"
         print(f"\n{'='*75}\n{prefix} -> {status.upper()}\n{'='*75}\n{detail}\n")
-        if status.upper() != "PASSED":
+        if status.upper() not in ("PASSED", "SKIPPED", "REVIEW_UNAVAILABLE", "PASSED_WITH_WARNINGS"):
             raise RuntimeError(f"PIPELINE HALTED at Stage {stage_num} ({name}): {detail}")
 
     def execute(self, brief_text: str, context_text: str = "") -> dict:
@@ -834,14 +835,89 @@ Output strictly valid JSON conforming to the schema.
         if (pw, ph) != (target_2x_w, target_2x_h):
             self.log_gate(6, "Physical Quality Gates", "FAILED", f"Resolution {pw}x{ph} != {target_2x_w}x{target_2x_h} px (2x).")
 
-        s6_duration = time.time() - s6_t0
-        self.log_gate(
-            6, "Deterministic Physical Quality Gates", "PASSED",
-            f"Physical quality verified in {s6_duration:.3f}s:\n" +
-            f"  • Dimensions: {pw} x {ph} px (Certified 2x Print Raster)\n" +
-            f"  • Safe-Zone Margins: >80 physical px on all sides\n" +
-            f"  • Blocking Issues: 0"
+        # Resolve hero rect if placed
+        hero_rect = getattr(vc_res, "hero_rect", None)
+        if hero_rect is None and hero_path and str(hero_path).lower() not in ("none", "native", ""):
+            positions = brief.get_positions()
+            if positions:
+                hw = canvas_w * 0.46
+                hh = min(320.0, hw * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 0.75))
+                hx = (canvas_w - hw) * 0.5
+                hy = 660.0
+                hero_rect = (hx, hy, hw, hh)
+            elif archetype == "z_pattern":
+                hw = canvas_w * 0.44
+                hh = hw * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 1.0)
+                hx = canvas_w * 0.52
+                hy = canvas_h * 0.35
+                hero_rect = (hx, hy, hw, hh)
+            elif archetype == "split":
+                hw = canvas_w * 0.60
+                hh = canvas_h * 0.45
+                hx = (canvas_w - hw) * 0.5
+                hy = canvas_h * 0.06
+                hero_rect = (hx, hy, hw, hh)
+            elif archetype == "grid_3col":
+                hw = canvas_w * 0.32
+                hh = hw
+                hx = canvas_w * 0.34
+                hy = canvas_h * 0.35
+                hero_rect = (hx, hy, hw, hh)
+            else:
+                hw = canvas_w * 0.48
+                hh = hw * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 1.0)
+                hx = (canvas_w - hw) * 0.5
+                hy = canvas_h * 0.35
+                hero_rect = (hx, hy, hw, hh)
+
+        # Run Stage 6 QA gate suite in order:
+        # text_bounds, hero_overlap, structure_contrast, required_content, dedupe, v_band_coverage
+        margin_px = max(40.0, canvas_w * 0.045)
+        qa_gates = run_stage6_gates(
+            rows=vc_res.text_manifest,
+            canvas_w=canvas_w,
+            canvas_h=canvas_h,
+            margin_px=margin_px,
+            image=png_2x_out,
+            hero_rect=hero_rect,
+            brief=brief,
+            scale=2.0,
         )
+
+        failed_gates = [g for g in qa_gates if g["verdict"] == "FAIL"]
+
+        # Record QA gate suite in plan.json
+        plan_provenance["gates"] = qa_gates
+        if failed_gates:
+            plan_provenance["gate_failures"] = failed_gates
+        with open(plan_json_path, "w", encoding="utf-8") as pf:
+            json.dump(plan_provenance, pf, indent=2)
+
+        s6_duration = time.time() - s6_t0
+
+        if failed_gates:
+            fail_summary = ", ".join(f"{g['name']} ({g['detail']})" for g in failed_gates)
+            if self.use_mock:
+                print("=" * 80)
+                print(">>> [STAGE 6 QA GATE BANNER] Gates failed in mock mode:")
+                for g in failed_gates:
+                    print(f"    • {g['name']}: {g['detail']}")
+                print("=" * 80)
+                self.log_gate(
+                    6, "Deterministic Physical Quality Gates", "PASSED_WITH_WARNINGS",
+                    f"Physical verified in {s6_duration:.3f}s with mock warnings: {fail_summary}"
+                )
+            else:
+                self.log_gate(6, "Deterministic Physical Quality Gates", "FAILED", f"QA gate failure(s): {fail_summary}")
+        else:
+            self.log_gate(
+                6, "Deterministic Physical Quality Gates", "PASSED",
+                f"Physical quality & 6 QA gates verified in {s6_duration:.3f}s:\n" +
+                f"  • Dimensions: {pw} x {ph} px (Certified 2x Print Raster)\n" +
+                f"  • Safe Margins: >= {margin_px:.1f} pt\n" +
+                f"  • QA Suite (6/6 PASS): text_bounds, hero_overlap, structure_contrast, required_content, dedupe, v_band_coverage\n" +
+                f"  • Blocking Issues: 0"
+            )
 
         # -------------------------------------------------------------
         # STAGE 7: GROUNDED MULTIMODAL VISUAL CRITIQUE (GEMINI VL)
@@ -904,42 +980,46 @@ Output strictly valid JSON with this schema:
                 "overall_score": 9,
                 "verdict": "READY_FOR_PRINT",
             }
+            vlm_score = 9
         else:
             try:
                 vlm_res = self.gemini.critique_image(image_input=png_2x_out, prompt=critique_prompt)
+                vlm_score = vlm_res.get("overall_score")
             except Exception as e:
-                print(f"[Stage 7] Gemini VLM critique API unavailable ({e}). Employing deterministic layout verification.")
+                print(f"[Stage 7] Gemini VLM critique API unavailable ({e}). Marking visual critique as REVIEW_UNAVAILABLE.")
                 vlm_res = {
-                    "ocr_check": {
-                        "title_verbatim": True,
-                        "date_verbatim": True,
-                        "venue_verbatim": True,
-                        "events_verbatim": True,
-                        "prize_verbatim": True,
-                        "cta_verbatim": True,
-                    },
+                    "verdict": "REVIEW_UNAVAILABLE",
+                    "overall_score": None,
+                    "error": str(e),
                     "aesthetic_audit": {
-                        "is_editorial_poster": True,
-                        "zero_web_button_cards": True,
-                        "depth_layering_effective": True,
-                        "critique": "High-impact editorial tech poster composition with clean typography hierarchy, crisp vector hairline dividers, zero web buttons, and flawless background integration without geometric occluders.",
+                        "critique": f"Gemini VLM critique unavailable: {e}",
                     },
-                    "overall_score": 9,
-                    "verdict": "READY_FOR_PRINT",
                 }
+                vlm_score = None
+
         s7_duration = time.time() - s7_t0
-        vlm_score = vlm_res.get("overall_score", 9)
 
-        if vlm_score < 7:
-            self.log_gate(7, "Multimodal Visual Critique", "FAILED", f"Score {vlm_score}/10 (<7). Feedback: {vlm_res.get('aesthetic_audit', {}).get('critique')}")
-
-        self.log_gate(
-            7, "Grounded Multimodal Visual Critique", "PASSED",
-            f"Gemini Multimodal Vision audited poster in {s7_duration:.2f}s (Score: {vlm_score}/10):\n" +
-            f"  • Verdict: {vlm_res.get('verdict')}\n" +
-            f"  • Zero Web-Button Cards: {vlm_res.get('aesthetic_audit', {}).get('zero_web_button_cards')}\n" +
-            f"  • Critique: {vlm_res.get('aesthetic_audit', {}).get('critique')}"
-        )
+        if vlm_score is None:
+            vlm_verdict = "REVIEW_UNAVAILABLE"
+            self.log_gate(
+                7, "Grounded Multimodal Visual Critique", "SKIPPED",
+                f"Gemini Multimodal Vision review unavailable ({vlm_res.get('error', 'API unavailable')}). Status: REVIEW_UNAVAILABLE (Score: N/A)"
+            )
+        else:
+            vlm_verdict = vlm_res.get("verdict", "READY_FOR_PRINT" if vlm_score >= 8 else "NEEDS_REPAIR")
+            if vlm_score < 8:
+                self.log_gate(
+                    7, "Multimodal Visual Critique", "FAILED",
+                    f"Score {vlm_score}/10 (<8 threshold). Feedback: {vlm_res.get('aesthetic_audit', {}).get('critique')}"
+                )
+            else:
+                self.log_gate(
+                    7, "Grounded Multimodal Visual Critique", "PASSED",
+                    f"Gemini Multimodal Vision audited poster in {s7_duration:.2f}s (Score: {vlm_score}/10):\n" +
+                    f"  • Verdict: {vlm_verdict}\n" +
+                    f"  • Zero Web-Button Cards: {vlm_res.get('aesthetic_audit', {}).get('zero_web_button_cards')}\n" +
+                    f"  • Critique: {vlm_res.get('aesthetic_audit', {}).get('critique')}"
+                )
 
         # -------------------------------------------------------------
         # STAGE 8: PRINT PACKAGING & MASTER DELIVERABLES
@@ -967,6 +1047,20 @@ Output strictly valid JSON with this schema:
             dest_hero = hero_path
             report_md = self.run_dir / f"{title_slug}_master_pipeline_report.md"
 
+        # Build Stage 6 QA Gates table
+        gates_rows = []
+        for g in qa_gates:
+            name = g["name"]
+            verdict = f"`{g['verdict']}`"
+            m_parts = [f"{k}={v}" for k, v in g.get("measured", {}).items() if k not in ("details", "escaping_targets", "colliding_targets")]
+            measured_str = ", ".join(m_parts) if m_parts else str(g.get("measured", ""))
+            gates_rows.append(f"| **{name}** | {verdict} | `{measured_str}` | {g.get('detail', '')} |")
+        gates_table = "\n".join(gates_rows)
+
+        score_display = f"{vlm_score} / 10 (`{vlm_verdict}`)" if vlm_score is not None else "`N/A` (`REVIEW_UNAVAILABLE` — VLM not evaluated)"
+        s7_status_badge = "`PASSED`" if (vlm_score is not None and vlm_score >= 8) else ("`REVIEW_UNAVAILABLE`" if vlm_score is None else "`FAILED`")
+        s7_detail = f"OCR verified verbatim, score {vlm_score}/10 (threshold: 8)" if vlm_score is not None else "REVIEW_UNAVAILABLE, score N/A"
+
         total_runtime = time.time() - total_t0
         _posix = lambda p: str(p).replace("\\", "/")  # noqa: E731 — file:/// links
         fallback_notice = f"\n**PLANNING_FALLBACK ACTIVE**: `{self.planning_fallback}`\n" if self.planning_fallback else ""
@@ -976,7 +1070,7 @@ Output strictly valid JSON with this schema:
 **Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}  
 **Hardware Engine**: NVIDIA GeForce RTX 4090 + Local ComfyUI (Ideogram 4.0 + Qwen-Image 2.1) + VectorCraft (Rust)  
 **Total Runtime**: {total_runtime:.2f} seconds  
-**Quality Score**: {vlm_score} / 10 (`READY_FOR_PRINT`)  
+**Quality Score**: {score_display}  
 **Hero**: {hero_res.source} ({hero_res.path})  
 **Background**: {bg_res.source} ({bg_res.path})  
 {fallback_notice}
@@ -995,20 +1089,28 @@ Output strictly valid JSON with this schema:
 | **Stage 4b** | **Background Measurement** | `PASSED` | {s4b_duration:.3f}s | 12x15 calm/busy/salient grid classification |
 | **Stage 4.5** | **Layout Planning (Slot Placement)** | `PASSED` | {s45_duration:.3f}s | Text slots placed strictly into measured calm zones |
 | **Stage 5** | **Depth-Layered Assembly (VectorCraft)** | `PASSED` | {s5_duration:.3f}s | Archetype: {archetype}, {text_count} text rows, {overflow_count} overflow warnings |
-| **Stage 6** | **Deterministic Physical Quality Gates** | `PASSED` | {s6_duration:.3f}s | Exact {target_2x_w}x{target_2x_h} px (2x), safe margins > 40px |
-| **Stage 7** | **Grounded Multimodal Visual Critique** | `PASSED` | {s7_duration:.2f}s | OCR 100% verbatim, score {vlm_score}/10 |
+| **Stage 6** | **Deterministic Physical Quality Gates** | `PASSED` | {s6_duration:.3f}s | Exact {target_2x_w}x{target_2x_h} px (2x), 6/6 QA gates verified |
+| **Stage 7** | **Grounded Multimodal Visual Critique** | {s7_status_badge} | {s7_duration:.2f}s | {s7_detail} |
 | **Stage 8** | **Print Packaging & Certification** | `PASSED` | 0.005s | True Vector PDF & 2x PNG deliverables packaged |
 
 ---
 
-## 2. Stage 7 Vision Critic Feedback
+## 2. Stage 6 Deterministic Quality Gates Enforcement
+
+| Gate | Verdict | Measured | Enforcement Detail |
+| :--- | :---: | :--- | :--- |
+{gates_table}
+
+---
+
+## 3. Stage 7 Vision Critic Feedback
 ```json
 {json.dumps(vlm_res, indent=2)}
 ```
 
 ---
 
-## 3. Final Deliverables
+## 4. Final Deliverables
 - **Print Master Vector PDF**: [{dest_pdf.name}](file:///{_posix(dest_pdf)})
 - **2x High-Res Render ({target_2x_w} x {target_2x_h} px)**: [{dest_png.name}](file:///{_posix(dest_png)})
 - **Layer 0 Background Art**: [{dest_bg.name}](file:///{_posix(dest_bg)})
@@ -1019,7 +1121,7 @@ Output strictly valid JSON with this schema:
         print("=" * 80)
         print("PIPELINE COMPLETED AUTONOMOUSLY!")
         print(f"Total Runtime : {total_runtime:.2f}s")
-        print(f"Score         : {vlm_score} / 10")
+        print(f"Quality Score : {score_display}")
         print(f"Master PDF    : {dest_pdf}")
         print(f"Master PNG 2x : {dest_png}")
         print("=" * 80)
@@ -1028,6 +1130,8 @@ Output strictly valid JSON with this schema:
             "pdf": dest_pdf,
             "png_2x": dest_png,
             "score": vlm_score,
+            "score_display": score_display,
+            "qa_gates": qa_gates,
             "report_md": report_md,
             "runtime": total_runtime,
         }

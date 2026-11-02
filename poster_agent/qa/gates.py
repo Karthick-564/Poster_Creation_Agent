@@ -11,6 +11,7 @@ strict physical design gates:
 """
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Any, Optional, Sequence, Union
 
 import numpy as np
@@ -19,7 +20,7 @@ from PIL import Image
 
 @dataclass
 class GateFailure:
-    kind: str      # canvas_bounds | row_overlap | empty_row | seam | contrast
+    kind: str      # canvas_bounds | row_overlap | empty_row | seam | contrast | hero_overlap | dedupe | required_content | v_band_coverage
     target: str    # text row id, or "frame" for seams
     detail: str
     measured: dict # JSON-safe values that tripped the gate
@@ -431,3 +432,359 @@ def run_all_gates(
         "manifest_gates": manifest_res,
         "pixel_gates": pixel_res,
     }
+
+
+def check_hero_overlap(
+    rows: Sequence[dict[str, Any]],
+    hero_rect: Optional[Union[tuple[float, float, float, float], list[float]]] = None,
+) -> list[GateFailure]:
+    """Check text rows for collision with the hero cutout asset bounding rect."""
+    failures: list[GateFailure] = []
+    if not hero_rect or len(hero_rect) < 4:
+        return failures
+
+    hx, hy, hw, hh = float(hero_rect[0]), float(hero_rect[1]), float(hero_rect[2]), float(hero_rect[3])
+    if hw <= 0 or hh <= 0:
+        return failures
+
+    for i, row in enumerate(rows):
+        target_id = str(row.get("id", row.get("role", f"row_{i}")))
+        rx, ry, rw, rh = _get_bounds(row)
+        if rw <= 0 or rh <= 0:
+            continue
+
+        ix1 = max(rx, hx)
+        iy1 = max(ry, hy)
+        ix2 = min(rx + rw, hx + hw)
+        iy2 = min(ry + rh, hy + hh)
+
+        if ix2 > ix1 + 0.5 and iy2 > iy1 + 0.5:
+            iw = ix2 - ix1
+            ih = iy2 - iy1
+            failures.append(GateFailure(
+                kind="hero_overlap",
+                target=target_id,
+                detail=f"Row '{str(row.get('text', ''))[:32]}' intersects hero reservation rect by {iw:.1f}x{ih:.1f}px",
+                measured={
+                    "row_id": target_id,
+                    "row_bounds": [round(rx, 2), round(ry, 2), round(rw, 2), round(rh, 2)],
+                    "hero_rect": [round(hx, 2), round(hy, 2), round(hw, 2), round(hh, 2)],
+                    "intersection_rect": [round(ix1, 2), round(iy1, 2), round(iw, 2), round(ih, 2)],
+                    "overlap_area": round(iw * ih, 2),
+                },
+            ))
+    return failures
+
+
+def check_dedupe(rows: Sequence[dict[str, Any]]) -> list[GateFailure]:
+    """Flag duplicate closing lines or identical text emitted across multiple roles."""
+    failures: list[GateFailure] = []
+    seen: dict[str, list[dict[str, Any]]] = {}
+
+    for i, r in enumerate(rows):
+        txt = str(r.get("text", "")).strip().lower()
+        if len(txt) < 8 or txt in ("open positions", "scan to apply", "presented by"):
+            continue
+        norm_txt = re.sub(r"[^\w\s]", "", txt)
+        if len(norm_txt) < 8:
+            continue
+        seen.setdefault(norm_txt, []).append(r)
+
+    for norm_txt, occurrences in seen.items():
+        if len(occurrences) > 1:
+            roles = [str(o.get("role", o.get("id", "unknown"))) for o in occurrences]
+            sample_txt = str(occurrences[0].get("text", ""))[:48]
+            failures.append(GateFailure(
+                kind="dedupe",
+                target=",".join(roles),
+                detail=f"Duplicate text '{sample_txt}' rendered {len(occurrences)} times across roles: {', '.join(roles)}",
+                measured={
+                    "text": sample_txt,
+                    "count": len(occurrences),
+                    "roles": roles,
+                },
+            ))
+    return failures
+
+
+def check_required_content(
+    rows: Sequence[dict[str, Any]],
+    brief: Any = None,
+    brief_text: Optional[str] = None,
+) -> list[GateFailure]:
+    """Verify that required content supplied by the brief (date, venue, CTA, QR) is present in the render."""
+    failures: list[GateFailure] = []
+    expected: dict[str, str] = {}
+
+    if brief is not None:
+        if hasattr(brief, "get_text"):
+            for k in ("date", "venue", "cta", "qr_url"):
+                val = brief.get_text(k)
+                if val:
+                    expected[k] = val
+        elif isinstance(brief, dict):
+            for k in ("date", "venue", "cta", "qr_url"):
+                if brief.get(k):
+                    expected[k] = str(brief[k])
+    elif brief_text:
+        for m in re.finditer(r"(?i)\b(date|venue|cta|qr(?:_url)?)\s*:\s*([^\r\n]+)", brief_text):
+            k = m.group(1).lower()
+            if "qr" in k:
+                k = "qr_url"
+            expected[k] = m.group(2).strip()
+
+    if not expected:
+        return failures
+
+    all_row_texts = " ".join(str(r.get("text", "")) for r in rows).lower()
+    all_roles = {str(r.get("role", "")).lower() for r in rows}
+
+    for req_key, req_val in expected.items():
+        val_clean = req_val.strip().lower()
+        if not val_clean:
+            continue
+        found = False
+        if req_key == "date":
+            alpha_words = [w for w in re.findall(r"[a-zA-Z]+", val_clean) if len(w) >= 3]
+            if any(r in all_roles for r in ("date", "schedule_text", "logistics_date")) or (
+                alpha_words and any(w in all_row_texts for w in alpha_words)
+            ):
+                found = True
+        elif req_key == "venue":
+            words = [w for w in re.findall(r"[a-zA-Z]+", val_clean) if len(w) >= 3]
+            if any(r in all_roles for r in ("venue", "location")) or (
+                words and any(w in all_row_texts for w in words)
+            ):
+                found = True
+        elif req_key == "cta":
+            words = [w for w in re.findall(r"[a-zA-Z]+", val_clean) if len(w) >= 3]
+            if any(r in all_roles for r in ("cta", "_structure_qr", "action", "button")) or (
+                words and any(w in all_row_texts for w in words)
+            ):
+                found = True
+        elif req_key == "qr_url":
+            if "_structure_qr" in all_roles or "scan" in all_row_texts or "qr" in all_row_texts:
+                found = True
+
+        if not found:
+            failures.append(GateFailure(
+                kind="required_content",
+                target=req_key,
+                detail=f"Required content '{req_key}' ('{req_val}') supplied in brief but missing from render manifest",
+                measured={
+                    "field": req_key,
+                    "expected_text": req_val,
+                },
+            ))
+    return failures
+
+
+def check_v_band_coverage_gate(
+    rows: Sequence[dict[str, Any]],
+    canvas_h: float = 1920.0,
+    min_coverage: float = 70.0,
+) -> tuple[bool, float, list[int], list[GateFailure]]:
+    """Check vertical rhythm: content must cover >= min_coverage% of vertical bands."""
+    failures: list[GateFailure] = []
+    band_fractions = [
+        (0.00, 0.15, "Band 0: Header & Brand"),
+        (0.15, 0.35, "Band 1: Headline & Hook"),
+        (0.35, 0.55, "Band 2: Hero Visual"),
+        (0.55, 0.80, "Band 3: Body & Positions"),
+        (0.80, 1.00, "Band 4: Logistics & Footer"),
+    ]
+    total_bands = len(band_fractions)
+    occupied = set()
+
+    for r in rows:
+        rx, ry, rw, rh = _get_bounds(r)
+        if rw <= 0 or rh <= 0:
+            continue
+        top_f = ry / canvas_h
+        bot_f = (ry + rh) / canvas_h
+        for idx, (b_start, b_end, _) in enumerate(band_fractions):
+            if not (bot_f < b_start or top_f > b_end):
+                occupied.add(idx)
+
+    cov_pct = (len(occupied) / total_bands) * 100.0 if total_bands > 0 else 0.0
+    passed = cov_pct >= min_coverage
+
+    if not passed:
+        failures.append(GateFailure(
+            kind="v_band_coverage",
+            target="vertical_rhythm",
+            detail=f"Vertical band coverage {cov_pct:.1f}% < required {min_coverage:.1f}%",
+            measured={
+                "coverage_pct": round(cov_pct, 1),
+                "threshold_pct": min_coverage,
+                "occupied_bands": sorted(list(occupied)),
+                "total_bands": total_bands,
+            },
+        ))
+
+    return passed, cov_pct, sorted(list(occupied)), failures
+
+
+def check_structure_contrast(
+    image: Optional[Union[Image.Image, np.ndarray, Path, str]],
+    rows: Sequence[dict[str, Any]],
+    scale: float = 2.0,
+) -> list[GateFailure]:
+    """Verify WCAG relative luminance contrast >= 4.5:1 for rows against rendered raster."""
+    if image is None:
+        return []
+    return sample_contrast(image=image, rows=rows, scale=scale)
+
+
+def run_stage6_gates(
+    rows: Sequence[dict[str, Any]],
+    canvas_w: float = 1080.0,
+    canvas_h: float = 1920.0,
+    margin_px: float = 48.6,
+    image: Optional[Union[Image.Image, np.ndarray, Path, str]] = None,
+    hero_rect: Optional[Union[tuple[float, float, float, float], list[float]]] = None,
+    brief: Any = None,
+    scale: float = 2.0,
+) -> list[dict[str, Any]]:
+    """Run all 6 Stage 6 QA gates in strict sequence and return formatted gate records.
+
+    Order of evaluation:
+    1. text_bounds
+    2. hero_overlap
+    3. structure_contrast
+    4. required_content
+    5. dedupe
+    6. v_band_coverage
+    """
+    gate_records: list[dict[str, Any]] = []
+
+    # 1. text_bounds
+    bounds_failures = check_canvas_bounds(rows, canvas_w=canvas_w, canvas_h=canvas_h, margin_px=margin_px)
+    if bounds_failures:
+        gate_records.append({
+            "name": "text_bounds",
+            "verdict": "FAIL",
+            "measured": {
+                "failure_count": len(bounds_failures),
+                "escaping_targets": [f.target for f in bounds_failures],
+                "margin_px": margin_px,
+            },
+            "detail": f"{len(bounds_failures)} text rows exceed canvas safe margins (margin={margin_px:.1f}px)",
+        })
+    else:
+        gate_records.append({
+            "name": "text_bounds",
+            "verdict": "PASS",
+            "measured": {"margin_px": margin_px, "canvas_w": canvas_w, "canvas_h": canvas_h, "escapes": 0},
+            "detail": "All queued text rows strictly within canvas safe margins.",
+        })
+
+    # 2. hero_overlap
+    overlap_failures = check_hero_overlap(rows, hero_rect=hero_rect)
+    if overlap_failures:
+        gate_records.append({
+            "name": "hero_overlap",
+            "verdict": "FAIL",
+            "measured": {
+                "failure_count": len(overlap_failures),
+                "colliding_targets": [f.target for f in overlap_failures],
+                "hero_rect": list(hero_rect) if hero_rect else None,
+            },
+            "detail": f"{len(overlap_failures)} text rows intersect hero reservation rect",
+        })
+    else:
+        gate_records.append({
+            "name": "hero_overlap",
+            "verdict": "PASS",
+            "measured": {"hero_rect": list(hero_rect) if hero_rect else None, "intersections": 0},
+            "detail": "Zero text rows intersect hero asset reservation rect.",
+        })
+
+    # 3. structure_contrast
+    contrast_failures = check_structure_contrast(image=image, rows=rows, scale=scale) if image is not None else []
+    if contrast_failures:
+        min_cr = min((float(f.measured.get("contrast_ratio", 0.0)) for f in contrast_failures), default=0.0)
+        gate_records.append({
+            "name": "structure_contrast",
+            "verdict": "FAIL",
+            "measured": {
+                "failure_count": len(contrast_failures),
+                "min_contrast_ratio": min_cr,
+                "targets": [f.target for f in contrast_failures],
+            },
+            "detail": f"{len(contrast_failures)} rows violate WCAG contrast floors (lowest CR: {min_cr:.2f}:1 < 4.5:1)",
+        })
+    else:
+        gate_records.append({
+            "name": "structure_contrast",
+            "verdict": "PASS",
+            "measured": {"min_contrast_floor": 4.5, "sampled_rows": len(rows)},
+            "detail": "All evaluated text rows meet WCAG 2.1 relative luminance contrast floors.",
+        })
+
+    # 4. required_content
+    req_failures = check_required_content(rows, brief=brief)
+    if req_failures:
+        missing_fields = [f.target for f in req_failures]
+        gate_records.append({
+            "name": "required_content",
+            "verdict": "FAIL",
+            "measured": {
+                "missing_fields": missing_fields,
+            },
+            "detail": f"Required content missing from render manifest: {', '.join(missing_fields)}",
+        })
+    else:
+        gate_records.append({
+            "name": "required_content",
+            "verdict": "PASS",
+            "measured": {"missing_count": 0},
+            "detail": "All brief-supplied required content (date, venue, CTA, QR) verified in render.",
+        })
+
+    # 5. dedupe
+    dedupe_failures = check_dedupe(rows)
+    if dedupe_failures:
+        gate_records.append({
+            "name": "dedupe",
+            "verdict": "FAIL",
+            "measured": {
+                "duplicate_count": len(dedupe_failures),
+                "targets": [f.target for f in dedupe_failures],
+            },
+            "detail": f"{len(dedupe_failures)} duplicate closing or structural text elements detected.",
+        })
+    else:
+        gate_records.append({
+            "name": "dedupe",
+            "verdict": "PASS",
+            "measured": {"duplicate_count": 0},
+            "detail": "Zero duplicate closing lines or structural text rows.",
+        })
+
+    # 6. v_band_coverage
+    vband_passed, cov_pct, occ_bands, vband_failures = check_v_band_coverage_gate(rows, canvas_h=canvas_h, min_coverage=70.0)
+    if not vband_passed:
+        gate_records.append({
+            "name": "v_band_coverage",
+            "verdict": "FAIL",
+            "measured": {
+                "coverage_pct": round(cov_pct, 1),
+                "threshold_pct": 70.0,
+                "occupied_bands": occ_bands,
+            },
+            "detail": f"Vertical band coverage {cov_pct:.1f}% below 70% threshold.",
+        })
+    else:
+        gate_records.append({
+            "name": "v_band_coverage",
+            "verdict": "PASS",
+            "measured": {
+                "coverage_pct": round(cov_pct, 1),
+                "threshold_pct": 70.0,
+                "occupied_bands": occ_bands,
+            },
+            "detail": f"Vertical band coverage {cov_pct:.1f}% meets >= 70% rhythm standard.",
+        })
+
+    return gate_records

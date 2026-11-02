@@ -177,9 +177,23 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - Full pytest suite passing: 124 passed on Windows.
   - Yardstick proof render generated to `runs/render_polish_demo/` (2160x3840 2x PNG, vector PDF, `report.md`, and `plan.json` with 0 overflows).
 
+- **Phase D Commit 2 (Deterministic QA Gates Wired + Honest Stage 7 Review)**:
+  - **Stage 6 QA Gate Suite**: Deterministic gate runner `run_stage6_gates` wired directly into Stage 6 of `UnifiedPosterPipeline`. Evaluates all 6 gates in strict sequence:
+    1. `text_bounds`: Guarantees no queued text row exceeds canvas safe margins (left, top, right, bottom with $\ge 4.5\%$ margin).
+    2. `hero_overlap`: Resolves hero bounding box and asserts zero text/hero rect intersections.
+    3. `structure_contrast`: Samples WCAG 2.1 relative luminance on raster image, enforcing $\ge 4.5:1$ contrast floor.
+    4. `required_content`: Confirms all brief-supplied logistics (date, venue, CTA, QR) appear in the render manifest.
+    5. `dedupe`: Flags any duplicate closing line or text across structural and body roles.
+    6. `v_band_coverage`: Audits vertical rhythm across 5 bands, enforcing $\ge 70\%$ vertical band coverage.
+  - **Audit Provenance in `plan.json`**: Every gate verdict, measured metrics, and failure targets recorded in `plan.json` under `gates: [...]` and `gate_failures: [...]`.
+  - **Honest Stage 7 VLM Verdict**: Completely removed synthetic `overall_score = 9` fallback. When Gemini VLM critique is unavailable or errors (e.g. 429 rate limit), verdict reads `REVIEW_UNAVAILABLE` with score `N/A`. When VLM responds, score pass threshold is strictly restored to **8/10** (reverting `149cb3e` 7→8). Overclaiming "10/10" language eliminated from reports.
+  - **Report Table**: `report.md` now features a dedicated `Stage 6 Deterministic Quality Gates Enforcement` markdown table showing gate names, verdicts (`PASS`/`FAIL`), measured metrics, and enforcement details.
+  - **Tests**: `tests/test_gates_integrated.py` created with 9 passing tests covering planted failures (oversized row, hero-overlapping row, low-contrast pair, missing required content, duplicate closing, clustered rhythm), clean spec verification, honest `REVIEW_UNAVAILABLE` handling, and score 8 threshold enforcement.
+  - **Corpus Protection**: `skills/poster-design-craft/SKILL.md` citations verified untouched.
+  - Full test suite: **133 passed**, 3 warnings in 63.56s on Windows.
+
 ### Pending / Next Up
-- **Phase D Commit 2**: Standalone deterministic QA gates integration (`poster_agent/qa/gates.py` into Stages 6 and 7; honest `REVIEW_UNAVAILABLE` verdict when VLM unavailable).
-- **Phase D Commit 3**: Repair executor (`poster_agent/repair/executor.py`) consuming typed operations within a 2-cycle budget.
+- **Phase D Commit 3**: Repair executor (`poster_agent/repair/executor.py`) consuming typed operations within a 2-cycle budget, pathological broken-scenario harness, and live acceptance run.
 
 ## 7. Superseded / Do Not Revive
 
