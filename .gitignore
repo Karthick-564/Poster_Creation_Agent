@@ -36,5 +36,12 @@ scripts/bakeoff/reports/temp_render/
 # VectorCraft runtime data & portable preferences
 **/VectorCraftData/
 
+# Oversized vendored binaries — keep local only (GitHub hard limit: 100 MB/file)
+tools/vectorcraft_portable.zip
+tools/vectorcraft_bin/**/*.exe
+
+# OneDrive exports & reference materials (1.2 GB — do not version)
+Examples/
+
 
 

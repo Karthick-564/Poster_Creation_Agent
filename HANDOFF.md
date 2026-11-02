@@ -166,9 +166,20 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
     `scripts/test.ps1` — CORE suite (7 invariant files, ~10s) by default; FULL suite only when
     composer / pipeline / gates / render code changes.
 
+- **Phase D Commit 1 (Composer Remediation & Six Defects Addressed)**:
+  - **Defect D1 (Headline Clipped)**: `wrap_and_fit_row` wraps long headlines to $\le 2$ lines before shrinking toward doctrine floors. If still exceeding usable width at floor, scales down with a loud banner (`>>> [composer] LOUD BANNER: row 'title' ...`) to guarantee zero canvas clipping.
+  - **Defect D2 (Subtitle/Venue/Date Clipped & QR Collision)**: QR reserve space calculated (`max_log_w = qr_px - margin_x - 30.0`). All bottom logistics rows constrained to `max_log_w`, preventing collision with the bottom-right QR code module.
+  - **Defect D3 (Hero Occlusion)**: Physical hero bounding box reserved in Band 1 ($y = 660 \dots 980$). Header items bounded to finish above hero crown ($y \le 640$). `check_rect_intersection` audit reports `HERO_OCCLUSION: none`.
+  - **Defect D4 (Closing Line Dedupe)**: Closing line rendered strictly once in the structural footer bar when allowed by genre; removed from body row emission.
+  - **Defect D5 (~25% Dead Vertical Band)**: 5-band vertical rhythm system implemented (`compute_vband_coverage`). Content distributed across full 9:16 portrait canvas; audited at `V-BAND COVERAGE: 100%`.
+  - **Defect D6 (Contrast Floors)**: WCAG 2.1 relative luminance checking implemented (`get_contrast_ratio`, `ensure_contrast_color`). Structural rows (footer bar, banner tabs, pills, barcodes) guarantee $\ge 4.5:1$ contrast against their fills; eyebrow text on light backgrounds uses deep navy `#0B2A5B` ($> 12:1$ contrast).
+  - New test suite `tests/test_render_polish.py` created with 8 comprehensive unit & end-to-end render tests (100% passing).
+  - Full pytest suite passing: 124 passed on Windows.
+  - Yardstick proof render generated to `runs/render_polish_demo/` (2160x3840 2x PNG, vector PDF, `report.md`, and `plan.json` with 0 overflows).
+
 ### Pending / Next Up
-- **Phase D**: Standalone deterministic QA gates integration (`poster_agent/qa/gates.py` into Stages 6 and 7).
-- **Phase D 3b**: Repair loop executor consuming `REPAIR_SCHEMA` operations upon gate failure.
+- **Phase D Commit 2**: Standalone deterministic QA gates integration (`poster_agent/qa/gates.py` into Stages 6 and 7; honest `REVIEW_UNAVAILABLE` verdict when VLM unavailable).
+- **Phase D Commit 3**: Repair executor (`poster_agent/repair/executor.py`) consuming typed operations within a 2-cycle budget.
 
 ## 7. Superseded / Do Not Revive
 

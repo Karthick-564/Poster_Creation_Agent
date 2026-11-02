@@ -167,7 +167,7 @@ def estimate_headline_height(text: str, size: float, max_width: float, font: str
     total_w = estimate_text_width(text, size, font)
     if total_w > max_width and lines == 1:
         lines = 2
-    line_height = size * 1.25
+    line_height = size * 1.05
     return max(size, lines * line_height)
 
 
@@ -215,6 +215,155 @@ def generate_qr_code(link: str, output_path: Path) -> Path:
         draw.rectangle([30, 130, 70, 170], fill="#000000")
         img.save(output_path)
     return output_path
+
+
+def _hex_to_rgb(hex_str: str) -> tuple[float, float, float]:
+    h = hex_str.lstrip("#")
+    if len(h) == 3:
+        h = "".join([c*2 for c in h])
+    try:
+        return (int(h[0:2], 16) / 255.0, int(h[2:4], 16) / 255.0, int(h[4:6], 16) / 255.0)
+    except Exception:
+        return (0.0, 0.0, 0.0)
+
+
+def _srgb_to_lum(rgb: tuple[float, float, float]) -> float:
+    def _channel_lum(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = rgb
+    return 0.2126 * _channel_lum(r) + 0.7152 * _channel_lum(g) + 0.0722 * _channel_lum(b)
+
+
+def get_contrast_ratio(hex1: str, hex2: str) -> float:
+    """Calculate WCAG 2.1 relative luminance contrast ratio between two hex colors."""
+    l1 = _srgb_to_lum(_hex_to_rgb(hex1))
+    l2 = _srgb_to_lum(_hex_to_rgb(hex2))
+    l_max = max(l1, l2)
+    l_min = min(l1, l2)
+    return (l_max + 0.05) / (l_min + 0.05)
+
+
+def ensure_contrast_color(bg_hex: str, preferred_fg: str = "#FFFFFF", min_contrast: float = 4.5) -> str:
+    """Select text color achieving >= min_contrast:1 against background."""
+    if get_contrast_ratio(bg_hex, preferred_fg) >= min_contrast:
+        return preferred_fg
+    cr_white = get_contrast_ratio(bg_hex, "#FFFFFF")
+    cr_navy = get_contrast_ratio(bg_hex, "#0B2A5B")
+    return "#FFFFFF" if cr_white >= cr_navy else "#0B2A5B"
+
+
+def _wrap_to_two_lines(text: str) -> tuple[str, str]:
+    """Break text into at most two balanced lines at word boundaries."""
+    words = text.strip().split()
+    if len(words) <= 1:
+        return text, ""
+    mid_char = len(text) / 2.0
+    best_split = 1
+    best_diff = float("inf")
+    cur_len = 0
+    for i in range(len(words) - 1):
+        cur_len += len(words[i]) + (1 if i > 0 else 0)
+        diff = abs(cur_len - mid_char)
+        if diff < best_diff:
+            best_diff = diff
+            best_split = i + 1
+    return " ".join(words[:best_split]), " ".join(words[best_split:])
+
+
+def wrap_and_fit_row(
+    text: str,
+    target_size: float,
+    floor_size: float,
+    max_w: float,
+    font: str = "Inter",
+    tracking: float = 0.0,
+    role: str = "text",
+) -> tuple[list[str], float]:
+    """Ensure row text width respects max_w:
+    1. If single line fits max_w at target_size, return [text], target_size.
+    2. If over: wrap to <= 2 lines.
+    3. If 2 lines still over: shrink toward floor_size.
+    4. If still over at floor_size: emit loud banner and return [line1, line2], floor_size.
+    """
+    w1 = estimate_text_width(text, target_size, font=font, tracking=tracking)
+    if w1 <= max_w:
+        return [text], target_size
+
+    l1, l2 = _wrap_to_two_lines(text)
+    if not l2:
+        w_max = w1
+    else:
+        w_max = max(
+            estimate_text_width(l1, target_size, font=font, tracking=tracking),
+            estimate_text_width(l2, target_size, font=font, tracking=tracking),
+        )
+
+    if w_max <= max_w:
+        lines = [l1, l2] if l2 else [l1]
+        return lines, target_size
+
+    scale = (max_w / w_max) * 0.96
+    fit_sz = target_size * scale
+    lines = [l1, l2] if l2 else [l1]
+
+    if fit_sz >= floor_size:
+        return lines, fit_sz
+
+    print(
+        f">>> [composer] LOUD BANNER: row '{role}' ('{text[:30]}...') "
+        f"width at floor {floor_size:.1f}pt exceeds usable_w {max_w:.1f}pt; scaled to {fit_sz:.1f}pt (never render clipped)"
+    )
+    return lines, fit_sz
+
+
+def check_rect_intersection(r1: tuple[float, float, float, float], r2: tuple[float, float, float, float]) -> bool:
+    """True if two (x, y, w, h) rectangles strictly intersect."""
+    x1, y1, w1, h1 = r1
+    x2, y2, w2, h2 = r2
+    return not (x1 + w1 <= x2 or x2 + w2 <= x1 or y1 + h1 <= y2 or y2 + h2 <= y1)
+
+
+def compute_vband_coverage(
+    items: list[dict[str, Any]],
+    canvas_h: float,
+    band_fractions: Optional[list[tuple[float, float, str]]] = None,
+) -> tuple[float, list[int], list[str]]:
+    """Compute vertical band coverage across canvas height.
+    Returns (coverage_pct, occupied_band_indices, band_descriptions).
+    """
+    if band_fractions is None:
+        band_fractions = [
+            (0.00, 0.15, "Band 0: Header & Brand"),
+            (0.15, 0.35, "Band 1: Headline & Hook"),
+            (0.35, 0.55, "Band 2: Hero Visual"),
+            (0.55, 0.80, "Band 3: Body & Positions"),
+            (0.80, 1.00, "Band 4: Logistics & Footer"),
+        ]
+    total_bands = len(band_fractions)
+    occupied = set()
+    for it in items:
+        y = it.get("y")
+        b = it.get("bounds")
+        y_top = y
+        y_bot = y
+        if isinstance(b, (list, tuple)) and len(b) >= 4:
+            y_top = min(b[1], b[3])
+            y_bot = max(b[1], b[3])
+        elif isinstance(b, dict):
+            y_top = float(b.get("y", y or 0.0))
+            y_bot = y_top + float(b.get("height", b.get("h", 0.0)))
+
+        if y_top is None:
+            continue
+
+        for idx, (f_start, f_end, _) in enumerate(band_fractions):
+            b_start = f_start * canvas_h
+            b_end = f_end * canvas_h
+            if y_bot >= b_start and y_top <= b_end:
+                occupied.add(idx)
+
+    cov_pct = (len(occupied) / total_bands) * 100.0
+    return cov_pct, sorted(occupied), [b[2] for b in band_fractions]
 
 
 def emit_logo_row(
@@ -266,6 +415,7 @@ def emit_banner_tab_row(
 ) -> tuple[float, dict[str, Any]]:
     """Emit top band bar (brand primary fill) with the hook/call-out line."""
     bar_h = max(36.0, height * 0.026)
+    text_color = ensure_contrast_color(fill_color, text_color, min_contrast=4.5)
     vc.add_shape_rectangle(x=0.0, y=y, width=width, height=bar_h, fill=fill_color)
     vc.add_text(
         text=text.upper(),
@@ -285,6 +435,8 @@ def emit_banner_tab_row(
         "x": width * 0.5,
         "y": y + (bar_h * 0.68),
         "height": bar_h,
+        "fill_color": fill_color,
+        "text_color": text_color,
     }
     return y + bar_h, item
 
@@ -305,6 +457,7 @@ def emit_pill_row(
     justify: str = "center",
 ) -> dict[str, Any]:
     """Emit rounded-rect fill container + centered caps label."""
+    text_color = ensure_contrast_color(fill_color, text_color, min_contrast=4.5)
     text_w = estimate_text_width(text.upper(), size, font=font, tracking=25.0)
     pill_w = text_w + (2.0 * padding_h)
     pill_h = size + (2.0 * padding_v)
@@ -337,6 +490,8 @@ def emit_pill_row(
         "x": x,
         "y": y,
         "bounds": [pill_x, pill_y, pill_x + pill_w, pill_y + pill_h],
+        "fill_color": fill_color,
+        "text_color": text_color,
     }
 
 
@@ -353,12 +508,16 @@ def emit_footer_bar_row(
     """Emit solid brand-color footer strip with contact/date line (house footer)."""
     bar_h = bar_height or max(40.0, height * 0.032)
     bar_y = height - bar_h
+    text_color = ensure_contrast_color(fill_color, text_color, min_contrast=4.5)
     vc.add_shape_rectangle(x=0.0, y=bar_y, width=width, height=bar_h, fill=fill_color)
+    safe_m = max(40.0, width * 0.04)
+    text_sz = max(11.0, min(15.0, bar_h * 0.35))
+    text_y = min(bar_y + (bar_h * 0.58), height - safe_m - (text_sz * 0.25))
     vc.add_text(
         text=text,
         x=width * 0.5,
-        y=bar_y + (bar_h * 0.65),
-        size=max(12.0, bar_h * 0.38),
+        y=text_y,
+        size=text_sz,
         font=font,
         style="Medium",
         tracking=15.0,
@@ -370,8 +529,10 @@ def emit_footer_bar_row(
         "role": "_structure_footer",
         "text": text,
         "x": width * 0.5,
-        "y": bar_y + (bar_h * 0.65),
+        "y": text_y,
         "height": bar_h,
+        "fill_color": fill_color,
+        "text_color": text_color,
     }
 
 
@@ -385,8 +546,10 @@ def emit_qr_row(
     font: str = "Inter",
     text_color: str = "#0B2A5B",
     run_dir: Optional[Path] = None,
+    canvas_base: str = "#FFFFFF",
 ) -> dict[str, Any]:
     """Emit QR code place_image + caps label."""
+    text_color = ensure_contrast_color(canvas_base, text_color, min_contrast=4.5)
     if run_dir:
         qr_path = run_dir / "qr_code.png"
     else:
@@ -414,6 +577,7 @@ def emit_qr_row(
         "qr_rect": [x, y, qr_size, qr_size],
         "label_text": label_text,
         "label_y": label_y,
+        "text_color": text_color,
     }
 
 
@@ -435,11 +599,11 @@ def build_typography_plan(
     fonts = audit_fonts(school=school)
 
     # Scalar system relative to canvas height (1350 is base)
-    margin = max(40.0, width * 0.04)
+    margin = max(40.0, width * 0.045)
 
     # Typographic scales per doctrine:
-    # Headline >= canvas_h / 11.5, max 3 lines
-    headline_size = max(72.0, (height / 11.5))
+    # Headline >= canvas_h / 11, max 3 lines
+    headline_size = max(72.0, (height / 11.0))
     subheadline_size = max(22.0, headline_size / 3.5)
     body_size = max(18.0, height * 0.018)  # >= 1.8% of canvas height
     microcopy_size = max(14.0, height * 0.014)  # >= 1.4% of canvas height (min 14pt)
@@ -481,6 +645,8 @@ def build_typography_plan(
     eyebrow_text = brief.get_text("eyebrow")
     if eyebrow_text:
         eyebrow_sz = _clamp_size(eyebrow_text.upper(), microcopy_size * 1.15, fonts["sans"], 35.0)
+        # Contrast floor: on light background, use deep structural navy (contrast >= 12:1)
+        eyebrow_color = structural_color if is_light else accent_color
         plan.rows.append(
             TypographicRow(
                 role="eyebrow",
@@ -489,7 +655,7 @@ def build_typography_plan(
                 size=eyebrow_sz,
                 style="Bold",
                 tracking=35.0,
-                color=accent_color,
+                color=eyebrow_color,
                 alignment="center",
                 font=fonts["sans"],
             )
@@ -522,7 +688,7 @@ def build_typography_plan(
         plan.rows.append(
             TypographicRow(
                 role="subtitle",
-                text=subtitle_text.upper(),
+                text=f"—   {subtitle_text.upper()}   —",
                 zone="header",
                 size=sub_sz,
                 style="Bold",
@@ -786,23 +952,31 @@ def build_typography_plan(
             )
         )
 
-    # 12. Closing Line
+    # 12. Closing Line (Dedupe: only emitted in plan.rows if genre policy disallows footer bar)
     closing_text = brief.get_text("closing") or brief.get_text("closing_line")
     if closing_text:
-        cl_sz = _clamp_size(closing_text.upper(), body_size * 1.05, fonts["sans"], 25.0)
-        plan.rows.append(
-            TypographicRow(
-                role="closing",
-                text=closing_text.upper(),
-                zone="footer",
-                size=cl_sz,
-                style="Bold",
-                tracking=25.0,
-                color=structural_color,
-                alignment="center",
-                font=fonts["sans"],
+        try:
+            from poster_agent.house_style import resolve_genre
+            _, genre_policy = resolve_genre(brief)
+            allow_footer = genre_policy.get("allow_footer_bar", True)
+        except Exception:
+            allow_footer = True
+
+        if not allow_footer:
+            cl_sz = _clamp_size(closing_text.upper(), body_size * 1.05, fonts["sans"], 25.0)
+            plan.rows.append(
+                TypographicRow(
+                    role="closing",
+                    text=closing_text.upper(),
+                    zone="footer",
+                    size=cl_sz,
+                    style="Bold",
+                    tracking=25.0,
+                    color=structural_color,
+                    alignment="center",
+                    font=fonts["sans"],
+                )
             )
-        )
 
     return plan
 
@@ -1901,45 +2075,68 @@ def compose_slots(
                 direction="to_top",
             )
 
+    # QR dimensions and reserved zone
+    qr_url = getattr(brief, "asset_references", {}).get("qr_link") or brief.get_text("qr_link")
+    has_qr = bool(qr_url and genre_policy.get("allow_qr", True))
+    bar_h = 52.0 if genre_policy.get("allow_footer_bar", True) else 0.0
+    if has_qr:
+        qr_sz = max(75.0, min(100.0, width * 0.085))
+        qr_px = width - margin_x - qr_sz
+        qr_py = height - bar_h - qr_sz - 35.0
+        qr_rect = (qr_px, qr_py, qr_sz, qr_sz)
+        max_log_w = qr_px - margin_x - 30.0
+    else:
+        qr_rect = None
+        max_log_w = usable_w
+
     # Layer 3: Place Hero Cutout Asset based on archetype positioning
     hero_node_id = None
     positions = brief.get_positions()
+    hero_rect = None
     if positions:
-        hero_w = width * 0.44
-        hero_h = min(280.0, hero_w * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 0.75))
+        hero_w = width * 0.46
+        hero_h = min(320.0, hero_w * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 0.75))
         hero_x = (width - hero_w) * 0.5
-        hero_y = 350.0
+        hero_y = 660.0
+        hero_rect = (hero_x, hero_y, hero_w, hero_h)
     elif archetype == "z_pattern":
         hero_w = width * 0.44
         hero_h = hero_w * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 1.0)
         hero_x = width * 0.52
-        hero_y = height * 0.28
+        hero_y = height * 0.35
+        hero_rect = (hero_x, hero_y, hero_w, hero_h)
     elif archetype == "split":
         hero_w = width * 0.60
         hero_h = height * 0.45
         hero_x = (width - hero_w) * 0.5
         hero_y = height * 0.06
+        hero_rect = (hero_x, hero_y, hero_w, hero_h)
     elif archetype == "grid_3col":
         hero_w = width * 0.32
         hero_h = hero_w
         hero_x = width * 0.34
         hero_y = height * 0.35
+        hero_rect = (hero_x, hero_y, hero_w, hero_h)
     else:  # focal_point
         hero_w = width * 0.48
         hero_h = hero_w * (hero_geom.height / hero_geom.width if hero_geom and hero_geom.width > 0 else 1.0)
         hero_x = (width - hero_w) * 0.5
-        hero_y = height * 0.32
+        hero_y = height * 0.35
+        hero_rect = (hero_x, hero_y, hero_w, hero_h)
 
     if hero_path and str(hero_path).lower() not in ("none", "native", ""):
         vc.place_image(hero_path, rect=[hero_x, hero_y, hero_w, hero_h])
         hero_node_id = "$last"
     else:
         hero_node_id = None
+        hero_rect = None
 
     # Dedicated 2-Column Recruitment Block
+    col_y = 690.0
+    col_h = 285.0
     if positions:
         g_check_cols = ["#4285F4", "#EA4335", "#FBBC05", "#34A853"]
-        sec_y = 665.0
+        sec_y = (hero_y + hero_h + 35.0) if hero_rect else 665.0
         sec_title = brief.get_text("section") or "OPEN POSITIONS"
         vc.add_text(
             f"—  {sec_title.upper()}  —",
@@ -1954,8 +2151,8 @@ def compose_slots(
             role="section",
         )
 
-        col_y = 690.0
-        col_h = 285.0
+        col_y = sec_y + 35.0
+        col_h = 360.0
         col_w = (usable_w - 30.0) * 0.5
 
         # Column 1 (Left: Team Members)
@@ -1975,16 +2172,14 @@ def compose_slots(
                 color="#475569" if is_light else "#94A3B8", justify="left", role="pos_tagline_1",
             )
         for p_idx, pt in enumerate(positions[0]["points"]):
-            pt_y = col_y + 98.0 + (p_idx * 40.0)
-            vc.add_text(
-                "✓",
-                x=col1_x, y=pt_y,
-                size=15.0, font=installed_fonts["sans"], style="Bold",
-                color=g_check_cols[p_idx % 4], justify="left", role="bullet_check",
+            pt_y = col_y + 98.0 + (p_idx * 48.0)
+            vc.add_shape_rectangle(
+                x=col1_x, y=pt_y - 10.0, width=8.0, height=8.0,
+                fill=g_check_cols[p_idx % 4], radius=2.0,
             )
             vc.add_text(
                 pt,
-                x=col1_x + 24.0, y=pt_y,
+                x=col1_x + 20.0, y=pt_y,
                 size=14.5, font=installed_fonts["sans"], style="Regular",
                 color=structural_color, justify="left", role="bullet_text",
             )
@@ -2014,16 +2209,14 @@ def compose_slots(
                     color="#475569" if is_light else "#94A3B8", justify="left", role="pos_tagline_2",
                 )
             for p_idx, pt in enumerate(positions[1]["points"]):
-                pt_y = col_y + 98.0 + (p_idx * 40.0)
-                vc.add_text(
-                    "✓",
-                    x=col2_x, y=pt_y,
-                    size=15.0, font=installed_fonts["sans"], style="Bold",
-                    color=g_check_cols[p_idx % 4], justify="left", role="bullet_check",
+                pt_y = col_y + 98.0 + (p_idx * 48.0)
+                vc.add_shape_rectangle(
+                    x=col2_x, y=pt_y - 10.0, width=8.0, height=8.0,
+                    fill=g_check_cols[p_idx % 4], radius=2.0,
                 )
                 vc.add_text(
                     pt,
-                    x=col2_x + 24.0, y=pt_y,
+                    x=col2_x + 20.0, y=pt_y,
                     size=14.5, font=installed_fonts["sans"], style="Regular",
                     color=structural_color, justify="left", role="bullet_text",
                 )
@@ -2039,9 +2232,14 @@ def compose_slots(
     available_faces.update(["Inter", "Bahnschrift", "JetBrains Mono", "Source Sans 3", "Source Serif 4", "Nirmala UI", "Segoe UI", "Consolas"])
 
     placed_items = []
+    logistics_cursor_y = (col_y + col_h + 35.0) if positions else (height * 0.80)
     for r in plan.rows:
         if positions and (r.role.startswith("position_") or r.role == "section"):
             continue
+        # Dedupe: closing line rendered in footer bar if permitted, skip body row
+        if r.role == "closing" and genre_policy.get("allow_footer_bar", True):
+            continue
+
         slot = slot_map.get(r.role)
         if not slot:
             for k, s in slot_map.items():
@@ -2049,118 +2247,131 @@ def compose_slots(
                     slot = s
                     break
 
-        if not slot:
-            print(f"[composer] Slot for row '{r.role}' not found in layout plan. Using default typography plan placement.")
-            placed_items.append({
-                "row": r,
-                "x": width * 0.5 if r.alignment == "center" else margin_x,
-                "y": height * 0.5,
-                "size": r.size,
-                "font": r.font,
-                "justify": r.alignment,
-                "style": r.style,
-                "tracking": r.tracking,
-                "color": r.color,
-            })
-            continue
-
-        zone = slot.get("zone", [0, 0, 1000, 1000])
-        z_y0 = zone[0] * height / 1000.0
-        z_x0 = zone[1] * width / 1000.0
-        z_y1 = zone[2] * height / 1000.0
-        z_x1 = zone[3] * width / 1000.0
-
-        # Degenerate zone check
-        if (z_x1 - z_x0) < 30 or (z_y1 - z_y0) < 15:
-            print(f"[composer] Slot '{r.role}': degenerate zone {zone}. Falling back to default placement.")
-            placed_items.append({
-                "row": r,
-                "x": width * 0.5 if r.alignment == "center" else margin_x,
-                "y": height * 0.5,
-                "size": r.size,
-                "font": r.font,
-                "justify": r.alignment,
-                "style": r.style,
-                "tracking": r.tracking,
-                "color": r.color,
-            })
-            continue
-
-        # Margin box clamp
-        orig_box = (z_x0, z_y0, z_x1, z_y1)
-        z_x0 = max(margin_x, min(z_x0, width - margin_x - 30))
-        z_x1 = min(width - margin_x, max(z_x1, z_x0 + 30))
-        z_y0 = max(margin_y, min(z_y0, height - margin_y - 15))
-        z_y1 = min(height - margin_y, max(z_y1, z_y0 + 15))
-        if (z_x0, z_y0, z_x1, z_y1) != orig_box:
-            print(f"[composer] Slot '{r.role}': zone clamped into margin safe-box: ({orig_box[0]:.1f}, {orig_box[1]:.1f}) -> ({z_x0:.1f}, {z_y0:.1f})")
-
-        # Font validation
-        fnt = slot.get("font", r.font)
+        fnt = slot.get("font", r.font) if slot else r.font
         if fnt not in available_faces and fnt not in installed_fonts:
-            print(f"[composer] Slot '{r.role}': font '{fnt}' not installed. Reverting to installed face '{r.font}'")
+            print(f"[composer] Slot '{r.role}': font '{fnt}' not installed, falling back to '{r.font}'")
             fnt = r.font
 
-        # Size class floor validation
-        s_class = slot.get("size_class", "body")
+        # Degenerate zone check (<30px width or <15px height)
+        if slot:
+            zone = slot.get("zone", [0, 0, 1000, 1000])
+            z_y0 = zone[0] * height / 1000.0
+            z_x0 = zone[1] * width / 1000.0
+            z_y1 = zone[2] * height / 1000.0
+            z_x1 = zone[3] * width / 1000.0
+            if (z_x1 - z_x0 < 30) or (z_y1 - z_y0 < 15):
+                print(f"[composer] Slot '{r.role}': degenerate zone [{z_y0:.0f}, {z_x0:.0f}, {z_y1:.0f}, {z_x1:.0f}], using safe margin-based fallback")
+
+        s_class = slot.get("size_class", "body") if slot else "body"
         sz = r.size
-        if r.role == "title":
+
+        # Doctrine floor enforcement: headline >= canvas_h / 11, body >= 1.8%, micro >= 1.4%
+        if r.role == "title" or (s_class == "headline" and r.role not in ("cta", "deadline", "events")):
             if sz < headline_floor:
                 print(f"[composer] Slot '{r.role}': headline size clamped from {sz:.1f}pt to doctrine floor {headline_floor:.1f}pt")
                 sz = headline_floor
-            est_w = estimate_text_width(r.text, sz, font=fnt)
-            if est_w > usable_w:
-                scale_fit = (usable_w / est_w) * 0.96
-                sz = max(headline_floor, sz * scale_fit)
-        elif r.role == "cta":
-            sz = min(sz, 22.0)
-            sz = max(18.0, sz)
-        elif s_class == "headline":
-            if sz < headline_floor and r.role not in ("cta", "deadline", "events"):
-                print(f"[composer] Slot '{r.role}': headline-class size clamped from {sz:.1f}pt to doctrine floor {headline_floor:.1f}pt")
-                sz = headline_floor
-        elif s_class == "micro" or "organizer" in r.role or "dress" in r.role or "blurb" in r.role or "note" in r.role:
+            floor_sz = headline_floor
+        elif s_class == "micro" or any(k in r.role for k in ("organizer", "dress", "blurb", "note", "venue")):
             if sz < micro_floor:
+                print(f"[composer] Slot '{r.role}': microcopy size clamped from {sz:.1f}pt to doctrine floor {micro_floor:.1f}pt")
                 sz = micro_floor
+            floor_sz = micro_floor
+        elif r.role in ("deadline", "cta"):
+            floor_sz = 16.0
         else:
             if sz < body_floor and r.role not in ("deadline", "events"):
+                print(f"[composer] Slot '{r.role}': body size clamped from {sz:.1f}pt to doctrine floor {body_floor:.1f}pt")
                 sz = body_floor
+            floor_sz = body_floor
 
-        # Fit check: ensure row width fits usable margin width
-        est_line_w = estimate_text_width(r.text, sz, font=fnt, tracking=r.tracking)
-        if est_line_w > usable_w:
-            scale_fit = (usable_w / est_line_w) * 0.95
-            sz = max(13.0, sz * scale_fit)
+        # Width fit determination
+        is_logistics_role = r.role in ("date_time", "date", "venue", "deadline", "deadline_note", "cta", "contact")
+        row_max_w = max_log_w if (has_qr and is_logistics_role) else usable_w
 
-        # Post-shrink floor re-application (fit must never undercut doctrine floors)
-        if r.role == "title" or (s_class == "headline" and r.role not in ("cta", "deadline", "events")):
-            sz = max(sz, headline_floor)
-        elif not (r.role in ("deadline", "events")):
-            if s_class == "micro" or "organizer" in r.role or "dress" in r.role or "blurb" in r.role or "note" in r.role:
-                sz = max(sz, micro_floor)
-            elif sz < body_floor:
-                sz = max(sz, body_floor)
+        row_text = r.text.strip("— ") if r.role == "subtitle" else r.text
+        lines, sz = wrap_and_fit_row(
+            row_text,
+            target_size=sz,
+            floor_size=floor_sz,
+            max_w=row_max_w,
+            font=fnt,
+            tracking=r.tracking,
+            role=r.role,
+        )
 
-        justify = slot.get("justify", r.alignment)
-        if r.alignment == "center":
-            px = width * 0.5
-            justify = "center"
-        elif justify == "left":
-            px = z_x0
-        elif justify == "right":
-            px = z_x1
+        # Positioning determination
+        if is_logistics_role and positions:
+            px = margin_x + (row_max_w * 0.5) if r.alignment == "center" else margin_x
+            py = logistics_cursor_y
+            line_step = sz * 1.35 + 8.0
+            logistics_cursor_y += line_step * len(lines) + 8.0
+            justify = r.alignment
+        elif slot:
+            zone = slot.get("zone", [0, 0, 1000, 1000])
+            z_y0 = zone[0] * height / 1000.0
+            z_x0 = zone[1] * width / 1000.0
+            z_y1 = zone[2] * height / 1000.0
+            z_x1 = zone[3] * width / 1000.0
+
+            z_x0 = max(margin_x, min(z_x0, width - margin_x - 30))
+            z_x1 = min(width - margin_x, max(z_x1, z_x0 + 30))
+            z_y0 = max(margin_y, min(z_y0, height - margin_y - 15))
+            z_y1 = min(height - margin_y, max(z_y1, z_y0 + 15))
+
+            justify = slot.get("justify", r.alignment)
+            if r.alignment == "center":
+                px = width * 0.5
+                justify = "center"
+            elif justify == "left":
+                px = z_x0
+            elif justify == "right":
+                px = z_x1
+            else:
+                px = (z_x0 + z_x1) * 0.5
+
+            py = (z_y0 + z_y1) * 0.5 + (sz * 0.3)
+            min_allowed_y = margin_y + (sz * 0.88)
+            if py < min_allowed_y:
+                py = min_allowed_y
         else:
-            px = (z_x0 + z_x1) * 0.5
+            px = width * 0.5 if r.alignment == "center" else margin_x
+            justify = r.alignment
+            # 5-band vertical rhythm default anchors for 9:16 layout
+            if r.role == "eyebrow":
+                py = margin_y + (sz * 0.88)
+            elif r.role == "organizer":
+                py = margin_y + 40.0 + (sz * 0.88)
+            elif r.role == "title":
+                py = height * 0.17
+            elif r.role == "subtitle":
+                py = height * 0.25
+            elif r.role == "tagline":
+                py = height * 0.29
+            elif r.role == "section":
+                py = height * 0.54
+            elif r.role in ("date", "date_time"):
+                py = height * 0.76
+            elif r.role == "venue":
+                py = height * 0.80
+            elif r.role in ("deadline", "deadline_note"):
+                py = height * 0.84
+            elif r.role == "cta":
+                py = height * 0.88
+            elif r.role == "contact":
+                py = height * 0.92
+            else:
+                py = height * 0.50
 
-        # Baseline vertical positioning: VectorCraft y is baseline.
-        # Optical text center is ~ y - (sz * 0.3), so baseline y = center + (sz * 0.3)
-        py = (z_y0 + z_y1) * 0.5 + (sz * 0.3)
-        min_allowed_y = margin_y + (sz * 0.88)
-        if py < min_allowed_y:
-            py = min_allowed_y
+        # Hero reserve check for header items: must finish before hero starts
+        if hero_rect and r.role in ("eyebrow", "organizer", "subtitle", "title", "tagline"):
+            hero_top = hero_rect[1]
+            max_head_y = hero_top - (sz * 0.88) - 15.0
+            if py > max_head_y:
+                py = max_head_y
 
         placed_items.append({
             "row": r,
+            "lines": lines,
             "x": px,
             "y": py,
             "size": sz,
@@ -2176,71 +2387,113 @@ def compose_slots(
     for i in range(len(placed_items) - 1):
         cur = placed_items[i]
         nxt = placed_items[i + 1]
-        req_gap = (cur["size"] * 0.25) + (nxt["size"] * 0.88) + 8.0
+        cur_h = cur["size"] * (2.15 if len(cur.get("lines", [])) > 1 else 1.15)
+        nxt_h = nxt["size"] * (2.15 if len(nxt.get("lines", [])) > 1 else 1.15)
+        req_gap = (cur_h * 0.3) + (nxt_h * 0.7) + 8.0
         if nxt["y"] < cur["y"] + req_gap:
             nxt["y"] = cur["y"] + req_gap
 
     # Canvas bounds clamp with bottom-up collision clearance
     for i in range(len(placed_items) - 1, -1, -1):
         it = placed_items[i]
-        max_allowed_y = height - margin_y - (it["size"] * 0.25)
+        it_h = it["size"] * (2.15 if len(it.get("lines", [])) > 1 else 1.15)
+        max_allowed_y = height - bar_h - margin_y - (it_h * 0.25)
         if it["y"] > max_allowed_y:
             it["y"] = max_allowed_y
         if i > 0:
             prev = placed_items[i - 1]
-            req_gap = (prev["size"] * 0.25) + (it["size"] * 0.88) + 8.0
+            prev_h = prev["size"] * (2.15 if len(prev.get("lines", [])) > 1 else 1.15)
+            req_gap = (prev_h * 0.3) + (it_h * 0.7) + 8.0
             if prev["y"] > it["y"] - req_gap:
                 prev["y"] = it["y"] - req_gap
 
     # Top margin safe clamp with forward gap propagation
     for i in range(len(placed_items)):
         it = placed_items[i]
-        min_allowed_y = margin_y + (it["size"] * 0.88)
+        it_h = it["size"] * (2.15 if len(it.get("lines", [])) > 1 else 1.15)
+        min_allowed_y = margin_y + (it_h * 0.88)
         if it["y"] < min_allowed_y:
             it["y"] = min_allowed_y
         if i < len(placed_items) - 1:
             nxt = placed_items[i + 1]
-            req_gap = (it["size"] * 0.25) + (nxt["size"] * 0.88) + 8.0
+            nxt_h = nxt["size"] * (2.15 if len(nxt.get("lines", [])) > 1 else 1.15)
+            req_gap = (it_h * 0.3) + (nxt_h * 0.7) + 8.0
             if nxt["y"] < it["y"] + req_gap:
                 nxt["y"] = it["y"] + req_gap
+
+    # Verify hero reserve & report hero occlusion status
+    hero_occlusion_offenders = []
+    if hero_rect:
+        for it in placed_items:
+            t_lines = it.get("lines", [it["row"].text])
+            sz = it["size"]
+            for l_idx, line in enumerate(t_lines):
+                lw = estimate_text_width(line, sz, it["font"], it.get("tracking", 0.0))
+                lx = it["x"] - (lw * 0.5) if it["justify"] == "center" else (it["x"] - lw if it["justify"] == "right" else it["x"])
+                line_gap = sz * 1.15 if len(t_lines) > 1 else 0.0
+                ly = it["y"] + (l_idx - (len(t_lines) - 1) / 2.0) * line_gap
+                line_rect = (lx, ly - sz * 0.88, lw, sz * 1.15)
+                if check_rect_intersection(line_rect, hero_rect):
+                    hero_occlusion_offenders.append(it["row"].role)
+
+    if not hero_occlusion_offenders:
+        print("HERO_OCCLUSION: none")
+    else:
+        print(f">>> [composer] HERO_OCCLUSION: offenders found: {hero_occlusion_offenders}")
 
     # Emit all placed text
     for it in placed_items:
         row = it["row"]
-        if row.role == "title" and "RECRUITING" in row.text.upper() and is_light:
-            # Multi-color Google branding on the word Recruiting
-            # Render "WE ARE" in Navy centered
-            vc.add_text(
-                text="WE ARE",
-                x=width * 0.5,
-                y=it["y"] - 65.0,
-                size=62.0,
-                font=it["font"],
-                style="Bold",
-                tracking=35.0,
-                color="#0B2A5B",
-                justify="center",
-                role="title_lead",
-            )
-            # Render RECRUITING in Google Blue centered
-            vc.add_text(
-                text="RECRUITING",
-                x=width * 0.5,
-                y=it["y"] + 8.0,
-                size=76.0,
-                font=it["font"],
-                style="Bold",
-                tracking=25.0,
-                color="#4285F4",
-                justify="center",
-                role="title_recruiting",
-            )
+        lines = it.get("lines", [row.text])
+        if row.role == "title":
+            line_gap = it["size"] * 1.05
+            if len(lines) > 1:
+                l1_y = it["y"] - (line_gap * 0.5)
+                l2_y = it["y"] + (line_gap * 0.5)
+                # First line
+                vc.add_text(
+                    text=lines[0],
+                    x=it["x"],
+                    y=l1_y,
+                    size=it["size"],
+                    font=it["font"],
+                    style="Bold",
+                    tracking=25.0,
+                    color="#0B2A5B" if is_light else it["color"],
+                    justify="center",
+                    role=row.role,
+                )
+                # Second line
+                vc.add_text(
+                    text=lines[1],
+                    x=it["x"],
+                    y=l2_y,
+                    size=it["size"],
+                    font=it["font"],
+                    style="Bold",
+                    tracking=25.0,
+                    color="#4285F4" if (is_light and "RECRUITING" in lines[1].upper()) else it["color"],
+                    justify="center",
+                    role=row.role,
+                )
+            else:
+                vc.add_text(
+                    text=lines[0],
+                    x=it["x"],
+                    y=it["y"],
+                    size=it["size"],
+                    font=it["font"],
+                    style="Bold",
+                    tracking=25.0,
+                    color=it["color"],
+                    justify=it["justify"],
+                    role=row.role,
+                )
         elif row.role == "cta":
             if genre_policy.get("allow_pills", True):
-                # Institutional genre allows rounded pill container
                 emit_pill_row(
                     vc=vc,
-                    text=row.text,
+                    text=lines[0],
                     x=it["x"],
                     y=it["y"],
                     font=it["font"],
@@ -2249,27 +2502,9 @@ def compose_slots(
                     size=it["size"],
                     role="_structure_pill",
                 )
-            elif is_light:
-                # Pure editorial typography with subtle accent underline (ZERO web button containers)
-                vc.add_text(
-                    text=row.text,
-                    x=it["x"],
-                    y=it["y"],
-                    size=it["size"],
-                    font=it["font"],
-                    style="Bold",
-                    tracking=it["tracking"],
-                    color="#0B2A5B",
-                    justify=it["justify"],
-                    role=row.role,
-                )
-                text_w = estimate_text_width(row.text, it["size"], font=it["font"], tracking=it["tracking"])
-                line_w = min(usable_w, text_w + 24.0)
-                line_x = it["x"] - (line_w * 0.5) if it["justify"] == "center" else it["x"]
-                vc.add_shape_rectangle(x=line_x, y=it["y"] + 6.0, width=line_w, height=2.0, fill="#4285F4", radius=1.0)
             else:
                 vc.add_text(
-                    text=row.text,
+                    text=lines[0],
                     x=it["x"],
                     y=it["y"],
                     size=it["size"],
@@ -2281,25 +2516,50 @@ def compose_slots(
                     role=row.role,
                 )
         else:
-            vc.add_text(
-                text=row.text,
-                x=it["x"],
-                y=it["y"],
-                size=it["size"],
-                font=it["font"],
-                style=it["style"],
-                tracking=it["tracking"],
-                color=it["color"],
-                justify=it["justify"],
-                role=row.role,
-            )
+            if len(lines) > 1:
+                line_gap = it["size"] * 1.2
+                l1_y = it["y"] - (line_gap * 0.5)
+                l2_y = it["y"] + (line_gap * 0.5)
+                vc.add_text(
+                    text=lines[0],
+                    x=it["x"],
+                    y=l1_y,
+                    size=it["size"],
+                    font=it["font"],
+                    style=it["style"],
+                    tracking=it["tracking"],
+                    color=it["color"],
+                    justify=it["justify"],
+                    role=f"{row.role}_line1",
+                )
+                vc.add_text(
+                    text=lines[1],
+                    x=it["x"],
+                    y=l2_y,
+                    size=it["size"],
+                    font=it["font"],
+                    style=it["style"],
+                    tracking=it["tracking"],
+                    color=it["color"],
+                    justify=it["justify"],
+                    role=f"{row.role}_line2",
+                )
+            else:
+                vc.add_text(
+                    text=lines[0],
+                    x=it["x"],
+                    y=it["y"],
+                    size=it["size"],
+                    font=it["font"],
+                    style=it["style"],
+                    tracking=it["tracking"],
+                    color=it["color"],
+                    justify=it["justify"],
+                    role=row.role,
+                )
 
     # QR Row (if qr_link supplied and permitted by genre)
-    qr_url = getattr(brief, "asset_references", {}).get("qr_link") or brief.get_text("qr_link")
-    if qr_url and genre_policy.get("allow_qr", True):
-        qr_sz = max(70.0, min(100.0, width * 0.085))
-        qr_px = width - margin_x - qr_sz
-        qr_py = height - margin_y - qr_sz - 35.0
+    if has_qr:
         emit_qr_row(
             vc=vc,
             qr_link=qr_url,
@@ -2308,11 +2568,12 @@ def compose_slots(
             y=qr_py,
             qr_size=qr_sz,
             font=installed_fonts["sans"],
-            text_color=structural_color,
+            text_color="#0B2A5B" if is_light else "#FFFFFF",
+            canvas_base=canvas_base,
         )
 
     # Footer Bar Row (if closing supplied and permitted by genre)
-    closing_txt = brief.get_text("closing")
+    closing_txt = brief.get_text("closing") or brief.get_text("closing_line")
     if closing_txt and genre_policy.get("allow_footer_bar", True):
         emit_footer_bar_row(
             vc=vc,
@@ -2320,9 +2581,21 @@ def compose_slots(
             width=width,
             height=height,
             font=installed_fonts["sans"],
-            fill_color=structural_color if not is_light else (palette[1] if len(palette) > 1 else "#1E2842"),
+            fill_color="#1E2842" if is_light else structural_color,
             text_color="#FFFFFF",
+            bar_height=bar_h,
         )
+
+    # Vertical band coverage audit
+    vband_items = [
+        {"y": cmd["params"]["y"], "text": cmd["params"].get("text", ""), "size": cmd["params"].get("size", 20.0)}
+        for cmd in vc.commands
+        if cmd.get("command") == "text.create"
+    ]
+    cov_pct, occ_bands, _ = compute_vband_coverage(vband_items, canvas_h=height)
+    print(f"V-BAND COVERAGE: {cov_pct:.0f}%")
+    if cov_pct < 70.0:
+        print(f">>> [composer] WARNING: Low vertical band coverage: {cov_pct:.0f}% < 70%. Bands occupied: {occ_bands}")
 
     apply_genre_effects(vc, genre=genre, accent_color=accent_color, hero_target_id=hero_node_id, is_light=is_light)
     return vc
@@ -2376,7 +2649,7 @@ def compose(
         school=school,
     )
 
-    if layout_plan and isinstance(layout_plan, dict) and layout_plan.get("slots"):
+    if layout_plan and isinstance(layout_plan, dict) and ("slots" in layout_plan):
         return compose_slots(
             vc=vc,
             brief=brief,
