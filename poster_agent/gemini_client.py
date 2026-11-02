@@ -134,6 +134,23 @@ CONCEPT_SCHEMA: dict[str, Any] = {
             },
             "required": ["assumptions", "unsupported_artifacts"],
         },
+        "asset_plan": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "slot": {"type": "STRING"},
+                    "source": {
+                        "type": "STRING",
+                        "enum": ["supplied", "archive", "native", "generated"],
+                    },
+                    "ref": {"type": "STRING"},
+                    "style_note": {"type": "STRING"},
+                    "reason": {"type": "STRING"},
+                },
+                "required": ["slot", "source", "ref", "style_note", "reason"],
+            },
+        },
     },
     "required": [
         "thesis",
@@ -344,6 +361,24 @@ def validate_concept_plan(plan: dict[str, Any]) -> tuple[bool, str]:
     self_check = plan.get("self_check")
     if not isinstance(self_check, dict) or "assumptions" not in self_check:
         return False, "self_check must contain 'assumptions'"
+
+    asset_plan = plan.get("asset_plan")
+    if asset_plan is not None:
+        if not isinstance(asset_plan, list):
+            return False, "asset_plan must be an array."
+        allowed_sources = {"supplied", "archive", "native", "generated"}
+        for item in asset_plan:
+            if not isinstance(item, dict):
+                return False, "Each item in asset_plan must be an object."
+            for k in ["slot", "source", "ref", "style_note", "reason"]:
+                if k not in item:
+                    return False, f"asset_plan item missing required field: '{k}'"
+            if item["source"] not in allowed_sources:
+                return False, f"Invalid asset_plan source: '{item['source']}'. Must be in {allowed_sources}"
+            if len(str(item["style_note"]).split()) > 15:
+                return False, f"asset_plan style_note exceeds 15 words: '{item['style_note']}'"
+            if len(str(item["reason"]).split()) > 15:
+                return False, f"asset_plan reason exceeds 15 words: '{item['reason']}'"
 
     return True, ""
 

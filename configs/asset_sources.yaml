@@ -1,0 +1,19 @@
+archive_roots:
+  - "assets/photos"
+  - "assets"
+
+min_file_size: 20000
+
+allowed_extensions:
+  - ".png"
+  - ".jpg"
+  - ".jpeg"
+  - ".webp"
+
+tag_keywords:
+  campus: ["campus", "building", "atrium", "architecture", "ground", "hall", "dome"]
+  students: ["students", "student", "peers", "team", "people", "community", "collaborate", "recruitment"]
+  sports: ["sports", "athlete", "run", "marathon", "fitness", "racing"]
+  tech: ["tech", "hackathon", "robot", "pcb", "coding", "developer", "gdg", "ctf"]
+  lab: ["lab", "biotech", "research", "science", "experiment"]
+  cultural: ["cultural", "concert", "drama", "music", "dance", "fest"]

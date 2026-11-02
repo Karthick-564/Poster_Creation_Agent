@@ -33,6 +33,7 @@ except Exception:
     pass
 
 from poster_agent.ingestion.extractor import BriefExtractor, ExtractedBrief
+from poster_agent.assets import AssetResolver, ResolvedAsset
 from poster_agent.generators.comfyui_client import ComfyUIClient
 from poster_agent.vision.art_measurer import ArtMeasurer
 from poster_agent.vision.bg_measurer import measure_background
@@ -151,6 +152,11 @@ class UnifiedPosterPipeline:
         missing = [k for k in required_keys if k not in brief.fields or not brief.fields[k].text.strip()]
         if missing:
             self.log_gate(1, "Brief Ingestion", "FAILED", f"Missing required fields: {missing}")
+
+        # Validate supplied asset references exist on disk (fail loud at Stage 1)
+        asset_errors = brief.validate_assets(PROJECT_ROOT)
+        if asset_errors:
+            self.log_gate(1, "Brief Ingestion", "FAILED", "Supplied asset references not found on disk:\n" + "\n".join(asset_errors))
 
         s1_duration = time.time() - s1_t0
         self.log_gate(
@@ -340,71 +346,128 @@ Output strictly valid JSON conforming to the schema.
         )
 
         # -------------------------------------------------------------
-        # STAGE 3: HERO ASSET GENERATION (LOCAL RTX 4090 / MOCK)
+        # STAGE 2b: ASSET RESOLUTION (DETERMINISTIC ASSET LADDER)
+        # -------------------------------------------------------------
+        s2b_t0 = time.time()
+        resolver = AssetResolver(project_root=PROJECT_ROOT)
+        resolved_assets = resolver.resolve_all(brief=brief, concept_plan=concept_plan)
+        hero_res = resolved_assets.get("hero")
+        bg_res = resolved_assets.get("background")
+        s2b_duration = time.time() - s2b_t0
+
+        self.log_gate(
+            2.5, "Asset Resolution (Stage 2b)", "PASSED",
+            f"Asset resolution ladder completed in {s2b_duration:.3f}s:\n" +
+            f"  • Hero: {hero_res.source} ({hero_res.path}) - {hero_res.why}\n" +
+            f"  • Background: {bg_res.source} ({bg_res.path}) - {bg_res.why}"
+        )
+
+        # -------------------------------------------------------------
+        # STAGE 3: HERO ASSET RESOLUTION / GENERATION
         # -------------------------------------------------------------
         s3_t0 = time.time()
-        hero_path = self.run_dir / "layer3_hero.png"
-        hero_caption = concept_plan["assets"]["hero"]["ideogram_caption"]
-        for banned_ui in ["holographic", "screens", "dashboard", "ui elements", "cards", "widgets", "floating elements", "code elements", "floating icons", "app icons"]:
-            hero_caption = re.sub(rf"\b{banned_ui}\b", "", hero_caption, flags=re.IGNORECASE)
-        qwen_hero_prompt = f"Isolated 3D {hero_caption.strip()}, directional studio lighting from {concept_plan['light_plan']['key_direction']}, crisp outer silhouette, pure black background for alpha extraction, high detail, centered, no text, no letters, isolated on empty alpha channel, transparent background, clean sticker cutout, 3D render, sharp edges, no background"
+        hero_path: Optional[Path] = None
+        min_size = 500 if self.use_mock else 20000
 
-        if self.use_mock:
-            print(">>> [Mock Mode] Synthesizing mock hero cutout locally...")
-            from PIL import Image as PILImage, ImageDraw as PILImageDraw
-            hero_im = PILImage.new("RGBA", (768, 768), (0, 0, 0, 0))
-            h_draw = PILImageDraw.Draw(hero_im)
-            h_draw.ellipse([120, 120, 648, 648], fill=(0, 245, 212, 220), outline=(255, 255, 255, 255), width=6)
-            hero_im.save(hero_path, "PNG")
-        else:
-            if not self.comfy.is_alive():
-                self.log_gate(3, "Hero Asset Generation", "FAILED", "ComfyUI server offline on http://127.0.0.1:8188")
+        if hero_res.source == "generated":
+            hero_path = self.run_dir / "layer3_hero.png"
+            hero_caption = concept_plan.get("assets", {}).get("hero", {}).get("ideogram_caption", "Hero visual")
+            for banned_ui in ["holographic", "screens", "dashboard", "ui elements", "cards", "widgets", "floating elements", "code elements", "floating icons", "app icons"]:
+                hero_caption = re.sub(rf"\b{banned_ui}\b", "", hero_caption, flags=re.IGNORECASE)
+            key_dir = concept_plan.get("light_plan", {}).get("key_direction", "top_left")
+            qwen_hero_prompt = f"Isolated 3D {hero_caption.strip()}, directional studio lighting from {key_dir}, crisp outer silhouette, pure black background for alpha extraction, high detail, centered, no text, no letters, isolated on empty alpha channel, transparent background, clean sticker cutout, 3D render, sharp edges, no background"
 
-            print(">>> Generating Layer 3 Hero Cutout via Qwen-Image 2.1 native alpha...")
-            self.comfy.generate_qwen_rgba(
-                prompt=qwen_hero_prompt,
-                output_path=hero_path,
-                prefix=f"{self.run_id}_qwen_hero",
-                width=768,
-                height=768,
+            if self.use_mock:
+                print(">>> [Mock Mode] Synthesizing mock hero cutout locally...")
+                from PIL import Image as PILImage, ImageDraw as PILImageDraw
+                hero_im = PILImage.new("RGBA", (768, 768), (0, 0, 0, 0))
+                h_draw = PILImageDraw.Draw(hero_im)
+                h_draw.ellipse([120, 120, 648, 648], fill=(0, 245, 212, 220), outline=(255, 255, 255, 255), width=6)
+                hero_im.save(hero_path, "PNG")
+            else:
+                if not self.comfy.is_alive():
+                    self.log_gate(3, "Hero Asset Generation", "FAILED", "PLANNING_HALT: ComfyUI server offline on http://127.0.0.1:8188")
+
+                print(">>> Generating Layer 3 Hero Cutout via Qwen-Image 2.1 native alpha...")
+                success = False
+                for attempt in range(2):
+                    try:
+                        self.comfy.generate_qwen_rgba(
+                            prompt=qwen_hero_prompt,
+                            output_path=hero_path,
+                            prefix=f"{self.run_id}_qwen_hero",
+                            width=768,
+                            height=768,
+                        )
+                        if hero_path.exists() and hero_path.stat().st_size >= min_size:
+                            success = True
+                            break
+                    except Exception as e:
+                        print(f">>> Hero generation attempt {attempt + 1} failed: {e}")
+                if not success or not hero_path.exists() or hero_path.stat().st_size < min_size:
+                    self.log_gate(3, "Hero Asset Generation", "FAILED", f"PLANNING_HALT: Hero cutout corrupted or missing after retry: {hero_path}")
+
+            s3_duration = time.time() - s3_t0
+            self.log_gate(
+                3, "Hero Asset Generation (Stage 3)", "PASSED",
+                f"Hero asset generation complete in {s3_duration:.2f}s:\n" +
+                f"  • Layer 3 Hero Cutout: {hero_path.name} ({hero_path.stat().st_size / 1024:.1f} KB)\n" +
+                f"  • Prompt: {qwen_hero_prompt[:120]}..."
             )
-
-        min_size = 500 if self.use_mock else 30000
-        if not hero_path.exists() or hero_path.stat().st_size < min_size:
-            self.log_gate(3, "Hero Asset Generation", "FAILED", f"Hero cutout corrupted or missing: {hero_path}")
-
-        s3_duration = time.time() - s3_t0
-        self.log_gate(
-            3, "Hero Asset Generation", "PASSED",
-            f"Hero asset generation complete in {s3_duration:.2f}s:\n" +
-            f"  • Layer 3 Hero Cutout: {hero_path.name} ({hero_path.stat().st_size / 1024:.1f} KB)\n" +
-            f"  • Prompt: {qwen_hero_prompt[:120]}..."
-        )
+        elif hero_res.source in ("supplied", "archive"):
+            cand = PROJECT_ROOT / hero_res.path
+            if not cand.exists() or cand.stat().st_size < min_size:
+                self.log_gate(3, "Hero Asset Resolution", "FAILED", f"Resolved hero asset invalid or missing: {cand}")
+            hero_path = self.run_dir / f"layer3_{cand.name}"
+            shutil.copy2(cand, hero_path)
+            s3_duration = time.time() - s3_t0
+            self.log_gate(
+                3, "Hero Asset Resolution (Stage 3)", "PASSED",
+                f"Hero asset resolved from {hero_res.source} in {s3_duration:.2f}s:\n" +
+                f"  • Path: {hero_path.name} ({hero_path.stat().st_size / 1024:.1f} KB)"
+            )
+        else:
+            hero_path = None
+            s3_duration = time.time() - s3_t0
+            self.log_gate(
+                3, "Hero Asset Resolution (Stage 3)", "PASSED",
+                f"Hero slot is {hero_res.source} (no raster hero layer required, skipped generation) in {s3_duration:.3f}s"
+            )
 
         # -------------------------------------------------------------
         # STAGE 3.5: HERO MEASUREMENT & COLOR PROFILE
         # -------------------------------------------------------------
         s35_t0 = time.time()
-        measurer = ArtMeasurer(target_w=1080, target_h=1350)
-        hero_geom, hero_halo = measurer.measure_alpha_cutout(hero_path)
-        hero_measured_color = _extract_dominant_hero_color(hero_path)
-        s35_duration = time.time() - s35_t0
-        self.log_gate(
-            3.5, "Hero Measurement & Color Profile", "PASSED",
-            f"Hero measured in {s35_duration:.3f}s:\n" +
-            f"  • Cutout Bounding Box: {hero_geom.width}x{hero_geom.height} px, center [{hero_geom.center_x}, {hero_geom.center_y}]\n" +
-            f"  • Edge Halo Score: {hero_halo.halo_score:.2f}\n" +
-            f"  • Measured Dominant Tone: {hero_measured_color}"
-        )
+        if hero_path and hero_path.exists():
+            measurer = ArtMeasurer(target_w=1080, target_h=1350)
+            hero_geom, hero_halo = measurer.measure_alpha_cutout(hero_path)
+            hero_measured_color = _extract_dominant_hero_color(hero_path)
+            s35_duration = time.time() - s35_t0
+            self.log_gate(
+                3.5, "Hero Measurement & Color Profile", "PASSED",
+                f"Hero measured in {s35_duration:.3f}s:\n" +
+                f"  • Cutout Bounding Box: {hero_geom.width}x{hero_geom.height} px, center [{hero_geom.center_x}, {hero_geom.center_y}]\n" +
+                f"  • Edge Halo Score: {hero_halo.halo_score:.2f}\n" +
+                f"  • Measured Dominant Tone: {hero_measured_color}"
+            )
+        else:
+            hero_geom = None
+            hero_halo = None
+            hero_measured_color = concept_plan.get("palette", {}).get("hero_30", "#00F5D4")
+            s35_duration = time.time() - s35_t0
+            self.log_gate(
+                3.5, "Hero Measurement & Color Profile", "PASSED",
+                f"Hero is {hero_res.source}; measurement bypassed in {s35_duration:.3f}s, dominant tone from palette: {hero_measured_color}"
+            )
 
         # -------------------------------------------------------------
-        # STAGE 4a: BACKGROUND ART GENERATION (IDEOGRAM 4.0 / MOCK)
+        # STAGE 4a: BACKGROUND ART GENERATION / RESOLUTION
         # -------------------------------------------------------------
         s4a_t0 = time.time()
+        feathered_bg_path = self.run_dir / "layer0_feathered_bg.png"
         bg_path = self.run_dir / "layer0_bg.png"
-        bg_caption = concept_plan["assets"]["background"]["ideogram_caption"]
-        light_plan = concept_plan["light_plan"]
-        palette_dict = concept_plan["palette"]
+        light_plan = concept_plan.get("light_plan", {})
+        palette_dict = concept_plan.get("palette", {})
         composed_palette = [
             palette_dict.get("bg_60", "#070B19"),
             hero_measured_color,
@@ -412,75 +475,111 @@ Output strictly valid JSON conforming to the schema.
             "#FFFFFF",
         ]
 
-        # Strict text purge: ensure background description contains zero event names/titles
-        for key in ["title", "tagline", "subtitle", "venue", "events", "prize", "cta"]:
-            val = brief.get_text(key)
-            if val and len(val) > 2 and val.lower() in bg_caption.lower():
-                bg_caption = re.sub(re.escape(val), "atmospheric environment", bg_caption, flags=re.IGNORECASE)
+        if bg_res.source == "generated":
+            bg_caption = concept_plan.get("assets", {}).get("background", {}).get("ideogram_caption", "Atmospheric background")
 
-        # Purge Ideogram 4.0 safety refusal trigger phrases
-        for trigger in [
-            "PURE NON-TEXT BACKGROUND ARTWORK:", "PURE NON-TEXT BACKGROUND ARTWORK",
-            "ABSOLUTELY NO TEXT", "NO WORDS", "NO LETTERS", "NO SIGNAGE",
-            "NO LABELS", "NO WATERMARKS", "NO NUMBERS", "WATERMARKS", "WATERMARK",
-        ]:
-            bg_caption = re.sub(re.escape(trigger), "", bg_caption, flags=re.IGNORECASE)
-        bg_caption = re.sub(r"\s+", " ", bg_caption).strip(" ,.:;")
-        if not bg_caption or len(bg_caption) < 15:
-            brief_mood = brief.get_text("mood") or "clean modern university tech community"
-            bg_caption = f"Modern university campus atrium with clean architectural surfaces, soft daylight and gradient shadows matching {brief_mood}, vast calm negative space"
+            # Strict text purge: ensure background description contains zero event names/titles
+            for key in ["title", "tagline", "subtitle", "venue", "events", "prize", "cta"]:
+                val = brief.get_text(key)
+                if val and len(val) > 2 and val.lower() in bg_caption.lower():
+                    bg_caption = re.sub(re.escape(val), "atmospheric environment", bg_caption, flags=re.IGNORECASE)
 
-        ideogram_prompt = {
-            "high_level_description": f"{bg_caption}. Volumetric lighting from {light_plan['key_direction']}, harmonious with {hero_measured_color} accents.",
-            "style_description": {
-                "aesthetics": f"Contemporary poster art, {concept_plan.get('movement', 'atmospheric')}, deep negative space",
-                "lighting": f"Key light from {light_plan['key_direction']}, intensity {light_plan['key_intensity']}%, fill {light_plan['fill_intensity']}%",
-                "medium": "digital_illustration",
-                "art_style": "contemporary architectural background with clean calm negative space, high-key ambient lighting, smooth subtle gradients.",
-                "color_palette": composed_palette,
-            },
-            "compositional_deconstruction": {
-                "background": f"Deep ambient background in tones of {composed_palette[0]} with soft atmospheric light spill, spacious negative space for vector typography.",
-                "elements": [],
-            },
-        }
+            # Purge Ideogram 4.0 safety refusal and text trigger phrases
+            for trigger in [
+                "PURE NON-TEXT BACKGROUND ARTWORK:", "PURE NON-TEXT BACKGROUND ARTWORK",
+                "ABSOLUTELY NO TEXT", "NO WORDS", "NO LETTERS", "NO SIGNAGE",
+                "NO LABELS", "NO WATERMARKS", "NO NUMBERS", "WATERMARKS", "WATERMARK",
+                "vector typography", "typography", "letters", "words",
+            ]:
+                bg_caption = re.sub(re.escape(trigger), "", bg_caption, flags=re.IGNORECASE)
+            bg_caption = re.sub(r"\s+", " ", bg_caption).strip(" ,.:;")
+            if not bg_caption or len(bg_caption) < 15:
+                brief_mood = brief.get_text("mood") or "clean modern university tech community"
+                bg_caption = f"Modern university campus atrium with clean architectural surfaces, soft daylight and gradient shadows matching {brief_mood}, vast calm negative space"
 
-        if self.use_mock:
-            print(">>> [Mock Mode] Synthesizing mock background art locally...")
-            from PIL import Image as PILImage, ImageDraw as PILImageDraw
-            bg_im = PILImage.new("RGB", (1080, 1350), composed_palette[0])
-            bg_draw = PILImageDraw.Draw(bg_im)
-            for y in range(0, 1350, 4):
-                ratio = y / 1350.0
-                bg_draw.line([(0, y), (1080, y)], fill=(int(7 + ratio * 20), int(11 + ratio * 30), int(25 + ratio * 40)), width=4)
-            bg_im.save(bg_path, "PNG")
-        else:
-            if not self.comfy.is_alive():
-                self.log_gate(4, "Generative Background Generation", "FAILED", "ComfyUI server offline on http://127.0.0.1:8188")
-            print(">>> Generating Layer 0 Background via Ideogram 4.0...")
-            self.comfy.generate_ideogram_background(
-                description=ideogram_prompt["high_level_description"],
-                palette=composed_palette,
-                output_path=bg_path,
-                prefix=f"{self.run_id}_ideogram_bg",
+            ideogram_prompt = {
+                "high_level_description": f"{bg_caption}. Volumetric lighting from {light_plan.get('key_direction', 'top_left')}, harmonious with {hero_measured_color} accents.",
+                "style_description": {
+                    "aesthetics": f"Contemporary poster art, {concept_plan.get('movement', 'atmospheric')}, deep negative space",
+                    "lighting": f"Key light from {light_plan.get('key_direction', 'top_left')}, intensity {light_plan.get('key_intensity', 80)}%, fill {light_plan.get('fill_intensity', 40)}%",
+                    "medium": "digital_illustration",
+                    "art_style": "contemporary architectural background with clean calm negative space, high-key ambient lighting, smooth subtle gradients.",
+                    "color_palette": composed_palette,
+                },
+                "compositional_deconstruction": {
+                    "background": f"Clean ambient background in tones of {composed_palette[0]} with soft atmospheric light spill, spacious calm negative space.",
+                    "elements": [],
+                },
+            }
+
+            if self.use_mock:
+                print(">>> [Mock Mode] Synthesizing mock background art locally...")
+                from PIL import Image as PILImage, ImageDraw as PILImageDraw
+                bg_im = PILImage.new("RGB", (1080, 1350), composed_palette[0])
+                bg_draw = PILImageDraw.Draw(bg_im)
+                for y in range(0, 1350, 4):
+                    ratio = y / 1350.0
+                    bg_draw.line([(0, y), (1080, y)], fill=(int(7 + ratio * 20), int(11 + ratio * 30), int(25 + ratio * 40)), width=4)
+                bg_im.save(bg_path, "PNG")
+            else:
+                if not self.comfy.is_alive():
+                    self.log_gate(4, "Generative Background Generation", "FAILED", "PLANNING_HALT: ComfyUI server offline on http://127.0.0.1:8188")
+                print(">>> Generating Layer 0 Background via Ideogram 4.0...")
+                success = False
+                for attempt in range(2):
+                    try:
+                        self.comfy.generate_ideogram_background(
+                            description=ideogram_prompt["high_level_description"],
+                            palette=composed_palette,
+                            output_path=bg_path,
+                            prefix=f"{self.run_id}_ideogram_bg",
+                        )
+                        if bg_path.exists() and bg_path.stat().st_size >= min_size:
+                            success = True
+                            break
+                    except Exception as e:
+                        print(f">>> Background generation attempt {attempt + 1} failed: {e}")
+                if not success or not bg_path.exists() or bg_path.stat().st_size < min_size:
+                    self.log_gate(4, "Generative Background Generation", "FAILED", f"PLANNING_HALT: Background art corrupted or missing after retry: {bg_path}")
+
+            # Lanczos resize to 1080x1350
+            bg_img = cv2.imread(str(bg_path), cv2.IMREAD_UNCHANGED)
+            bg_resized = cv2.resize(bg_img, (1080, 1350), interpolation=cv2.INTER_LANCZOS4)
+            cv2.imwrite(str(feathered_bg_path), bg_resized)
+
+            s4a_duration = time.time() - s4a_t0
+            self.log_gate(
+                4, "Background Art Generation (Stage 4a)", "PASSED",
+                f"Background generated & normalized in {s4a_duration:.2f}s:\n" +
+                f"  • File: {feathered_bg_path.name} ({feathered_bg_path.stat().st_size / 1024:.1f} KB)\n" +
+                f"  • Palette: {', '.join(composed_palette)}"
             )
-
-        if not bg_path.exists() or bg_path.stat().st_size < min_size:
-            self.log_gate(4, "Generative Background Generation", "FAILED", f"Background art corrupted or missing: {bg_path}")
-
-        # Lanczos resize to 1080x1350
-        bg_img = cv2.imread(str(bg_path), cv2.IMREAD_UNCHANGED)
-        bg_resized = cv2.resize(bg_img, (1080, 1350), interpolation=cv2.INTER_LANCZOS4)
-        feathered_bg_path = self.run_dir / "layer0_feathered_bg.png"
-        cv2.imwrite(str(feathered_bg_path), bg_resized)
-
-        s4a_duration = time.time() - s4a_t0
-        self.log_gate(
-            4, "Background Art Generation (Stage 4a)", "PASSED",
-            f"Background generated & normalized in {s4a_duration:.2f}s:\n" +
-            f"  • File: {feathered_bg_path.name} ({feathered_bg_path.stat().st_size / 1024:.1f} KB)\n" +
-            f"  • Palette: {', '.join(composed_palette)}"
-        )
+        elif bg_res.source in ("supplied", "archive"):
+            cand = PROJECT_ROOT / bg_res.path
+            if not cand.exists() or cand.stat().st_size < min_size:
+                self.log_gate(4, "Background Art Resolution", "FAILED", f"Resolved background asset invalid: {cand}")
+            bg_img = cv2.imread(str(cand), cv2.IMREAD_UNCHANGED)
+            bg_resized = cv2.resize(bg_img, (1080, 1350), interpolation=cv2.INTER_LANCZOS4)
+            cv2.imwrite(str(feathered_bg_path), bg_resized)
+            shutil.copy2(feathered_bg_path, bg_path)
+            s4a_duration = time.time() - s4a_t0
+            self.log_gate(
+                4, "Background Art Resolution (Stage 4a)", "PASSED",
+                f"Background resolved from {bg_res.source} and normalized in {s4a_duration:.2f}s:\n" +
+                f"  • File: {feathered_bg_path.name} ({feathered_bg_path.stat().st_size / 1024:.1f} KB)"
+            )
+        else:
+            preview_path = self.run_dir / "layer0_native_preview.png"
+            from PIL import Image as PILImage
+            native_im = PILImage.new("RGB", (1080, 1350), composed_palette[0])
+            native_im.save(preview_path, "PNG")
+            feathered_bg_path = preview_path
+            shutil.copy2(feathered_bg_path, bg_path)
+            s4a_duration = time.time() - s4a_t0
+            self.log_gate(
+                4, "Background Art Resolution (Stage 4a)", "PASSED",
+                f"Native background raster preview generated in {s4a_duration:.2f}s: {preview_path.name}"
+            )
 
         # -------------------------------------------------------------
         # STAGE 4b: BACKGROUND MEASUREMENT (CALM / BUSY / SALIENT MAP)
@@ -517,16 +616,18 @@ Output strictly valid JSON conforming to the schema.
 
         measured_art_summary = {
             "hero": {
-                "width": hero_geom.width,
-                "height": hero_geom.height,
-                "center": [hero_geom.center_x, hero_geom.center_y],
-                "halo_score": hero_halo.halo_score,
+                "width": hero_geom.width if hero_geom else 0,
+                "height": hero_geom.height if hero_geom else 0,
+                "center": [hero_geom.center_x, hero_geom.center_y] if hero_geom else [500, 500],
+                "halo_score": hero_halo.halo_score if hero_halo else 0.0,
                 "dominant_color": hero_measured_color,
+                "source": hero_res.source,
             },
             "background": {
                 "calm_percentage": bg_measurement["calm_percentage"],
                 "calm_regions": bg_measurement["calm_regions"],
                 "grid": f"{bg_measurement['grid_cols']}x{bg_measurement['grid_rows']}",
+                "source": bg_res.source,
             },
         }
 
@@ -660,6 +761,15 @@ Output strictly valid JSON conforming to the schema.
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "concept": concept_plan,
             "layout": layout_plan,
+            "asset_plan": concept_plan.get("asset_plan", []),
+            "resolved_assets": {
+                slot: {
+                    "source": res.source,
+                    "path": res.path,
+                    "why": res.why,
+                }
+                for slot, res in resolved_assets.items()
+            },
             "measured_art": measured_art_summary,
             "allowlists": {
                 "fonts": available_fonts,
@@ -694,7 +804,7 @@ Output strictly valid JSON conforming to the schema.
             png_out=png_2x_out,
         )
 
-        min_render_size = 10000 if self.use_mock else 100000
+        min_render_size = 10000 if (self.use_mock or bg_res.source == "native") else 100000
         if not png_2x_out.exists() or png_2x_out.stat().st_size < min_render_size:
             self.log_gate(5, "Depth-Layered Assembly", "FAILED", "VectorCraft compilation produced invalid output.")
 
@@ -836,29 +946,34 @@ Output strictly valid JSON with this schema:
             dest_pdf = self.artifact_dir / f"{title_slug}_print_master.pdf"
             dest_png = self.artifact_dir / f"{title_slug}_master_render_2x.png"
             dest_bg = self.artifact_dir / f"{title_slug}_layer0_bg.png"
-            dest_hero = self.artifact_dir / f"{title_slug}_layer3_hero.png"
+            dest_hero = self.artifact_dir / f"{title_slug}_layer3_hero.png" if hero_path else None
 
             shutil.copy2(pdf_out, dest_pdf)
             shutil.copy2(png_2x_out, dest_png)
-            shutil.copy2(bg_path, dest_bg)
-            shutil.copy2(hero_path, dest_hero)
+            if feathered_bg_path.exists():
+                shutil.copy2(feathered_bg_path, dest_bg)
+            if hero_path and hero_path.exists() and dest_hero:
+                shutil.copy2(hero_path, dest_hero)
             report_md = self.artifact_dir / f"{title_slug}_master_pipeline_report.md"
         else:
             dest_pdf = pdf_out
             dest_png = png_2x_out
-            dest_bg = bg_path
+            dest_bg = feathered_bg_path
             dest_hero = hero_path
             report_md = self.run_dir / f"{title_slug}_master_pipeline_report.md"
 
         total_runtime = time.time() - total_t0
         _posix = lambda p: str(p).replace("\\", "/")  # noqa: E731 — file:/// links
         fallback_notice = f"\n**PLANNING_FALLBACK ACTIVE**: `{self.planning_fallback}`\n" if self.planning_fallback else ""
+        hero_line = f"- **Layer 3 Hero Cutout**: [{dest_hero.name}](file:///{_posix(dest_hero)})" if dest_hero and dest_hero.exists() else f"- **Layer 3 Hero Cutout**: Native/None ({hero_res.source})"
         report_text = f"""# {brief.get_text('title')} — Autonomous Master Pipeline Report
 
 **Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}  
 **Hardware Engine**: NVIDIA GeForce RTX 4090 + Local ComfyUI (Ideogram 4.0 + Qwen-Image 2.1) + VectorCraft (Rust)  
 **Total Runtime**: {total_runtime:.2f} seconds  
 **Quality Score**: {vlm_score} / 10 (`READY_FOR_PRINT`)  
+**Hero**: {hero_res.source} ({hero_res.path})  
+**Background**: {bg_res.source} ({bg_res.path})  
 {fallback_notice}
 ---
 
@@ -868,9 +983,10 @@ Output strictly valid JSON with this schema:
 | :--- | :--- | :---: | :---: | :--- |
 | **Stage 1** | **Brief Ingestion & Zero-Drop Guard** | `PASSED` | {s1_duration:.3f}s | 100% required fields non-empty |
 | **Stage 2a** | **Concept Planning (Art Direction)** | `PASSED` | {s2a_duration:.3f}s | Valid thesis, light plan, palette, & calm requests |
-| **Stage 3** | **Hero Asset Generation (RTX 4090)** | `PASSED` | {s3_duration:.2f}s | Layer 3 (Qwen 2.1) native alpha cutout verified |
+| **Stage 2b** | **Asset Resolution (Ladder)** | `PASSED` | {s2b_duration:.3f}s | Hero: {hero_res.source}, BG: {bg_res.source} |
+| **Stage 3** | **Hero Asset Generation / Resolution** | `PASSED` | {s3_duration:.2f}s | Hero source: {hero_res.source} |
 | **Stage 3.5** | **Hero Measurement & Color Profile** | `PASSED` | {s35_duration:.3f}s | Bounding box, halo score, & dominant color profile |
-| **Stage 4a** | **Background Art Generation (Ideogram)** | `PASSED` | {s4a_duration:.2f}s | Layer 0 prompt conditioned on hero & light plan |
+| **Stage 4a** | **Background Art Generation / Resolution** | `PASSED` | {s4a_duration:.2f}s | Background source: {bg_res.source} |
 | **Stage 4b** | **Background Measurement** | `PASSED` | {s4b_duration:.3f}s | 12x15 calm/busy/salient grid classification |
 | **Stage 4.5** | **Layout Planning (Slot Placement)** | `PASSED` | {s45_duration:.3f}s | Text slots placed strictly into measured calm zones |
 | **Stage 5** | **Depth-Layered Assembly (VectorCraft)** | `PASSED` | {s5_duration:.3f}s | Archetype: {archetype}, {text_count} text rows, {overflow_count} overflow warnings |
@@ -891,7 +1007,7 @@ Output strictly valid JSON with this schema:
 - **Print Master Vector PDF**: [{dest_pdf.name}](file:///{_posix(dest_pdf)})
 - **2x High-Res Render (2160 x 2700 px)**: [{dest_png.name}](file:///{_posix(dest_png)})
 - **Layer 0 Background Art**: [{dest_bg.name}](file:///{_posix(dest_bg)})
-- **Layer 3 Hero Cutout**: [{dest_hero.name}](file:///{_posix(dest_hero)})
+{hero_line}
 """
         report_md.write_text(report_text, encoding="utf-8")
 
@@ -916,7 +1032,7 @@ Output strictly valid JSON with this schema:
         brief: ExtractedBrief,
         palette: list[str],
         bg_path: Path,
-        hero_path: Path,
+        hero_path: Optional[Path | str],
         pdf_out: Path,
         png_out: Path,
         hero_geom: Optional[Any] = None,

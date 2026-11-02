@@ -617,7 +617,7 @@ def compose_focal_point(
     palette: list[str],
     plan: TypographicPlan,
     bg_path: Path,
-    hero_path: Path,
+    hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
     width: float = 1080,
     height: float = 1350,
@@ -740,8 +740,11 @@ def compose_focal_point(
         color=accent_color, alpha_stop_inner=0.50, alpha_stop_outer=0.0,
         blend_mode="screen",
     )
-    vc.place_image(hero_path, rect=[hero_x, hero_y, hero_w, hero_h])
-    hero_node_id = "$last"
+    if hero_path and str(hero_path).lower() not in ("none", "native", ""):
+        vc.place_image(hero_path, rect=[hero_x, hero_y, hero_w, hero_h])
+        hero_node_id = "$last"
+    else:
+        hero_node_id = None
 
     # Layer 5: Orbital Text Ribbon under Hero Baseline
     orbital_y = hero_y + hero_h + height * 0.015
@@ -852,7 +855,7 @@ def compose_z_pattern(
     palette: list[str],
     plan: TypographicPlan,
     bg_path: Path,
-    hero_path: Path,
+    hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
     width: float = 1080,
     height: float = 1350,
@@ -1020,8 +1023,11 @@ def compose_z_pattern(
         color=accent_color, alpha_stop_inner=0.45, alpha_stop_outer=0.0,
         blend_mode="screen",
     )
-    vc.place_image(hero_path, rect=[hero_cx - hero_w / 2.0, hero_cy - hero_h / 2.0, hero_w, hero_h])
-    hero_node_id = "$last"
+    if hero_path and str(hero_path).lower() not in ("none", "native", ""):
+        vc.place_image(hero_path, rect=[hero_cx - hero_w / 2.0, hero_cy - hero_h / 2.0, hero_w, hero_h])
+        hero_node_id = "$last"
+    else:
+        hero_node_id = None
 
     # BUG 2 FIX: Dedicated non-overlapping vertical slotting for bottom band
     bot_y = height * 0.69
@@ -1089,7 +1095,7 @@ def compose_split(
     palette: list[str],
     plan: TypographicPlan,
     bg_path: Path,
-    hero_path: Path,
+    hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
     width: float = 1080,
     height: float = 1350,
@@ -1115,8 +1121,11 @@ def compose_split(
         color=accent_color, alpha_stop_inner=0.45, alpha_stop_outer=0.0,
         blend_mode="screen",
     )
-    vc.place_image(hero_path, rect=[hero_cx - hero_w / 2.0, hero_cy - hero_h / 2.0, hero_w, hero_h])
-    hero_node_id = "$last"
+    if hero_path and str(hero_path).lower() not in ("none", "native", ""):
+        vc.place_image(hero_path, rect=[hero_cx - hero_w / 2.0, hero_cy - hero_h / 2.0, hero_w, hero_h])
+        hero_node_id = "$last"
+    else:
+        hero_node_id = None
 
     # Layer 1: Atmospheric Scrim (Overshoot past canvas edge, final 0.0 stop before edge)
     fade_overshoot = 0.03 * min(width, height)
@@ -1236,7 +1245,7 @@ def compose_grid_3col(
     palette: list[str],
     plan: TypographicPlan,
     bg_path: Path,
-    hero_path: Path,
+    hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
     width: float = 1080,
     height: float = 1350,
@@ -1330,8 +1339,11 @@ def compose_grid_3col(
         color=accent_color, alpha_stop_inner=0.45, alpha_stop_outer=0.0,
         blend_mode="screen",
     )
-    vc.place_image(hero_path, rect=[hero_cx - hero_w / 2.0, mid_top_y, hero_w, hero_h])
-    hero_node_id = "$last"
+    if hero_path and str(hero_path).lower() not in ("none", "native", ""):
+        vc.place_image(hero_path, rect=[hero_cx - hero_w / 2.0, mid_top_y, hero_w, hero_h])
+        hero_node_id = "$last"
+    else:
+        hero_node_id = None
 
     # Center Column Content below Hero (Tagline, Blurb, Subtitle)
     c_y = mid_top_y + hero_h + height * 0.030
@@ -1504,7 +1516,7 @@ def compose_slots(
     palette: list[str],
     plan: TypographicPlan,
     bg_path: Path,
-    hero_path: Path,
+    hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
     layout_plan: Optional[dict[str, Any]] = None,
     archetype: str = "focal_point",
@@ -1649,8 +1661,11 @@ def compose_slots(
         hero_x = (width - hero_w) * 0.5
         hero_y = height * 0.32
 
-    vc.place_image(hero_path, rect=[hero_x, hero_y, hero_w, hero_h])
-    hero_node_id = "$last"
+    if hero_path and str(hero_path).lower() not in ("none", "native", ""):
+        vc.place_image(hero_path, rect=[hero_x, hero_y, hero_w, hero_h])
+        hero_node_id = "$last"
+    else:
+        hero_node_id = None
 
     # Dedicated 2-Column Recruitment Block
     if positions:
@@ -1991,7 +2006,7 @@ def compose(
     brief: ExtractedBrief,
     palette: list[str],
     bg_path: Path,
-    hero_path: Path,
+    hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
     archetype: str = "focal_point",
     layout_hints: Optional[list[str]] = None,

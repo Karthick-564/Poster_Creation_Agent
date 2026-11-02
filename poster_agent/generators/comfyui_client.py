@@ -7,6 +7,7 @@ Handles:
 """
 import json
 import os
+import re
 import time
 import urllib.request
 import urllib.error
@@ -67,21 +68,20 @@ class ComfyUIClient:
         if "98:18" in wf and "inputs" in wf["98:18"]:
             wf["98:18"]["inputs"]["noise_seed"] = int(time.time() * 1000) % 1000000000000000
 
-        # Clean structured Ideogram prompt without safety filter trigger words
+        # Clean structured Ideogram prompt without safety filter trigger words or text glyph triggers
         palette_list = palette[:5] if palette else ["#FFFFFF", "#0B2A5B", "#4285F4"]
+        clean_desc = re.split(r"(?:pure non-text|strictly zero|absolutely no|no text)", description, flags=re.IGNORECASE)[0]
+        clean_desc = re.sub(r"\b(vector|typography|letters?|words?|font|text|labels?|signage|watermarks?|numbers?)\b", "", clean_desc, flags=re.IGNORECASE)
+        clean_desc = re.sub(r"[,\s:-]+$", "", clean_desc).strip()
+        if len(clean_desc) < 15:
+            clean_desc = "Modern clean university campus atrium with soft daylight reflections, subtle minimalist architecture, and smooth pastel gradient shadows"
+        clean_desc = re.sub(r"\s+", " ", clean_desc).strip(" ,.:;")
         ideogram_prompt = {
-            "high_level_description": description,
-            "style_description": f"Clean modern graphic illustration, cinematic digital painting with smooth atmospheric gradients and soft studio lighting. Color palette: {', '.join(palette_list)}.",
+            "high_level_description": clean_desc,
+            "style_description": f"Clean modern graphic illustration, architectural photography with soft ambient lighting and smooth subtle gradients. Color palette: {', '.join(palette_list)}.",
             "compositional_deconstruction": {
-                "background": f"{description}. Ambient backdrop with soft studio lighting, spacious calm negative space for vector typography.",
-                "elements": [
-                    {
-                        "type": "obj",
-                        "bbox": [400, 250, 700, 750],
-                        "desc": "Soft abstract ambient gradient ribbons and subtle architectural shadows.",
-                        "color_palette": palette_list[:3],
-                    }
-                ],
+                "background": f"{clean_desc}. Spacious calm negative space with subtle architectural lines.",
+                "elements": [],
             },
             "aspect_ratio": "4:5",
         }
