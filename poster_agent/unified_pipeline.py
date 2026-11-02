@@ -159,7 +159,7 @@ class UnifiedPosterPipeline:
 
             raise RuntimeError(f"PIPELINE HALTED at Stage {stage_num} ({name}): {detail}")
 
-    def execute(self, brief_text: str, context_text: str = "") -> dict:
+    def execute(self, brief_text: str, context_text: str = "", reuse_assets_from: Optional[str] = None) -> dict:
         total_t0 = time.time()
         print("=" * 80)
         print("EXECUTING UNIFIED 8-STAGE POSTER PRODUCTION PIPELINE")
@@ -417,6 +417,14 @@ class UnifiedPosterPipeline:
             key_dir = concept_plan.get("light_plan", {}).get("key_direction", "top_left")
             qwen_hero_prompt = f"Isolated 3D {hero_caption.strip()}, directional studio lighting from {key_dir}, crisp outer silhouette, pure black background for alpha extraction, high detail, centered, no text, no letters, isolated on empty alpha channel, transparent background, clean sticker cutout, 3D render, sharp edges, no background"
 
+            _reused_hero = False
+            if reuse_assets_from:
+                _prev_hero = PROJECT_ROOT / "runs" / reuse_assets_from / "layer3_hero.png"
+                if _prev_hero.exists() and _prev_hero.stat().st_size >= min_size:
+                    shutil.copy2(_prev_hero, hero_path)
+                    _reused_hero = True
+                    print(f">>> [Stage 3] Reusing hero from previous run '{reuse_assets_from}' (diffusion skipped)")
+
             if self.use_mock:
                 print(">>> [Mock Mode] Synthesizing mock hero cutout locally...")
                 from PIL import Image as PILImage, ImageDraw as PILImageDraw
@@ -429,8 +437,8 @@ class UnifiedPosterPipeline:
                     self.log_gate(3, "Hero Asset Generation", "FAILED", "PLANNING_HALT: ComfyUI server offline on http://127.0.0.1:8188")
 
                 print(">>> Generating Layer 3 Hero Cutout via Qwen-Image 2.1 native alpha...")
-                success = False
-                for attempt in range(2):
+                success = _reused_hero
+                for attempt in range(2 if not _reused_hero else 0):
                     try:
                         self.comfy.generate_qwen_rgba(
                             prompt=qwen_hero_prompt,
@@ -562,9 +570,16 @@ class UnifiedPosterPipeline:
             else:
                 if not self.comfy.is_alive():
                     self.log_gate(4, "Generative Background Generation", "FAILED", "PLANNING_HALT: ComfyUI server offline on http://127.0.0.1:8188")
+                _reused_bg = False
+                if reuse_assets_from:
+                    _prev_bg = PROJECT_ROOT / "runs" / reuse_assets_from / "layer0_bg.png"
+                    if _prev_bg.exists() and _prev_bg.stat().st_size >= min_size:
+                        shutil.copy2(_prev_bg, bg_path)
+                        _reused_bg = True
+                        print(f">>> [Stage 4a] Reusing background from previous run '{reuse_assets_from}' (diffusion skipped)")
                 print(">>> Generating Layer 0 Background via Ideogram 4.0 (Payload v2)...")
-                success = False
-                for attempt in range(2):
+                success = _reused_bg
+                for attempt in range(2 if not _reused_bg else 0):
                     try:
                         self.comfy.generate_ideogram_background(
                             description=ideogram_prompt["high_level_description"],
@@ -777,13 +792,26 @@ Output strictly valid JSON conforming to the schema.
             }
         else:
             try:
-                layout_plan = self.gemini.generate_json(
-                    prompt=layout_prompt,
-                    schema=LAYOUT_SCHEMA,
-                    system_instruction="You are the lead compositor and typography planner. Place text rows strictly into calm zones. Never invent copy.",
-                    validator=lambda p: validate_layout_plan(p, available_fonts=available_fonts),
-                    timeout=120,
-                )
+                _layout_last_err: Optional[Exception] = None
+                layout_plan = None
+                for _lay_attempt in range(3):
+                    try:
+                        layout_plan = self.gemini.generate_json(
+                            prompt=layout_prompt,
+                            schema=LAYOUT_SCHEMA,
+                            system_instruction="You are the lead compositor and typography planner. Place text rows strictly into calm zones. Never invent copy.",
+                            validator=lambda p: validate_layout_plan(p, available_fonts=available_fonts),
+                            timeout=120,
+                        )
+                        _layout_last_err = None
+                        break
+                    except Exception as le:
+                        _layout_last_err = le
+                        if _lay_attempt < 2:
+                            print(f">>> [Stage 4.5] Layout call failed ({le}); retrying in 20s...")
+                            time.sleep(20)
+                if layout_plan is None and _layout_last_err is not None:
+                    raise _layout_last_err
             except Exception as e:
                 layout_plan = {"error": str(e)}
 

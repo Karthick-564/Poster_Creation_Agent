@@ -26,6 +26,8 @@ def main():
     parser.add_argument("--artifact-dir", type=str, default=None, help="Optional external directory to copy deliverables to")
     parser.add_argument("--mock", action="store_true", help="Run with mock generation without requiring ComfyUI")
     parser.add_argument("--context", type=str, default="", help="Optional additional institutional brand context")
+    parser.add_argument("--reuse-assets-from", type=str, default=None,
+                        help="Run ID whose layer0_bg.png and layer3_hero.png are reused (skips diffusion Stage 3/4a)")
     args = parser.parse_args()
 
     brief_text = ""
@@ -53,7 +55,7 @@ def main():
         artifact_dir=args.artifact_dir,
         use_mock=args.mock,
     )
-    result = pipeline.execute(brief_text=brief_text, context_text=context_text)
+    result = pipeline.execute(brief_text=brief_text, context_text=context_text, reuse_assets_from=args.reuse_assets_from)
     print("\nCLI RESULT SUMMARY:")
     print(f"Master Print PDF : {result['pdf']}")
     print(f"2x Render PNG    : {result['png_2x']}")
