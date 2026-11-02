@@ -15,8 +15,8 @@
   - `poster_agent/renderer/vectorcraft_renderer.py` — VectorCraft CLI bridge. CLI binary path: `tools/vectorcraft_bin/vectorcraft-0.19.0-windows-x64-portable/vectorcraft-cli.exe`. Batch JSON → `vectorcraft-cli run --commands <file> --export <png> --scale 2 --export <pdf>`. 60s subprocess timeout (tight for large exports).
 - Prior planner used **Groq** (`GROQ_API_KEY` still in `.env`) — now legacy. Gemini is the live planner.
 - Stage 2 injects poster-design-craft (was: ideogram-prompting + poster-graphic-design).
-- Canvas: 1080×1350 (4:5) rendered at scale 2.0 → gate requires exactly **2160×2700** PNG.
-- Fonts used: Display typography standardized on **Inter Black 900** (or `Bahnschrift` fallback; Outfit is absent offline). Structural/body fonts: `Segoe UI`, `JetBrains Mono`, `Nirmala UI` (Tamil venue block relies on Nirmala UI complex-script shaping — unverified inside VectorCraft).
+- Canvas: Default 1080×1920 (9:16 story) or format-driven (4:5, 1:1, A3, A4) rendered at scale 2.0 → gate dynamically requires exact 2x canvas dimensions (e.g. 2160×3840 for story).
+- Fonts used: Display typography standardized on school voice (**Montserrat Bold** for KCT/KCLAS/KI/KIA, **Barlow Bold** for KCTBS, **Noto Sans Tamil Bold** for Tamil, **Inter Black 900** / `Bahnschrift` fallback). Structural/body fonts: `Inter`, `Source Sans 3`, `Segoe UI`, `JetBrains Mono`. Note: Offline TTFs (`Montserrat-Bold.ttf`, `Barlow-Bold.ttf`, `NotoSansTamil-Bold.ttf`) were obtained offline and installed into `tools/vectorcraft_bin/vectorcraft-0.19.0-windows-x64-portable/VectorCraftData/Fonts` (with copies in `assets/fonts/`); only Bold weights exist offline (display roles; body text remains Inter / Source Sans 3).
 
 ## 2. Environment Prerequisites
 
@@ -138,8 +138,18 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - Structural rows implemented in `poster_agent/renderer/composer.py`: `emit_logo_row`, `emit_banner_tab_row`, `emit_pill_row`, `emit_footer_bar_row`, `emit_qr_row` (with deterministic QR code generation). Manifest records all structural items with `_structure_*` prefix. Genre policy enforces institutional allowance of pills/banners while preserving clean line on cultural editorial.
   - Full test suite: 111/111 tests passed (`tests/test_house_style.py`, `tests/test_composer.py`). Committed as `feat(house): house style...`.
 
+- **Phase C4 Commit 3 (Doctrine Rebuild & Corpus Exemplar Injection)**:
+  - Addendum Item 1 applied: `poster_agent/assets/resolver.py` resolves to `native` if `declared_source is None or declared_source != "generated"`, legacy comment removed, verified by unit test `test_concept_without_asset_plan_resolves_native_for_hero_and_bg`.
+  - Addendum Item 2 applied: WSL skip guards added to all VectorCraft execution tests in `tests/test_house_style.py` and `tests/test_doctrine_c4.py`.
+  - Addendum Item 3 applied: Normalized trailing newlines in `configs/house_style.yaml` and `poster_agent/house_style.py`.
+  - Addendum Item 4 applied: Recorded offline font discovery / Bold-weight limitation in Section 1 and Section 6.
+  - Section 1.5 added to `skills/poster-design-craft/SKILL.md` with verified corpus ground truth citations (`corpus: 173/205` for 9:16 story, `corpus: 129/205` for white/light base, `corpus: 48/205` for QR code, `corpus: 44/205` for weak-point discipline). Updated Section 1 (genre-aware structural policy), Section 12 (9:16 story default), and Section 13 (quality rubric).
+  - Exemplar picker `select_house_exemplars` and prompt formatter `format_exemplars_for_prompt` implemented in `poster_agent/house_style.py`.
+  - Concept prompt builder `build_concept_prompt` implemented in `poster_agent/gemini_client.py` injecting up to 3 exemplars under strict ~500 token budget (~2000 chars).
+  - Pipeline logs `HOUSE_EXEMPLARS: N` at Stage 1.5. Verified `HOUSE_EXEMPLARS: 3` on GDG recruitment brief and `HOUSE_EXEMPLARS: 0` on unknown genre brief.
+  - Full test suite: 116/116 tests passing (`tests/test_doctrine_c4.py`, `tests/test_assets.py`, `tests/test_house_style.py`).
+
 ### Pending / Next Up
-- **Phase C4 Commit 3**: Doctrine rebuild (`poster-design-craft` as house design system with corpus citations `corpus: X/205`, exemplar injection into concept call in `gemini_client.py`).
 - **Phase D**: Standalone deterministic QA gates integration (`poster_agent/qa/gates.py` into Stages 6 and 7).
 - **Phase D 3b**: Repair loop executor consuming `REPAIR_SCHEMA` operations upon gate failure.
 

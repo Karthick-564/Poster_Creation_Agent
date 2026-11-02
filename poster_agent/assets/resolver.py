@@ -206,29 +206,19 @@ class AssetResolver:
         # -----------------------------------------------------------------
         # STEP 3: NATIVE
         # -----------------------------------------------------------------
-        # If concept declared native OR if slot is not declared generated
-        if declared_source == "native":
-            self._log(f"[Ladder Step 3: native] Concept explicitly declared native for '{slot}'")
+        if declared_source is None or declared_source != "generated":
+            self._log(f"[Ladder Step 3: native] Source '{declared_source}' is not 'generated'; resolving native for '{slot}'")
             return ResolvedAsset(
                 slot=slot,
                 source="native",
                 path="native",
-                why="Concept asset_plan declared native",
-            )
-
-        if declared_source is not None and declared_source != "generated":
-            self._log(f"[Ladder Step 3: native] Source '{declared_source}' failed prior steps; defaulting to native")
-            return ResolvedAsset(
-                slot=slot,
-                source="native",
-                path="native",
-                why=f"Prior ladder steps failed for declared source '{declared_source}'",
+                why=f"Declared source '{declared_source}' resolved to native",
             )
 
         # -----------------------------------------------------------------
         # STEP 4: GENERATED
         # -----------------------------------------------------------------
-        # Only reached if declared_source == "generated" (or no asset_plan entry, legacy concept)
+        # Only reached if concept's asset_plan says source: generated AND steps 1–3 came up empty.
         model_name = "qwen-image-2.1" if slot == "hero" else "ideogram-4.0"
         self._log(f"[Ladder Step 4: generated] Reached generation tool for slot '{slot}' (model={model_name})")
         return ResolvedAsset(

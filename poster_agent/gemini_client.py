@@ -638,3 +638,56 @@ class GeminiClient:
                     continue
 
         raise RuntimeError(f"Gemini API rate-limited or unavailable: {last_error}")
+
+
+def build_concept_prompt(
+    brief_fields_repr: list[str],
+    canvas_w: float,
+    canvas_h: float,
+    available_fonts: list[str],
+    available_treatments: list[str],
+    available_blends: list[str],
+    microcopy_allowlist: list[str],
+    style_history: list[dict[str, Any]],
+    design_craft_skill: str,
+    context_text: str = "",
+    exemplar_block: str = "",
+) -> str:
+    """Build standardized concept planning prompt with optional house exemplars."""
+    exemplar_section = f"\n{exemplar_block}\n" if exemplar_block else ""
+    return f"""You are the Art Director. Design an event poster concept grounded in the brief and master doctrine.
+
+EVENT BRIEF FIELDS:
+{chr(10).join(brief_fields_repr)}
+
+ADDITIONAL CONTEXT:
+{context_text}
+
+CANVAS CONTRACT:
+{int(canvas_w)} x {int(canvas_h)} px.
+{exemplar_section}
+AVAILABLE RESOURCES:
+- Available Fonts: {', '.join(available_fonts)}
+- Available Treatments: {', '.join(available_treatments)}
+- Available Blends: {', '.join(available_blends)}
+- Microcopy Allowlist: {', '.join(microcopy_allowlist)}
+- Style History (last runs): {json.dumps(style_history)}
+
+MASTER DESIGN DOCTRINE:
+{design_craft_skill}
+
+REQUIREMENTS:
+1. Thesis: <= 25 words on what the poster argues visually.
+2. Select 1 Archetype: focal_point | z_pattern | split | grid_3col (provide <= 40 word rationale).
+3. Movement: static | diagonal_sweep | orbital | convergence.
+4. Light Plan: key_direction, key_intensity (0-100), fill_intensity (0-100), rim lighting (enabled, color_hex), notes (<= 25 words).
+5. 60/30/10 Palette: bg_60, hero_30, accent_10 hex colors (#RRGGBB) adhering to palette policy.
+6. Typography & Accent: body_stance (<= 20 words), tracking_stance (<= 20 words), accent_row_choice (<= 20 words).
+7. Assets:
+   - hero: ideogram_caption (describe physical subject ONLY, e.g. student developers collaborating at desks. STRICTLY NO floating UI elements, NO floating screens, NO app icons, NO UI cards/widgets), negative_caption ("text, letters, numbers, words, watermark, floating cards, UI widgets, buttons, screens"), aspect ("4:5").
+   - background: ideogram_caption (strictly zero-text, no event strings, pure atmosphere).
+   - accents: list of {{id, ideogram_caption}}.
+8. Calm Regions Requested: Up to 4 normalized bounding boxes [y0, x0, y1, x1] in 0-1000 where text must sit.
+9. Self-check: assumptions (<= 40 words), unsupported_artifacts [].
+Output strictly valid JSON conforming to the schema.
+"""

@@ -34,7 +34,13 @@ except Exception:
 
 from poster_agent.ingestion.extractor import BriefExtractor, ExtractedBrief
 from poster_agent.assets import AssetResolver, ResolvedAsset
-from poster_agent.house_style import resolve_canvas_dimensions, resolve_school, resolve_genre
+from poster_agent.house_style import (
+    resolve_canvas_dimensions,
+    resolve_school,
+    resolve_genre,
+    select_house_exemplars,
+    format_exemplars_for_prompt,
+)
 from poster_agent.generators.comfyui_client import ComfyUIClient
 from poster_agent.vision.art_measurer import ArtMeasurer
 from poster_agent.vision.bg_measurer import measure_background
@@ -48,6 +54,7 @@ from poster_agent.gemini_client import (
     AVAILABLE_BLEND_MODES,
     validate_concept_plan,
     validate_layout_plan,
+    build_concept_prompt,
 )
 
 
@@ -201,42 +208,23 @@ class UnifiedPosterPipeline:
             else:
                 brief_fields_repr.append(f"- {k}: [ABSENT]")
 
-        concept_prompt = f"""You are the Art Director. Design an event poster concept grounded in the brief and master doctrine.
+        exemplars = select_house_exemplars(genre=genre_name, format_name=brief.get_text("format"))
+        print(f"HOUSE_EXEMPLARS: {len(exemplars)}")
+        exemplar_prompt_block = format_exemplars_for_prompt(exemplars)
 
-EVENT BRIEF FIELDS:
-{chr(10).join(brief_fields_repr)}
-
-ADDITIONAL CONTEXT:
-{context_text}
-
-CANVAS CONTRACT:
-{int(canvas_w)} x {int(canvas_h)} px.
-
-AVAILABLE RESOURCES:
-- Available Fonts: {', '.join(available_fonts)}
-- Available Treatments: {', '.join(available_treatments)}
-- Available Blends: {', '.join(available_blends)}
-- Microcopy Allowlist: {', '.join(MICROCOPY_ALLOWLIST)}
-- Style History (last runs): {json.dumps(style_history)}
-
-MASTER DESIGN DOCTRINE:
-{self.design_craft_skill}
-
-REQUIREMENTS:
-1. Thesis: <= 25 words on what the poster argues visually.
-2. Select 1 Archetype: focal_point | z_pattern | split | grid_3col (provide <= 40 word rationale).
-3. Movement: static | diagonal_sweep | orbital | convergence.
-4. Light Plan: key_direction, key_intensity (0-100), fill_intensity (0-100), rim lighting (enabled, color_hex), notes (<= 25 words).
-5. 60/30/10 Palette: bg_60, hero_30, accent_10 hex colors (#RRGGBB) adhering to palette policy.
-6. Typography & Accent: body_stance (<= 20 words), tracking_stance (<= 20 words), accent_row_choice (<= 20 words).
-7. Assets:
-   - hero: ideogram_caption (describe physical subject ONLY, e.g. student developers collaborating at desks. STRICTLY NO floating UI elements, NO floating screens, NO app icons, NO UI cards/widgets), negative_caption ("text, letters, numbers, words, watermark, floating cards, UI widgets, buttons, screens"), aspect ("4:5").
-   - background: ideogram_caption (strictly zero-text, no event strings, pure atmosphere).
-   - accents: list of {{id, ideogram_caption}}.
-8. Calm Regions Requested: Up to 4 normalized bounding boxes [y0, x0, y1, x1] in 0-1000 where text must sit.
-9. Self-check: assumptions (<= 40 words), unsupported_artifacts [].
-Output strictly valid JSON conforming to the schema.
-"""
+        concept_prompt = build_concept_prompt(
+            brief_fields_repr=brief_fields_repr,
+            canvas_w=canvas_w,
+            canvas_h=canvas_h,
+            available_fonts=available_fonts,
+            available_treatments=available_treatments,
+            available_blends=available_blends,
+            microcopy_allowlist=MICROCOPY_ALLOWLIST,
+            style_history=style_history,
+            design_craft_skill=self.design_craft_skill,
+            context_text=context_text,
+            exemplar_block=exemplar_prompt_block,
+        )
 
         forced_archetype = os.environ.get("POSTER_FORCE_ARCHETYPE")
         chosen_archetype = forced_archetype if forced_archetype in ("focal_point", "z_pattern", "split", "grid_3col") else "focal_point"
@@ -284,6 +272,10 @@ Output strictly valid JSON conforming to the schema.
                         {"id": "accent_light", "ideogram_caption": "Subtle orbital gradient glow"}
                     ],
                 },
+                "asset_plan": [
+                    {"slot": "hero", "source": "generated", "ref": "3D organic geometric crystal mainframe core", "style_note": "clean alpha cutout", "reason": "hero focal subject"},
+                    {"slot": "background", "source": "generated", "ref": "Atmospheric deep-focus cinematic abstract event backdrop", "style_note": "calm negative space", "reason": "ambient backdrop"},
+                ],
                 "calm_regions_requested": [
                     [0, 0, 360, 1000],
                     [680, 0, 1000, 1000],

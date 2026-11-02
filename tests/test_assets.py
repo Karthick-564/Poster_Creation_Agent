@@ -205,6 +205,18 @@ def test_resolver_ladder_native_and_generated():
     assert "qwen-image-2.1" in res_gen.path
 
 
+def test_concept_without_asset_plan_resolves_native_for_hero_and_bg():
+    resolver = AssetResolver()
+    brief_extractor = BriefExtractor()
+    brief = brief_extractor.extract("Title: Minimal Design\nDate: Aug 1\nVenue: Hall")
+    concept_no_plan = {}
+    resolved = resolver.resolve_all(brief, concept_no_plan)
+    assert resolved["hero"].source == "native"
+    assert resolved["hero"].path == "native"
+    assert resolved["background"].source == "native"
+    assert resolved["background"].path == "native"
+
+
 def test_brief_asset_parsing_and_no_leak_to_verbatim_text():
     raw_brief = """
 Title: AI HACKATHON 2026

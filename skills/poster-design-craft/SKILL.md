@@ -6,12 +6,48 @@ description: Master doctrine for editorial poster design, compositional archetyp
 
 > Operational distillation of `DESIGN.md`, *PosterGen (CVPR 2026)*, *PosterMELD (2026)*, and Swiss International Typographic style.
 
-## 1. The Cardinal Rule: Posters are NOT Web Dashboards
+## 1. The Cardinal Rule: Editorial Distinction & House Style Grammar
 An event poster is a large-format **editorial art piece**, not a mobile phone screen or SaaS dashboard.
-- **NEVER DRAW CONTAINER CARDS**: Do not wrap event names, dates, or prices in rounded rectangle boxes (`add_shape_rectangle`), pill badges, or colored card backgrounds.
-- **NEVER USE WEB BUTTONS**: A Call-To-Action (CTA) on a poster is a typographic link (e.g. `REGISTER: site.example/join`), NOT an HTML submit button with a colored background pill.
-- **TEXT SITS DIRECTLY ON THE ATMOSPHERE**: Typography integrates directly into the background art, separated by subtle lighting gradients, optical drop shadows, or fine technical hairline rules (1px width).
+
+- **Genre-Aware Structural Policy**:
+  - **Institutional Genres** (*hiring, recruitment, admission, workshop, event, conference, commemoration, achievement, alumni, campaign*): Structural rows — brand banner tabs, accent pills, solid footer bars, and QR registration blocks — are **LEGAL and encouraged** as part of the corpus house style.
+  - **Premium-Editorial Genres** (*cultural concerts, fine arts fests, high-prestige A3 print*): Strictly preserve the clean-line rule. No container cards or web-button pills; typography integrates directly into atmospheric scrims.
 - **NO DIGITAL SLOP**: No gratuitous procedural sparkles, random starfields, or digital gradient noise.
+- **PHOTOGRAPHY-FIRST ASSET LADDER**: Real campus photography, supplied assets, or native vector brand fields always precede generative art. AI diffusion is a conditional tool and the last resort in the asset ladder.
+
+## 1.5 House Style System & Corpus Ground Truth (205-Posters Benchmark)
+All design parameters are calibrated against the verified house style corpus (`Examples/extracted/Posters/poster_catalog.csv`):
+
+1. **Format Ladder**:
+   - **9:16 Story (1080×1920)**: Dominates 84% of the corpus (`corpus: 173/205`) $\rightarrow$ **DEFAULT** format across the pipeline.
+   - **Secondary Tiers**: 4:5 portrait (1080×1350), 1:1 square (1080×1080), and A3/A4 print point dimensions (`corpus: 39/205`).
+2. **Palette Discipline & White-Space Habit**:
+   - **White / Light Base Dominance**: 63% of catalog posters (`corpus: 129/205`) employ clean white or light tinted backgrounds.
+   - **60/30/10 Ratio**: 60% canvas base (white/light or deep brand navy), 30% structural body copy (deep navy `#1E2842` or `#0B2A5B` on light backgrounds), 10% high-impact accent.
+   - **Brand Anchors per School**:
+     - *KCT*: `#1E2842` (navy), `#85CEBD` (mint), `#705355`, `#C8C7CC`. Display voice: Montserrat.
+     - *KCLAS*: `#0A5BB5` / `#1F4F9C` (blue), `#7A1A45` (maroon). Display voice: Montserrat / DIN Pro.
+     - *KCTBS*: `#1F3E8A` (deep blue), `#F2B61E` (gold). Display voice: Barlow.
+     - *KI / KIA*: Forest green `#245C4A`, sand `#D9C4A0`, institutional blues.
+3. **Typography Voices & Scales**:
+   - Display headlines: Heavy ALL-CAPS wordmark-on-canvas occupying $15\% - 22\%$ of canvas height.
+   - Kickers & Eyebrows: Letter-spaced caps ($20\text{--}40$ tracking).
+   - Display voice selection: Montserrat (KCT/KCLAS/KI/KIA), Barlow (KCTBS), Noto Sans Tamil (Tamil text). Body/logistics: Inter / Source Sans 3.
+4. **Structural Components**:
+   - **Logo Row**: Top header with brand rules (never place logos on busy gradients).
+   - **Banner Tab**: Top band bar (brand primary fill) with the hook / call-out line.
+   - **Pill Row**: Rounded-rect fill + centered caps label for deadlines, badges, and CTAs in institutional layouts.
+   - **Footer Bar**: Solid brand-color footer strip for contact, closing line, or organizer credentials.
+   - **QR Code Row**: High-contrast QR code + centered caps label (`SCAN TO APPLY` / `REGISTER NOW`) whenever an application or registration URL exists (`corpus: 48/205`).
+   - **White/Photo Split**: In recruitment and admissions, a $\approx 35\% : 65\%$ balance between clean typographic space and hero subject.
+5. **Mandatory Content Enforcement**:
+   - Every event, hiring, or recruitment poster **MUST** carry Date, Time, and Venue when supplied in the brief.
+   - Posters promising registration/application **MUST** carry QR code and CTA.
+6. **Weak-Point Discipline (Corpus Weaknesses Audited)**:
+   - Sourced from catalog audit notes (`corpus: 44/205` citing text volume, clutter, or visual crowding):
+     - **Information Group Discipline**: Maximum $\approx 6$ distinct information groups plus footer bar.
+     - **One Idea per Row**: Avoid combining disjointed facts into one crowded sentence.
+     - **No Filler Copy**: Strictly zero `#readmore`, `click here`, or redundant filler phrases.
 
 ## 2. Core Philosophy & Design Hierarchy
 1. **Hierarchy Before Decoration**: Every pixel on the canvas must serve visual communication. If an ornament does not guide the viewer's eye to the title, date, or message, it does not belong on the poster.
@@ -133,15 +169,15 @@ Ideogram was specifically trained to render text when it detects words, signage,
 4. **Overlap Depth**: Hero Layer 3 overlaps Headline Layer 2 by 30px–50px, establishing instant physical foreground presence.
 
 ## 12. Pre-flight Certification & Production Standards
-- **Canvas Dimensions**: Standard $1080\times 1350$ (4:5) rendered at $2\times$ scale $\rightarrow$ $2160\times 2700\text{px}$ master print raster.
-- **Margins & Safe Zones**: Minimum 40px–50px safety margin on all edges.
+- **Canvas Dimensions**: Default 9:16 Story ($1080\times 1920$) rendered at $2\times$ scale $\rightarrow$ $2160\times 3840\text{px}$ master print raster; format-driven for secondary tiers (4:5, 1:1, A3, A4).
+- **Margins & Safe Zones**: Minimum 40px–50px safety margin on all edges (relative 4.5% margins).
 - **Physical Output**: VectorCraft headless CLI builds dual deliverables (`master_print.pdf` and `master_render_2x.png`).
 
 ## 13. Quality Review Rubric & Failure Patterns
 When evaluating poster candidates, apply the following checkable rubric:
 - **3-Second Glance Test**: Downscale to 300px thumbnail. Are the title and date unmistakable?
-- **Web UI Check**: Zero container cards, zero button pills, zero SaaS dashboard UI.
+- **Web UI Check**: Zero gratuitous container cards or web buttons in premium-editorial cultural tiers; structural brand components (pills/banner tabs/footer bars/QRs) permitted strictly in institutional genres per house grammar.
 - **Hero Stature**: Occupies 30–60% of poster canvas height; crisp silhouette; no alpha fringing.
-- **Typographic Discipline**: Maximum 2 font families; clear mathematical hierarchy (headline $\ge 72\text{pt}$, body $\ge 14\text{pt}$).
+- **Typographic Discipline**: Maximum 2 font families; clear mathematical hierarchy (headline $\ge 72\text{pt}$ or $\ge \text{canvas\_h} / 11$, body $\ge 1.8\%$, micro $\ge 1.4\%$).
 - **Contrast Compliance**: Minimum 4.5:1 for body copy; 3.0:1 for display typography.
 
