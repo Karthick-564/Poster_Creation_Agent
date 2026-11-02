@@ -17,9 +17,7 @@ __pycache__/
 htmlcov/
 
 # Run logs & artifacts (large generated images & PDFs)
-runs/*
-!runs/*.py
-!runs/*.html
+runs/
 *.log
 
 # Environment variables & secrets
