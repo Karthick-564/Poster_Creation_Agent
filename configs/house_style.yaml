@@ -1,0 +1,142 @@
+# House Style System: Brand data per school, format dimensions, genre taxonomies, and structural policies.
+# Sources: Examples/extracted/Brand Guidelines/*, Examples/extracted/Posters/poster_catalog.csv
+
+schools:
+  KCT:
+    name: "Kumaraguru College of Technology"
+    palette:
+      primary: "#1E2842"
+      secondary: "#85CEBD"
+      tertiary: "#705355"
+      neutral: "#C8C7CC"
+      surface: "#FFFFFF"
+    fonts:
+      display: "Montserrat"
+      body: "Inter"
+      mono: "JetBrains Mono"
+      tamil: "Noto Sans Tamil"
+    logo: "assets/logo_kumaraguru.png"
+    logo_rules: "Never place logo on gradients; place on solid brand field or clean white background"
+
+  KCLAS:
+    name: "Kumaraguru College of Liberal Arts and Science"
+    palette:
+      primary: "#0A5BB5"
+      secondary: "#7A1A45"
+      tertiary: "#4FC3F7"
+      neutral: "#EDEDED"
+      surface: "#FFFFFF"
+    fonts:
+      display: "Montserrat"
+      body: "Inter"
+      mono: "JetBrains Mono"
+      tamil: "Noto Sans Tamil"
+    logo: "assets/logo_kumaraguru.png"
+    logo_rules: "Place on solid brand field or clean white background"
+
+  KCTBS:
+    name: "Kumaraguru Center for Technology and Business Studies"
+    palette:
+      primary: "#1F3E8A"
+      secondary: "#F2B61E"
+      tertiary: "#2E9A5C"
+      neutral: "#E8E8E8"
+      surface: "#FFFFFF"
+    fonts:
+      display: "Barlow"
+      body: "Inter"
+      mono: "JetBrains Mono"
+      tamil: "Noto Sans Tamil"
+    logo: "assets/logo_kumaraguru.png"
+    logo_rules: "Place on solid brand field or clean white background"
+
+  KI:
+    name: "Kumaraguru Institutions"
+    palette:
+      primary: "#1F3F66"
+      secondary: "#5E8FC4"
+      tertiary: "#9CC0E4"
+      neutral: "#D8E4F0"
+      surface: "#FFFFFF"
+    fonts:
+      display: "Montserrat"
+      body: "Inter"
+      mono: "JetBrains Mono"
+      tamil: "Noto Sans Tamil"
+    logo: "assets/logo_kumaraguru.png"
+    logo_rules: "Place on solid brand field or clean white background"
+
+  KIA:
+    name: "Kumaraguru Institute of Agriculture"
+    palette:
+      primary: "#245C4A"
+      secondary: "#D9C4A0"
+      tertiary: "#5C8A3A"
+      neutral: "#F5EFE3"
+      surface: "#FFFFFF"
+    fonts:
+      display: "Montserrat"
+      body: "Inter"
+      mono: "JetBrains Mono"
+      tamil: "Noto Sans Tamil"
+    logo: "assets/logo_kumaraguru.png"
+    logo_rules: "Place on solid brand field or clean white background"
+
+formats:
+  story: [1080, 1920]       # 9:16 portrait (DEFAULT - 81% of corpus)
+  square: [1080, 1080]      # 1:1 square
+  fourfive: [1080, 1350]    # 4:5 portrait
+  A3: [842, 1191]           # A3 portrait print points
+  A4: [595, 842]            # A4 portrait print points
+
+genres:
+  hiring:
+    keywords: ["hiring", "recruitment", "recruiting", "drive", "open positions", "leads", "team members", "job", "careers"]
+    policy: "institutional"
+  recruitment:
+    keywords: ["recruitment", "recruiting", "open positions", "leads", "team members", "join our team"]
+    policy: "institutional"
+  admission:
+    keywords: ["admission", "programme", "course", "diploma", "b.sc", "m.sc", "degree", "curriculum"]
+    policy: "institutional"
+  workshop:
+    keywords: ["workshop", "talk", "session", "lecture", "seminar", "webinar", "expert talk", "training"]
+    policy: "institutional"
+  event:
+    keywords: ["event", "orientation", "freshers", "inauguration", "launch", "annual"]
+    policy: "institutional"
+  festival:
+    keywords: ["festival", "wishes", "celebration", "day", "engineers day", "reunion"]
+    policy: "institutional"
+  commemoration:
+    keywords: ["commemoration", "foundation day", "memorial"]
+    policy: "institutional"
+  achievement:
+    keywords: ["achievement", "congratulations", "naac", "awards", "excellence", "ranked"]
+    policy: "institutional"
+  conference:
+    keywords: ["conference", "summit", "conclave", "symposium"]
+    policy: "institutional"
+  cultural:
+    keywords: ["cultural", "concert", "drama", "music", "dance", "fest", "gaana", "orchestra"]
+    policy: "cultural"
+  alumni:
+    keywords: ["alumni", "batch", "reunion", "decade"]
+    policy: "institutional"
+  campaign:
+    keywords: ["campaign", "awareness", "save life", "soil day", "drive"]
+    policy: "institutional"
+
+structural_policies:
+  institutional:
+    allow_cards: true
+    allow_pills: true
+    allow_banner_tab: true
+    allow_footer_bar: true
+    allow_qr: true
+  cultural:
+    allow_cards: false
+    allow_pills: false
+    allow_banner_tab: false
+    allow_footer_bar: true
+    allow_qr: true

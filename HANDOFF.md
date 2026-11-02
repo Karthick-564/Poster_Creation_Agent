@@ -124,8 +124,22 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - **[AUDIT FIX 2026-11-02]** Headline floor corrected: the slot clamp actually used a hardcoded 72pt while `headline_floor = canvas_h/11` existed as dead code; clamp now uses the doctrine floor and floors are RE-APPLIED after fit-shrink (shrink floor was 13-14pt, which could silently undercut doctrine). Floor unit test now asserts the clamped VALUE (queued text size >= canvas_h/11), replacing log-string assertions. Mock pipeline confirmed to never consult Gemini (canned plan unconditional) — old "fallback in mock" test was vacuous and was replaced with `test_mock_pipeline_never_consults_planner_and_writes_plan` + new live halt tests `test_live_pipeline_halt_on_failed_concept_call` / `test_live_pipeline_halt_on_layout_failure_after_valid_concept` (generators stubbed; layout-halt path mirrors concept-halt path, code-audited). CLI-render-dependent mock tests skip honestly with reason on WSL path-interop. WSL audit: 80 passed / 12 CLI-gated failed (Windows renders), full suite green on Windows host.
   - Verification: 93 passing unit tests (`tests/test_planner_c2.py`), 4 forced archetype renders in `runs/archetype_check_v4/` (2160x2700 PNG + vector PDF), and live mode ComfyUI halt verified.
 - **Housekeeping**: Root litter verified clean; offline font search completed; display weight standardized on Inter Black 900 in `HANDOFF.md` and `DESIGN.md`.
+- **Phase C4 Commit 1 (Asset Strategy Resolver)**:
+  - Resolver ladder implemented in `poster_agent/assets/resolver.py`: `supplied -> archive -> native -> generated`. Generation is now the last resort rather than mandatory pipeline spine.
+  - Brief asset references parsed via `poster_agent/ingestion/extractor.py` without leaking into verbatim poster copy.
+  - Stage 2b asset resolution gate integrated into `poster_agent/unified_pipeline.py`. Stages 3 & 4a conditionally run only if corresponding slots resolve to `generated`. Live run without ComfyUI completes when assets are supplied/archive/native.
+  - Native background raster preview generated and measured in Stage 4b. Provenance logged per-slot in `plan.json`.
+  - Full test suite: 102/102 tests passed (`tests/test_assets.py`). Committed as `78f0c6c`.
+- **Phase C4 Commit 2 (House Style System)**:
+  - Brand data per school (KCT, KCLAS, KCTBS, KI, KIA), format mappings (`story -> 1080x1920 (DEFAULT)`, `square -> 1080x1080`, `fourfive -> 1080x1350`, `A3 -> 842x1191pt`, `A4 -> 595x842pt`), genre taxonomy, and structural policies defined in `configs/house_style.yaml`.
+  - House style resolver implemented in `poster_agent/house_style.py` (`load_house_style`, `resolve_canvas_dimensions`, `resolve_school`, `resolve_genre`). Default canvas when absent: 1080x1920 (9:16 story).
+  - Fonts installed offline into VectorCraft Data directory: `Montserrat-Bold.ttf`, `Barlow-Bold.ttf`, `NotoSansTamil-Bold.ttf`. Runtime font auditing (`audit_fonts`) selects school display voice (Barlow for KCTBS, Montserrat for KCT/KCLAS/KI/KIA, Noto Sans Tamil for Tamil).
+  - Dynamic canvas sizing end-to-end: Stage 2 concept contract, Stage 3.5 measurer, Stage 4a background generation, Stage 4b measurement, Stage 4.5 layout, Stage 5 VectorCraft render, and Stage 6 exact size gate dynamically derived from canvas (`target_2x = (canvas_w * 2, canvas_h * 2)`).
+  - Structural rows implemented in `poster_agent/renderer/composer.py`: `emit_logo_row`, `emit_banner_tab_row`, `emit_pill_row`, `emit_footer_bar_row`, `emit_qr_row` (with deterministic QR code generation). Manifest records all structural items with `_structure_*` prefix. Genre policy enforces institutional allowance of pills/banners while preserving clean line on cultural editorial.
+  - Full test suite: 111/111 tests passed (`tests/test_house_style.py`, `tests/test_composer.py`). Committed as `feat(house): house style...`.
 
 ### Pending / Next Up
+- **Phase C4 Commit 3**: Doctrine rebuild (`poster-design-craft` as house design system with corpus citations `corpus: X/205`, exemplar injection into concept call in `gemini_client.py`).
 - **Phase D**: Standalone deterministic QA gates integration (`poster_agent/qa/gates.py` into Stages 6 and 7).
 - **Phase D 3b**: Repair loop executor consuming `REPAIR_SCHEMA` operations upon gate failure.
 

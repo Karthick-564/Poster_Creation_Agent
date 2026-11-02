@@ -90,12 +90,12 @@ class TypographicPlan:
         return None
 
 
-def audit_fonts() -> dict[str, str]:
+def audit_fonts(school: Optional[str] = None) -> dict[str, str]:
     """Audit available fonts at runtime via VectorCraft's shared fonts directory.
 
     Returns mapping of canonical roles ('display', 'sans', 'mono', 'serif', 'tamil')
     to available font family names, degrading gracefully to system fonts if specific
-    TTF files are absent.
+    TTF files are absent. Prefers the specified school's display voice if provided.
     """
     fonts_dir = get_vectorcraft_fonts_dir()
     available_ttfs = set()
@@ -105,17 +105,28 @@ def audit_fonts() -> dict[str, str]:
         for p in fonts_dir.glob("*.otf"):
             available_ttfs.add(p.stem.lower())
 
-    # Map roles based on verified installed fonts (Outfit is NOT installed)
+    # Map roles based on verified installed fonts
     has_inter = any("inter" in name for name in available_ttfs)
     has_jetbrains = any("jetbrains" in name for name in available_ttfs)
     has_sourcesans = any("sourcesans" in name for name in available_ttfs)
     has_sourceserif = any("sourceserif" in name for name in available_ttfs)
+    has_montserrat = any("montserrat" in name for name in available_ttfs)
+    has_barlow = any("barlow" in name for name in available_ttfs)
+    has_noto_tamil = any("notosanstamil" in name or ("noto" in name and "tamil" in name) for name in available_ttfs)
 
-    display_font = "Inter" if has_inter else "Bahnschrift"
+    # School display voice resolution
+    if school == "KCTBS":
+        display_font = "Barlow" if has_barlow else ("Montserrat" if has_montserrat else ("Inter" if has_inter else "Bahnschrift"))
+    elif school in ("KCT", "KCLAS", "KI", "KIA"):
+        display_font = "Montserrat" if has_montserrat else ("Inter" if has_inter else "Bahnschrift")
+    else:
+        # Default display voice: prefer Montserrat if installed, else Inter, else Bahnschrift
+        display_font = "Montserrat" if has_montserrat else ("Inter" if has_inter else "Bahnschrift")
+
     sans_font = "Inter" if has_inter else ("Source Sans 3" if has_sourcesans else "Segoe UI")
     mono_font = "JetBrains Mono" if has_jetbrains else "Consolas"
     serif_font = "Source Serif 4" if has_sourceserif else "Georgia"
-    tamil_font = "Nirmala UI"
+    tamil_font = "Noto Sans Tamil" if has_noto_tamil else "Nirmala UI"
 
     return {
         "display": display_font,
@@ -179,15 +190,249 @@ def is_light_context(brief: ExtractedBrief, palette: list[str]) -> bool:
     return False
 
 
+def generate_qr_code(link: str, output_path: Path) -> Path:
+    """Generate a high-contrast QR code image for print/screen use."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import qrcode
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=2,
+        )
+        qr.add_data(link)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        img.save(output_path)
+    except Exception:
+        from PIL import Image as PILImage, ImageDraw as PILDraw
+        img = PILImage.new("RGB", (200, 200), "#FFFFFF")
+        draw = PILDraw.Draw(img)
+        draw.rectangle([10, 10, 190, 190], outline="#000000", width=4)
+        draw.rectangle([30, 30, 70, 70], fill="#000000")
+        draw.rectangle([130, 30, 170, 70], fill="#000000")
+        draw.rectangle([30, 130, 70, 170], fill="#000000")
+        img.save(output_path)
+    return output_path
+
+
+def emit_logo_row(
+    vc: VectorCraftRenderer,
+    brief: ExtractedBrief,
+    school_info: dict[str, Any],
+    width: float,
+    height: float,
+    margin_x: float,
+    margin_y: float,
+    is_light: bool = True,
+) -> list[dict[str, Any]]:
+    """Emit brand logo(s) according to house style rules."""
+    emitted = []
+    logo_path_str = getattr(brief, "asset_references", {}).get("logo_path") or brief.get_text("logo_path")
+    logos_spec = brief.get_text("logos")
+    school_logo = school_info.get("logo", "assets/logo_kumaraguru.png")
+    
+    kg_path = Path(school_logo) if school_logo else Path("assets/logo_kumaraguru.png")
+    if logo_path_str and Path(logo_path_str).exists():
+        kg_path = Path(logo_path_str)
+        
+    gdg_path = Path("assets/logo_gdg_oncampus.png")
+    
+    logo_h = max(36.0, height * 0.035)
+    logo_w = logo_h * 3.0
+    logo_y = margin_y + 8.0
+    
+    if kg_path.exists():
+        vc.place_image(kg_path, rect=[margin_x, logo_y, logo_w, logo_h])
+        emitted.append({"role": "_structure_logo_left", "path": str(kg_path), "rect": [margin_x, logo_y, logo_w, logo_h]})
+        
+    if gdg_path.exists() and ("gdg" in brief.get_text("title").lower() or "gdg" in brief.get_text("organizer").lower() or "gdg" in logos_spec.lower()):
+        vc.place_image(gdg_path, rect=[width - margin_x - logo_w, logo_y, logo_w, logo_h])
+        emitted.append({"role": "_structure_logo_right", "path": str(gdg_path), "rect": [width - margin_x - logo_w, logo_y, logo_w, logo_h]})
+        
+    return emitted
+
+
+def emit_banner_tab_row(
+    vc: VectorCraftRenderer,
+    text: str,
+    width: float,
+    height: float,
+    font: str,
+    fill_color: str,
+    text_color: str = "#FFFFFF",
+    y: float = 0.0,
+) -> tuple[float, dict[str, Any]]:
+    """Emit top band bar (brand primary fill) with the hook/call-out line."""
+    bar_h = max(36.0, height * 0.026)
+    vc.add_shape_rectangle(x=0.0, y=y, width=width, height=bar_h, fill=fill_color)
+    vc.add_text(
+        text=text.upper(),
+        x=width * 0.5,
+        y=y + (bar_h * 0.68),
+        size=max(12.0, bar_h * 0.44),
+        font=font,
+        style="Bold",
+        tracking=35.0,
+        color=text_color,
+        justify="center",
+        role="_structure_banner_tab",
+    )
+    item = {
+        "role": "_structure_banner_tab",
+        "text": text,
+        "x": width * 0.5,
+        "y": y + (bar_h * 0.68),
+        "height": bar_h,
+    }
+    return y + bar_h, item
+
+
+def emit_pill_row(
+    vc: VectorCraftRenderer,
+    text: str,
+    x: float,
+    y: float,
+    font: str,
+    fill_color: str,
+    text_color: str = "#FFFFFF",
+    size: float = 18.0,
+    radius: float = 14.0,
+    padding_h: float = 24.0,
+    padding_v: float = 7.0,
+    role: str = "_structure_pill",
+    justify: str = "center",
+) -> dict[str, Any]:
+    """Emit rounded-rect fill container + centered caps label."""
+    text_w = estimate_text_width(text.upper(), size, font=font, tracking=25.0)
+    pill_w = text_w + (2.0 * padding_h)
+    pill_h = size + (2.0 * padding_v)
+    pill_x = x - (pill_w * 0.5) if justify == "center" else x
+    pill_y = y - (size * 0.8)
+    
+    vc.add_shape_rectangle(
+        x=pill_x,
+        y=pill_y,
+        width=pill_w,
+        height=pill_h,
+        fill=fill_color,
+        radius=radius,
+    )
+    vc.add_text(
+        text=text.upper(),
+        x=x,
+        y=y,
+        size=size,
+        font=font,
+        style="Bold",
+        tracking=25.0,
+        color=text_color,
+        justify=justify,
+        role=role,
+    )
+    return {
+        "role": role,
+        "text": text,
+        "x": x,
+        "y": y,
+        "bounds": [pill_x, pill_y, pill_x + pill_w, pill_y + pill_h],
+    }
+
+
+def emit_footer_bar_row(
+    vc: VectorCraftRenderer,
+    text: str,
+    width: float,
+    height: float,
+    font: str,
+    fill_color: str,
+    text_color: str = "#FFFFFF",
+    bar_height: Optional[float] = None,
+) -> dict[str, Any]:
+    """Emit solid brand-color footer strip with contact/date line (house footer)."""
+    bar_h = bar_height or max(40.0, height * 0.032)
+    bar_y = height - bar_h
+    vc.add_shape_rectangle(x=0.0, y=bar_y, width=width, height=bar_h, fill=fill_color)
+    vc.add_text(
+        text=text,
+        x=width * 0.5,
+        y=bar_y + (bar_h * 0.65),
+        size=max(12.0, bar_h * 0.38),
+        font=font,
+        style="Medium",
+        tracking=15.0,
+        color=text_color,
+        justify="center",
+        role="_structure_footer",
+    )
+    return {
+        "role": "_structure_footer",
+        "text": text,
+        "x": width * 0.5,
+        "y": bar_y + (bar_h * 0.65),
+        "height": bar_h,
+    }
+
+
+def emit_qr_row(
+    vc: VectorCraftRenderer,
+    qr_link: str,
+    cta_text: str,
+    x: float,
+    y: float,
+    qr_size: float = 90.0,
+    font: str = "Inter",
+    text_color: str = "#0B2A5B",
+    run_dir: Optional[Path] = None,
+) -> dict[str, Any]:
+    """Emit QR code place_image + caps label."""
+    if run_dir:
+        qr_path = run_dir / "qr_code.png"
+    else:
+        qr_path = Path("runs") / "qr_code.png"
+    generate_qr_code(qr_link, qr_path)
+    vc.place_image(qr_path, rect=[x, y, qr_size, qr_size])
+    
+    label_text = cta_text.upper() if cta_text else "SCAN TO APPLY"
+    label_y = y + qr_size + 16.0
+    vc.add_text(
+        text=label_text,
+        x=x + (qr_size * 0.5),
+        y=label_y,
+        size=11.5,
+        font=font,
+        style="Bold",
+        tracking=20.0,
+        color=text_color,
+        justify="center",
+        role="_structure_qr",
+    )
+    return {
+        "role": "_structure_qr",
+        "qr_path": str(qr_path),
+        "qr_rect": [x, y, qr_size, qr_size],
+        "label_text": label_text,
+        "label_y": label_y,
+    }
+
+
 def build_typography_plan(
     brief: ExtractedBrief,
     palette: list[str],
     layout_hints: Optional[list[str]] = None,
-    width: float = 1080,
-    height: float = 1350,
+    width: float = 1080.0,
+    height: float = 1920.0,
+    school: Optional[str] = None,
 ) -> TypographicPlan:
     """Build a canvas-relative typographic plan obeying the poster-design-craft doctrine."""
-    fonts = audit_fonts()
+    if school is None:
+        try:
+            from poster_agent.house_style import resolve_school
+            school, _ = resolve_school(brief)
+        except Exception:
+            school = "KCT"
+    fonts = audit_fonts(school=school)
 
     # Scalar system relative to canvas height (1350 is base)
     margin = max(40.0, width * 0.04)
@@ -619,8 +864,8 @@ def compose_focal_point(
     bg_path: Path,
     hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
-    width: float = 1080,
-    height: float = 1350,
+    width: float = 1080.0,
+    height: float = 1350.0,
 ) -> VectorCraftRenderer:
     """Focal Point Archetype: Centered optical radiance with orbital text under hero."""
     canvas_base = palette[0] if palette else "#070B19"
@@ -791,10 +1036,15 @@ def compose_focal_point(
     base_y = orbital_y + height * 0.048
     blurb_row = plan.get_row("blurb")
     if blurb_row:
+        blurb_sz = blurb_row.size
+        usable_blurb_w = width - 2 * margin
+        est_blurb_w = estimate_text_width(blurb_row.text, blurb_sz, font=blurb_row.font, tracking=blurb_row.tracking)
+        if est_blurb_w > usable_blurb_w and est_blurb_w > 0:
+            blurb_sz = max(10.0, blurb_sz * (usable_blurb_w / est_blurb_w) * 0.95)
         vc.add_shape_rectangle(x=margin + 40, y=base_y, width=width - 2 * (margin + 40), height=1, fill=palette[2] if len(palette) > 2 else "#00BBF9")
         base_y += height * 0.022
         vc.add_text(
-            text=blurb_row.text, x=cx, y=base_y, size=blurb_row.size,
+            text=blurb_row.text, x=cx, y=base_y, size=blurb_sz,
             font=blurb_row.font, style=blurb_row.style, tracking=blurb_row.tracking,
             color=blurb_row.color, justify="center", role="blurb",
         )
@@ -831,19 +1081,32 @@ def compose_focal_point(
 
     cta_row = plan.get_row("cta")
     if cta_row:
-        cta_w = width * 0.65
-        cta_x = (width - cta_w) / 2.0
-        vc.add_shape_rectangle(x=cta_x, y=base_y, width=cta_w, height=1, fill=cta_row.color)
-        base_y += height * 0.024
-        vc.add_text(
-            text=f"◆   {cta_row.text}   ◆", x=cx, y=base_y, size=cta_row.size,
-            font=cta_row.font, style="Bold", tracking=25.0, color=cta_row.color,
-            justify="center", role="cta",
-        )
-        if not accent_target_id:
-            accent_target_id = "$last"
-        base_y += height * 0.016
-        vc.add_shape_rectangle(x=cta_x, y=base_y, width=cta_w, height=1, fill=cta_row.color)
+        from poster_agent.house_style import resolve_genre
+        _, genre_policy = resolve_genre(brief)
+        if genre_policy.get("allow_pills", True):
+            emit_pill_row(
+                vc=vc,
+                text=cta_row.text,
+                x=cx,
+                y=base_y + (height * 0.024),
+                font=cta_row.font,
+                fill_color=accent_color,
+                text_color="#FFFFFF",
+                size=cta_row.size,
+                role="_structure_pill",
+            )
+        else:
+            cta_w = width * 0.65
+            cta_x = (width - cta_w) / 2.0
+            vc.add_shape_rectangle(x=cta_x, y=base_y, width=cta_w, height=1, fill=cta_row.color)
+            base_y += height * 0.024
+            vc.add_text(
+                text=f"◆   {cta_row.text}   ◆", x=cx, y=base_y, size=cta_row.size,
+                font=cta_row.font, style="Bold", tracking=25.0, color=cta_row.color,
+                justify="center", role="cta",
+            )
+            base_y += height * 0.016
+            vc.add_shape_rectangle(x=cta_x, y=base_y, width=cta_w, height=1, fill=cta_row.color)
 
     apply_genre_effects(vc, genre=genre, accent_color=accent_color, hero_target_id=hero_node_id, accent_target_id=accent_target_id)
     return vc
@@ -857,8 +1120,8 @@ def compose_z_pattern(
     bg_path: Path,
     hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
-    width: float = 1080,
-    height: float = 1350,
+    width: float = 1080.0,
+    height: float = 1350.0,
 ) -> VectorCraftRenderer:
     """Z-Pattern Archetype: Dynamic diagonal scan with collision-free vertical slotting."""
     canvas_base = palette[0] if palette else "#070B19"
@@ -1097,8 +1360,8 @@ def compose_split(
     bg_path: Path,
     hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
-    width: float = 1080,
-    height: float = 1350,
+    width: float = 1080.0,
+    height: float = 1350.0,
 ) -> VectorCraftRenderer:
     """Split Layout Archetype: Seamless upper art zone into solid lower field (ZERO horizontal seam lines)."""
     canvas_base = palette[0] if palette else "#070B19"
@@ -1247,8 +1510,8 @@ def compose_grid_3col(
     bg_path: Path,
     hero_path: Optional[Path | str] = None,
     hero_geom: Optional[Any] = None,
-    width: float = 1080,
-    height: float = 1350,
+    width: float = 1080.0,
+    height: float = 1350.0,
 ) -> VectorCraftRenderer:
     """3-Column Grid Archetype: Balanced vertical distribution with bounded columns."""
     canvas_base = palette[0] if palette else "#070B19"
@@ -1521,7 +1784,7 @@ def compose_slots(
     layout_plan: Optional[dict[str, Any]] = None,
     archetype: str = "focal_point",
     width: float = 1080.0,
-    height: float = 1350.0,
+    height: float = 1920.0,
 ) -> VectorCraftRenderer:
     """Slot-driven composition validated against master doctrine floors.
 
@@ -1537,11 +1800,15 @@ def compose_slots(
     4. Scrims built through soft_scrim DSL with seam overshoot.
     5. Post-placement collision resolution & canvas bounds enforcement.
     """
+    from poster_agent.house_style import resolve_school, resolve_genre
+    school_name, school_info = resolve_school(brief)
+    genre_name, genre_policy = resolve_genre(brief)
+
     is_light = is_light_context(brief, palette)
     canvas_base = "#FFFFFF" if is_light else (palette[0] if palette else "#070B19")
     accent_color = "#4285F4" if is_light else (palette[1] if len(palette) > 1 else "#00F5D4")
     structural_color = "#0B2A5B" if is_light else (palette[4] if len(palette) > 4 else "#FFFFFF")
-    installed_fonts = audit_fonts()
+    installed_fonts = audit_fonts(school=school_name)
     genre = _detect_genre(brief)
 
     # Margin box (4.5% margins)
@@ -1558,15 +1825,17 @@ def compose_slots(
     # Layer 0: Place Background Art
     vc.place_image(bg_path, rect=[0, 0, width, height])
 
-    # Dual Header Logos (Kumaraguru left, GDG right)
-    logos_spec = brief.get_text("logos")
-    if logos_spec or Path("assets/logo_kumaraguru.png").exists():
-        kg_path = Path("assets/logo_kumaraguru.png")
-        gdg_path = Path("assets/logo_gdg_oncampus.png")
-        if kg_path.exists():
-            vc.place_image(kg_path, rect=[margin_x, margin_y + 8.0, 150.0, 50.0])
-        if gdg_path.exists():
-            vc.place_image(gdg_path, rect=[width - margin_x - 150.0, margin_y + 8.0, 150.0, 50.0])
+    # Structural Row: Brand Logo(s)
+    emit_logo_row(
+        vc=vc,
+        brief=brief,
+        school_info=school_info,
+        width=width,
+        height=height,
+        margin_x=margin_x,
+        margin_y=margin_y,
+        is_light=is_light,
+    )
 
     # 4-color Google brand top stripe
     if is_light or "navy for text" in brief.get_text("palette_use").lower():
@@ -1966,24 +2235,51 @@ def compose_slots(
                 justify="center",
                 role="title_recruiting",
             )
-        elif row.role == "cta" and is_light:
-            # Pure editorial typography with subtle accent underline (ZERO web button containers)
-            vc.add_text(
-                text=row.text,
-                x=it["x"],
-                y=it["y"],
-                size=it["size"],
-                font=it["font"],
-                style="Bold",
-                tracking=it["tracking"],
-                color="#0B2A5B",
-                justify=it["justify"],
-                role=row.role,
-            )
-            text_w = estimate_text_width(row.text, it["size"], font=it["font"], tracking=it["tracking"])
-            line_w = min(usable_w, text_w + 24.0)
-            line_x = it["x"] - (line_w * 0.5) if it["justify"] == "center" else it["x"]
-            vc.add_shape_rectangle(x=line_x, y=it["y"] + 6.0, width=line_w, height=2.0, fill="#4285F4", radius=1.0)
+        elif row.role == "cta":
+            if genre_policy.get("allow_pills", True):
+                # Institutional genre allows rounded pill container
+                emit_pill_row(
+                    vc=vc,
+                    text=row.text,
+                    x=it["x"],
+                    y=it["y"],
+                    font=it["font"],
+                    fill_color=accent_color,
+                    text_color="#FFFFFF",
+                    size=it["size"],
+                    role="_structure_pill",
+                )
+            elif is_light:
+                # Pure editorial typography with subtle accent underline (ZERO web button containers)
+                vc.add_text(
+                    text=row.text,
+                    x=it["x"],
+                    y=it["y"],
+                    size=it["size"],
+                    font=it["font"],
+                    style="Bold",
+                    tracking=it["tracking"],
+                    color="#0B2A5B",
+                    justify=it["justify"],
+                    role=row.role,
+                )
+                text_w = estimate_text_width(row.text, it["size"], font=it["font"], tracking=it["tracking"])
+                line_w = min(usable_w, text_w + 24.0)
+                line_x = it["x"] - (line_w * 0.5) if it["justify"] == "center" else it["x"]
+                vc.add_shape_rectangle(x=line_x, y=it["y"] + 6.0, width=line_w, height=2.0, fill="#4285F4", radius=1.0)
+            else:
+                vc.add_text(
+                    text=row.text,
+                    x=it["x"],
+                    y=it["y"],
+                    size=it["size"],
+                    font=it["font"],
+                    style=it["style"],
+                    tracking=it["tracking"],
+                    color=it["color"],
+                    justify=it["justify"],
+                    role=row.role,
+                )
         else:
             vc.add_text(
                 text=row.text,
@@ -1998,6 +2294,36 @@ def compose_slots(
                 role=row.role,
             )
 
+    # QR Row (if qr_link supplied and permitted by genre)
+    qr_url = getattr(brief, "asset_references", {}).get("qr_link") or brief.get_text("qr_link")
+    if qr_url and genre_policy.get("allow_qr", True):
+        qr_sz = max(70.0, min(100.0, width * 0.085))
+        qr_px = width - margin_x - qr_sz
+        qr_py = height - margin_y - qr_sz - 35.0
+        emit_qr_row(
+            vc=vc,
+            qr_link=qr_url,
+            cta_text=brief.get_text("cta") or "SCAN TO APPLY",
+            x=qr_px,
+            y=qr_py,
+            qr_size=qr_sz,
+            font=installed_fonts["sans"],
+            text_color=structural_color,
+        )
+
+    # Footer Bar Row (if closing supplied and permitted by genre)
+    closing_txt = brief.get_text("closing")
+    if closing_txt and genre_policy.get("allow_footer_bar", True):
+        emit_footer_bar_row(
+            vc=vc,
+            text=closing_txt,
+            width=width,
+            height=height,
+            font=installed_fonts["sans"],
+            fill_color=structural_color if not is_light else (palette[1] if len(palette) > 1 else "#1E2842"),
+            text_color="#FFFFFF",
+        )
+
     apply_genre_effects(vc, genre=genre, accent_color=accent_color, hero_target_id=hero_node_id, is_light=is_light)
     return vc
 
@@ -2010,14 +2336,33 @@ def compose(
     hero_geom: Optional[Any] = None,
     archetype: str = "focal_point",
     layout_hints: Optional[list[str]] = None,
-    width: float = 1080,
-    height: float = 1350,
+    width: Optional[float] = None,
+    height: Optional[float] = None,
     layout_plan: Optional[dict[str, Any]] = None,
+    school: Optional[str] = None,
 ) -> VectorCraftRenderer:
     """Master compose entrypoint: dispatches to slot execution if valid plan exists, else archetype default."""
     forced_archetype = os.environ.get("POSTER_FORCE_ARCHETYPE")
     if forced_archetype in ("focal_point", "z_pattern", "split", "grid_3col"):
         archetype = forced_archetype
+
+    if width is None or height is None:
+        from poster_agent.house_style import resolve_canvas_dimensions
+        brief_fmt = brief.get_text("format")
+        if brief_fmt:
+            w_res, h_res = resolve_canvas_dimensions(brief)
+            width = width or w_res
+            height = height or h_res
+        else:
+            width = width or 1080.0
+            height = height or 1350.0
+
+    if school is None:
+        try:
+            from poster_agent.house_style import resolve_school
+            school, _ = resolve_school(brief)
+        except Exception:
+            school = "KCT"
 
     vc = VectorCraftRenderer()
     vc.new_document(width=width, height=height, units="Points", color_mode="rgb", raster_resolution=300)
@@ -2028,6 +2373,7 @@ def compose(
         layout_hints=layout_hints,
         width=width,
         height=height,
+        school=school,
     )
 
     if layout_plan and isinstance(layout_plan, dict) and layout_plan.get("slots"):

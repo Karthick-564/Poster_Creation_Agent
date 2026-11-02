@@ -34,6 +34,7 @@ except Exception:
 
 from poster_agent.ingestion.extractor import BriefExtractor, ExtractedBrief
 from poster_agent.assets import AssetResolver, ResolvedAsset
+from poster_agent.house_style import resolve_canvas_dimensions, resolve_school, resolve_genre
 from poster_agent.generators.comfyui_client import ComfyUIClient
 from poster_agent.vision.art_measurer import ArtMeasurer
 from poster_agent.vision.bg_measurer import measure_background
@@ -146,8 +147,11 @@ class UnifiedPosterPipeline:
         # -------------------------------------------------------------
         s1_t0 = time.time()
         required_keys = ["title", "date", "venue"]
-        extractor = BriefExtractor(required_keys=required_keys)
-        brief = extractor.extract(brief_text, context_text=context_text)
+        if isinstance(brief_text, ExtractedBrief):
+            brief = brief_text
+        else:
+            extractor = BriefExtractor(required_keys=required_keys)
+            brief = extractor.extract(brief_text, context_text=context_text)
 
         missing = [k for k in required_keys if k not in brief.fields or not brief.fields[k].text.strip()]
         if missing:
@@ -164,6 +168,10 @@ class UnifiedPosterPipeline:
             f"Extracted {len(brief.fields)} verbatim fields in {s1_duration:.3f}s with 0 dummy data:\n" +
             "\n".join([f"  • {k}: {v.text}" for k, v in brief.fields.items()])
         )
+
+        canvas_w, canvas_h = resolve_canvas_dimensions(brief)
+        school_name, school_info = resolve_school(brief)
+        genre_name, genre_policy = resolve_genre(brief)
 
         # -------------------------------------------------------------
         # STAGE 2a: CONCEPT PLANNING (SPATIAL & ART DIRECTION)
@@ -202,7 +210,7 @@ ADDITIONAL CONTEXT:
 {context_text}
 
 CANVAS CONTRACT:
-1080 x 1350 px, 4:5 portrait.
+{int(canvas_w)} x {int(canvas_h)} px.
 
 AVAILABLE RESOURCES:
 - Available Fonts: {', '.join(available_fonts)}
@@ -439,7 +447,7 @@ Output strictly valid JSON conforming to the schema.
         # -------------------------------------------------------------
         s35_t0 = time.time()
         if hero_path and hero_path.exists():
-            measurer = ArtMeasurer(target_w=1080, target_h=1350)
+            measurer = ArtMeasurer(target_w=int(canvas_w), target_h=int(canvas_h))
             hero_geom, hero_halo = measurer.measure_alpha_cutout(hero_path)
             hero_measured_color = _extract_dominant_hero_color(hero_path)
             s35_duration = time.time() - s35_t0
@@ -515,11 +523,11 @@ Output strictly valid JSON conforming to the schema.
             if self.use_mock:
                 print(">>> [Mock Mode] Synthesizing mock background art locally...")
                 from PIL import Image as PILImage, ImageDraw as PILImageDraw
-                bg_im = PILImage.new("RGB", (1080, 1350), composed_palette[0])
+                bg_im = PILImage.new("RGB", (int(canvas_w), int(canvas_h)), composed_palette[0])
                 bg_draw = PILImageDraw.Draw(bg_im)
-                for y in range(0, 1350, 4):
-                    ratio = y / 1350.0
-                    bg_draw.line([(0, y), (1080, y)], fill=(int(7 + ratio * 20), int(11 + ratio * 30), int(25 + ratio * 40)), width=4)
+                for y in range(0, int(canvas_h), 4):
+                    ratio = y / float(canvas_h)
+                    bg_draw.line([(0, y), (int(canvas_w), y)], fill=(int(7 + ratio * 20), int(11 + ratio * 30), int(25 + ratio * 40)), width=4)
                 bg_im.save(bg_path, "PNG")
             else:
                 if not self.comfy.is_alive():
@@ -542,9 +550,9 @@ Output strictly valid JSON conforming to the schema.
                 if not success or not bg_path.exists() or bg_path.stat().st_size < min_size:
                     self.log_gate(4, "Generative Background Generation", "FAILED", f"PLANNING_HALT: Background art corrupted or missing after retry: {bg_path}")
 
-            # Lanczos resize to 1080x1350
+            # Lanczos resize to canvas dimensions
             bg_img = cv2.imread(str(bg_path), cv2.IMREAD_UNCHANGED)
-            bg_resized = cv2.resize(bg_img, (1080, 1350), interpolation=cv2.INTER_LANCZOS4)
+            bg_resized = cv2.resize(bg_img, (int(canvas_w), int(canvas_h)), interpolation=cv2.INTER_LANCZOS4)
             cv2.imwrite(str(feathered_bg_path), bg_resized)
 
             s4a_duration = time.time() - s4a_t0
@@ -559,7 +567,7 @@ Output strictly valid JSON conforming to the schema.
             if not cand.exists() or cand.stat().st_size < min_size:
                 self.log_gate(4, "Background Art Resolution", "FAILED", f"Resolved background asset invalid: {cand}")
             bg_img = cv2.imread(str(cand), cv2.IMREAD_UNCHANGED)
-            bg_resized = cv2.resize(bg_img, (1080, 1350), interpolation=cv2.INTER_LANCZOS4)
+            bg_resized = cv2.resize(bg_img, (int(canvas_w), int(canvas_h)), interpolation=cv2.INTER_LANCZOS4)
             cv2.imwrite(str(feathered_bg_path), bg_resized)
             shutil.copy2(feathered_bg_path, bg_path)
             s4a_duration = time.time() - s4a_t0
@@ -571,7 +579,7 @@ Output strictly valid JSON conforming to the schema.
         else:
             preview_path = self.run_dir / "layer0_native_preview.png"
             from PIL import Image as PILImage
-            native_im = PILImage.new("RGB", (1080, 1350), composed_palette[0])
+            native_im = PILImage.new("RGB", (int(canvas_w), int(canvas_h)), composed_palette[0])
             native_im.save(preview_path, "PNG")
             feathered_bg_path = preview_path
             shutil.copy2(feathered_bg_path, bg_path)
@@ -610,8 +618,9 @@ Output strictly valid JSON conforming to the schema.
             brief=brief,
             palette=palette_list,
             layout_hints=[concept_plan.get("archetype_rationale", "")],
-            width=1080,
-            height=1350,
+            width=canvas_w,
+            height=canvas_h,
+            school=school_name,
         )
 
         measured_art_summary = {
@@ -802,6 +811,8 @@ Output strictly valid JSON conforming to the schema.
             layout_plan=layout_plan,
             pdf_out=pdf_out,
             png_out=png_2x_out,
+            width=canvas_w,
+            height=canvas_h,
         )
 
         min_render_size = 10000 if (self.use_mock or bg_res.source == "native") else 100000
@@ -826,8 +837,10 @@ Output strictly valid JSON conforming to the schema.
         with Image.open(png_2x_out) as img:
             pw, ph = img.size
 
-        if (pw, ph) != (2160, 2700):
-            self.log_gate(6, "Physical Quality Gates", "FAILED", f"Resolution {pw}x{ph} != 2160x2700 px (2x).")
+        target_2x_w = int(canvas_w * 2)
+        target_2x_h = int(canvas_h * 2)
+        if (pw, ph) != (target_2x_w, target_2x_h):
+            self.log_gate(6, "Physical Quality Gates", "FAILED", f"Resolution {pw}x{ph} != {target_2x_w}x{target_2x_h} px (2x).")
 
         s6_duration = time.time() - s6_t0
         self.log_gate(
@@ -990,7 +1003,7 @@ Output strictly valid JSON with this schema:
 | **Stage 4b** | **Background Measurement** | `PASSED` | {s4b_duration:.3f}s | 12x15 calm/busy/salient grid classification |
 | **Stage 4.5** | **Layout Planning (Slot Placement)** | `PASSED` | {s45_duration:.3f}s | Text slots placed strictly into measured calm zones |
 | **Stage 5** | **Depth-Layered Assembly (VectorCraft)** | `PASSED` | {s5_duration:.3f}s | Archetype: {archetype}, {text_count} text rows, {overflow_count} overflow warnings |
-| **Stage 6** | **Deterministic Physical Quality Gates** | `PASSED` | {s6_duration:.3f}s | Exact 2160x2700 px (2x), safe margins > 40px |
+| **Stage 6** | **Deterministic Physical Quality Gates** | `PASSED` | {s6_duration:.3f}s | Exact {target_2x_w}x{target_2x_h} px (2x), safe margins > 40px |
 | **Stage 7** | **Grounded Multimodal Visual Critique** | `PASSED` | {s7_duration:.2f}s | OCR 100% verbatim, score {vlm_score}/10 |
 | **Stage 8** | **Print Packaging & Certification** | `PASSED` | 0.005s | True Vector PDF & 2x PNG deliverables packaged |
 
@@ -1005,7 +1018,7 @@ Output strictly valid JSON with this schema:
 
 ## 3. Final Deliverables
 - **Print Master Vector PDF**: [{dest_pdf.name}](file:///{_posix(dest_pdf)})
-- **2x High-Res Render (2160 x 2700 px)**: [{dest_png.name}](file:///{_posix(dest_png)})
+- **2x High-Res Render ({target_2x_w} x {target_2x_h} px)**: [{dest_png.name}](file:///{_posix(dest_png)})
 - **Layer 0 Background Art**: [{dest_bg.name}](file:///{_posix(dest_bg)})
 {hero_line}
 """
@@ -1039,6 +1052,8 @@ Output strictly valid JSON with this schema:
         archetype: str = "focal_point",
         layout_hints: Optional[list[str]] = None,
         layout_plan: Optional[dict[str, Any]] = None,
+        width: float = 1080.0,
+        height: float = 1920.0,
     ) -> Any:
         """Assembles depth-layered vector composition following archetype-native rules."""
         from poster_agent.renderer.composer import compose
@@ -1051,8 +1066,8 @@ Output strictly valid JSON with this schema:
             archetype=archetype,
             layout_hints=layout_hints,
             layout_plan=layout_plan,
-            width=1080,
-            height=1350,
+            width=width,
+            height=height,
         )
         vc_res = vc.execute(output_png=png_out, output_pdf=pdf_out, scale=2.0, work_dir=self.run_dir)
         if not vc_res.success:

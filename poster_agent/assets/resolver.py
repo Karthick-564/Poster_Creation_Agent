@@ -254,3 +254,4 @@ class AssetResolver:
         for s in slots:
             results[s] = self.resolve_slot(s, brief, concept_plan)
         return results
+
