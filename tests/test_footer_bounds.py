@@ -55,3 +55,4 @@ def test_footer_bar_baseline_respects_canvas_bottom_margin():
     }]
     failures = check_canvas_bounds(row_manifest, canvas_w=width, canvas_h=height, margin_px=margin_px)
     assert len(failures) == 0, f"Canvas bounds gate failed on footer: {failures}"
+

@@ -138,6 +138,25 @@ class UnifiedPosterPipeline:
         prefix = f"[Stage {stage_num}: {name}]"
         print(f"\n{'='*75}\n{prefix} -> {status.upper()}\n{'='*75}\n{detail}\n")
         if status.upper() not in ("PASSED", "SKIPPED", "REVIEW_UNAVAILABLE", "PASSED_WITH_WARNINGS"):
+            # Persist halt receipt to plan.json before raising (if checkpointed)
+            plan_file = self.run_dir / "plan.json"
+            if plan_file.exists():
+                try:
+                    with open(plan_file, "r", encoding="utf-8") as pf:
+                        plan_data = json.load(pf)
+                except Exception:
+                    plan_data = {}
+                plan_data.update({
+                    "run_id": self.run_id,
+                    "halt": True,
+                    "halt_reason": detail,
+                    "halted_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "halt_stage": f"Stage {stage_num}: {name}",
+                    "mock_used": self.use_mock,
+                })
+                with open(plan_file, "w", encoding="utf-8") as pf:
+                    json.dump(plan_data, pf, indent=2)
+
             raise RuntimeError(f"PIPELINE HALTED at Stage {stage_num} ({name}): {detail}")
 
     def execute(self, brief_text: str, context_text: str = "") -> dict:

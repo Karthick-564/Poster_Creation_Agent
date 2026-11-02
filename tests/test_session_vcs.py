@@ -130,3 +130,4 @@ def test_session_vcs_re_render_parity(tmp_path):
     m1_texts = [item.get("text") for item in res1.text_manifest]
     m2_texts = [item.get("text") for item in res2.text_manifest]
     assert m1_texts == m2_texts
+

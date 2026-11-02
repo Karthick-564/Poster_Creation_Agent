@@ -138,3 +138,4 @@ def build_ideogram_v2_payload(
         },
         "aspect_ratio": aspect_str,
     }
+

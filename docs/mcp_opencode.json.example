@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "vectorcraft": {
+      "command": "python",
+      "args": ["-m", "poster_agent.mcp.vectorcraft_server"],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}

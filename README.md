@@ -138,13 +138,40 @@ Exercises the full planning, asset resolution, layout compilation, VectorCraft r
 python run_poster.py --mock --brief-file briefs/brief_c4_demo.txt
 ```
 
-### 3. Running the Test Suite
+### 3. Interactive Designer Session (MCP Server)
+OpenCode and MCP-compatible clients can drive VectorCraft interactively with human-in-the-loop design or autonomous agent iteration via the built-in stdio MCP server:
+
+```powershell
+python -m poster_agent.mcp.vectorcraft_server
+```
+
+Configure in OpenCode `mcpServers` (see `docs/mcp_opencode.json.example`):
+```json
+{
+  "mcpServers": {
+    "vectorcraft": {
+      "command": "python",
+      "args": ["-m", "poster_agent.mcp.vectorcraft_server"]
+    }
+  }
+}
+```
+
+#### Anti-Thrash Interaction Policy:
+1. **Load & Lock**: Call `load_brief(path)` first to lock verbatim text fields into memory. Any hallucinated copy is instantly rejected with `VerbatimValidationError`.
+2. **Layout & Measure**: Emit text, shapes, and image placements with `add_text`, `place_image`, `soft_scrim`, and `radial_light`.
+3. **Measure Before Preview**: Always call `measure()` after edits. It runs instant pure-math geometric gates (`canvas_bounds`, `row_overlap`, `hero_overlap`, `dedupe`, `required_content`, `v_band_coverage`) in `<5ms` without invoking the CLI rasterizer.
+4. **Preview When Close**: Call `render_preview(scale=0.5)` only when geometric gates are passing to verify typography visual weight and balance.
+5. **Export When Green**: Calling `export(output_png, output_pdf)` is strictly gated. If `measure()` reports any failing gates, export is blocked with `ExportBlockedError`.
+
+### 4. Running the Test Suite
 Run the full test suite across all subsystems:
 ```powershell
 python -m pytest tests/ -q
 ```
 Or run individual targeted test suites:
 ```powershell
+python -m pytest tests/test_mcp_server.py -v
 python -m pytest tests/test_render_polish.py -v
 python -m pytest tests/test_composer.py -v
 python -m pytest tests/test_house_style.py -v

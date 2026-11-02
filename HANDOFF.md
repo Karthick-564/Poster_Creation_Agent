@@ -203,8 +203,17 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - **Broken-Scenario Harness (`briefs/brief_broken_dense.txt`)**: Stress-test brief featuring a 44-character single-word headline and 9 dense positions, verified end-to-end in `tests/test_repair_broken_scenario.py`.
   - Full test suite: **144 passed**, 3 warnings on Windows.
 
+- **Phase E (VectorCraft MCP Server + Interactive Designer Mode + Bakeoff)**:
+  - **Halt-Receipt Contract Fix**: Updated `log_gate` in `poster_agent/unified_pipeline.py` to persist early checkpointed `plan.json` with `halt: True`, `halt_reason`, `halted_at`, and `halt_stage` before re-raising. Updated `test_planner_c2.py` contract.
+  - **VectorCraft MCP Server (`poster_agent/mcp/vectorcraft_server.py`)**: Dependency-free JSON-RPC 2.0 stdio server providing 11 authoring tools: `create_doc`, `load_brief`, `add_text` (with strict verbatim copy validation against loaded brief), `place_image` (with project-root path security enforcement), `soft_scrim`, `radial_light`, `measure` (instant `<1ms` pure-math evaluation of 6 Phase-D QA gates), `render_preview` (fast CLI raster preview), `save_session` / `load_session` (.vcs session round-trips), and `export` (honest blocked export refusing to render if any QA gates fail).
+  - **OpenCode & README Documentation**: Created `docs/mcp_opencode.json.example` ready for OpenCode integration; added "Interactive Designer Session" and "Anti-Thrash Interaction Policy" to `README.md`.
+  - **Test Suite (`tests/test_mcp_server.py`)**: 10 comprehensive tests verifying tool schemas, verbatim rejection of non-brief text, pure-math measurement catching margin escapes and overlaps, blocked export enforcement, permitted export when green, and JSON-RPC protocol framing.
+  - **Pilot Bakeoff (`docs/interactive_bakeoff.md`)**: Executed automated bakeoff (`scripts/mcp_pilot_client.py`) on `briefs/brief_c4_demo.txt`. Batch mode delivered in 2.27s (score 9.0); Interactive MCP designer completed 28 tool calls in 2.91s, measuring pure-math gates in 0.1ms, iteratively wrapping headlines to resolve margin escapes, and achieving a 10.0/10.0 score with 100% vertical band coverage. Master renders, session files, and telemetry logged in `runs/mcp_bakeoff_20261103/`.
+  - Full test suite: **154 passed**, 3 warnings on Windows.
+
 ### Pending / Next Up
-- **Live Acceptance Run**: Run live production pipeline with real Gemini API on `briefs/brief_c4_demo.txt` and `briefs/brief_robotics_demoday.txt` to verify end-to-end asset generation, QA gates, repair executor, and editable `.vcs` deliverables.
+- **Phase E3 (Hybrid Routing Engine)**: Connect planner to route standard briefs ($\le 10$ fields) to Batch Pipeline and dense/complex briefs ($\ge 15$ fields) to Interactive MCP loop.
+- **Live Acceptance Run**: Run live production pipeline with real Gemini API on `briefs/brief_c4_demo.txt` and `briefs/brief_robotics_demoday.txt`.
 
 ## 7. Superseded / Do Not Revive
 

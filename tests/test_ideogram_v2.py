@@ -92,3 +92,4 @@ def test_build_ideogram_v2_payload_schema():
 
     # 4. Aspect ratio
     assert payload["aspect_ratio"] == "9:16"
+

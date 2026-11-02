@@ -55,3 +55,4 @@ def test_refusal_gate_passes_solid_canvas(tmp_path):
 
     failures = check_refusal_free(solid_path)
     assert len(failures) == 0
+

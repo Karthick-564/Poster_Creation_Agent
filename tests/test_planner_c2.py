@@ -261,6 +261,8 @@ def test_live_pipeline_halt_on_failed_concept_call(monkeypatch):
     No canned poster, no silent fallback, plan.json never written."""
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key-for-test")
     pipeline = UnifiedPosterPipeline(run_id="test_halt_concept_run", use_mock=False)
+    if (pipeline.run_dir / "plan.json").exists():
+        (pipeline.run_dir / "plan.json").unlink()
     fake_client = MagicMock()
     fake_client.generate_json.return_value = {"error": "simulated API down"}
     pipeline.gemini = fake_client
@@ -304,7 +306,11 @@ def test_live_pipeline_halt_on_layout_failure_after_valid_concept(monkeypatch):
     with pytest.raises(RuntimeError, match="PLANNING_HALT"):
         pipeline.execute(brief_text=brief_text)
     assert fake_gemini.generate_json.call_count == 2
-    assert not (pipeline.run_dir / "plan.json").exists()
+    plan_p = pipeline.run_dir / "plan.json"
+    assert plan_p.exists()
+    plan_data = json.loads(plan_p.read_text(encoding="utf-8"))
+    assert plan_data.get("halt") is True
+    assert "halt_reason" in plan_data
 
 
 # 3. Composer slot execution: undersized slot clamped, unknown font & degenerate zone fallback
