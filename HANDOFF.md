@@ -143,11 +143,28 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - Addendum Item 2 applied: WSL skip guards added to all VectorCraft execution tests in `tests/test_house_style.py` and `tests/test_doctrine_c4.py`.
   - Addendum Item 3 applied: Normalized trailing newlines in `configs/house_style.yaml` and `poster_agent/house_style.py`.
   - Addendum Item 4 applied: Recorded offline font discovery / Bold-weight limitation in Section 1 and Section 6.
-  - Section 1.5 added to `skills/poster-design-craft/SKILL.md` with verified corpus ground truth citations (`corpus: 173/205` for 9:16 story, `corpus: 129/205` for white/light base, `corpus: 48/205` for QR code, `corpus: 44/205` for weak-point discipline). Updated Section 1 (genre-aware structural policy), Section 12 (9:16 story default), and Section 13 (quality rubric).
+  - Section 1.5 added to `skills/poster-design-craft/SKILL.md` with verified corpus ground truth citations (`corpus: 172/205` for 9:16 story per the audit-adjusted rule, `corpus: 129/205` for white/light base, `corpus: 48/205` for QR code, `corpus: 44/205` for weak-point discipline). Updated Section 1 (genre-aware structural policy), Section 12 (9:16 story default), and Section 13 (quality rubric).
   - Exemplar picker `select_house_exemplars` and prompt formatter `format_exemplars_for_prompt` implemented in `poster_agent/house_style.py`.
   - Concept prompt builder `build_concept_prompt` implemented in `poster_agent/gemini_client.py` injecting up to 3 exemplars under strict ~500 token budget (~2000 chars).
   - Pipeline logs `HOUSE_EXEMPLARS: N` at Stage 1.5. Verified `HOUSE_EXEMPLARS: 3` on GDG recruitment brief and `HOUSE_EXEMPLARS: 0` on unknown genre brief.
   - Full test suite: 116/116 tests passing (`tests/test_doctrine_c4.py`, `tests/test_assets.py`, `tests/test_house_style.py`).
+  - **[AUDIT ALIGN 2026-11-02]** Citation arithmetic corrected against the CSV recompute: with the rule
+    `"1080x1920" in format` the story count is **172/205 (84%)** — the earlier 173 came from an OR-rule
+    that also counted one mislabeled `~1080x2070` row; "166" matched no rule on the CSV. Secondary tiers
+    recompute to **32/205 (16%)** (rule: 4:5/square/A3/A4 and non-1080x1920) — the earlier `39/205` was
+    unverifiable. `SKILL.md` and `tests/test_doctrine_c4.py` now agree on both rules and counts.
+  - **[AUDIT ALIGN]** An uncommitted worktree edit had silently rolled `house_style.py` back to
+    Commit 2's first-match genre logic; the Commit 3 weighted-scoring version was restored from
+    `20bfc15` after its own tests passed. Whether a deliberate revert is preferred must be argued
+    with failing-test evidence, not silent file replacement.
+  - **[AUDIT ALIGN — font provenance]** Montserrat-Barlow-NotoSansTamil Bold TTFs were copied from the
+    VectorCraft portable bundle (`tools/vectorcraft_bin/.../VectorCraftData/Fonts/`) — sizes byte-identical
+    to `assets/fonts/`. No network downloads. All three are OFL families; ship OFL attribution files with
+    the bundle before any public distribution.
+  - **[AUDIT ALIGN — test hygiene]** `tests/test_no_hardcoded_paths.py` reworked to `os.walk` with directory
+    pruning (same invariants): 186s → ~1s under WSL. Minimal test policy added: `scripts/test.sh` /
+    `scripts/test.ps1` — CORE suite (7 invariant files, ~10s) by default; FULL suite only when
+    composer / pipeline / gates / render code changes.
 
 ### Pending / Next Up
 - **Phase D**: Standalone deterministic QA gates integration (`poster_agent/qa/gates.py` into Stages 6 and 7).

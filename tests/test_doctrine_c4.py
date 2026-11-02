@@ -64,9 +64,20 @@ def test_doctrine_skill_md_corpus_citations_match_csv_recompute():
     total = len(rows)
     assert total == 205
 
-    # Recompute Story format count: 173/205 (84%)
-    story_count = sum(1 for r in rows if "1080x1920" in r.get("format", "").lower() or "story" in r.get("format", "").lower())
-    assert story_count == 173
+    # Recompute Story format count: count rows whose format field states 1080x1920.
+    # ("story" as a bare substring is NOT a valid predicate: one mislabeled row is
+    # ~1080x2070 story, and other non-9:16 rows mention 'story' -> 171/173 vs honest 172.)
+    story_count = sum(1 for r in rows if "1080x1920" in r.get("format", "").lower())
+    assert story_count == 172
+
+    # Recompute secondary tiers (4:5, square, A3, A4; excluding story rows present)
+    secondary_count = sum(
+        1 for r in rows
+        if ("1080x1350" in r.get("format", "").lower() or "square" in r.get("format", "").lower()
+            or "a3" in r.get("format", "").lower() or "a4" in r.get("format", "").lower())
+        and "1080x1920" not in r.get("format", "").lower()
+    )
+    assert secondary_count == 32
 
     # Recompute White background count: 129/205 (63%)
     white_count = sum(1 for r in rows if "white" in r.get("background", "").lower())
@@ -85,7 +96,8 @@ def test_doctrine_skill_md_corpus_citations_match_csv_recompute():
     assert skill_p.exists(), f"SKILL.md missing at {skill_p}"
     skill_text = skill_p.read_text(encoding="utf-8")
 
-    assert "corpus: 173/205" in skill_text
+    assert "corpus: 172/205" in skill_text
+    assert "corpus: 32/205" in skill_text
     assert "corpus: 129/205" in skill_text
     assert "corpus: 48/205" in skill_text
     assert "corpus: 44/205" in skill_text
@@ -149,3 +161,4 @@ def test_composer_genre_policy_pills_for_recruitment_absent_for_cultural_a3(tmp_
 
     roles_cult = [t.get("role") for t in vc_cult.text_manifest]
     assert "_structure_pill" not in roles_cult
+

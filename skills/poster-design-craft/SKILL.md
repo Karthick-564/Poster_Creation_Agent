@@ -19,8 +19,8 @@ An event poster is a large-format **editorial art piece**, not a mobile phone sc
 All design parameters are calibrated against the verified house style corpus (`Examples/extracted/Posters/poster_catalog.csv`):
 
 1. **Format Ladder**:
-   - **9:16 Story (1080×1920)**: Dominates 84% of the corpus (`corpus: 173/205`) $\rightarrow$ **DEFAULT** format across the pipeline.
-   - **Secondary Tiers**: 4:5 portrait (1080×1350), 1:1 square (1080×1080), and A3/A4 print point dimensions (`corpus: 39/205`).
+   - **9:16 Story (1080×1920)**: Dominates 84% of the corpus (`corpus: 172/205`) → **DEFAULT** format across the pipeline.
+   - **Secondary Tiers**: 4:5 portrait (1080×1350), 1:1 square, and A3/A4 print dimensions (`corpus: 32/205`, 16%).
 2. **Palette Discipline & White-Space Habit**:
    - **White / Light Base Dominance**: 63% of catalog posters (`corpus: 129/205`) employ clean white or light tinted backgrounds.
    - **60/30/10 Ratio**: 60% canvas base (white/light or deep brand navy), 30% structural body copy (deep navy `#1E2842` or `#0B2A5B` on light backgrounds), 10% high-impact accent.
