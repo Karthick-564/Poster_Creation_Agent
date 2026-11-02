@@ -212,6 +212,19 @@ PDF/PNG is a **pipeline smoke test, not a poster** — treat any mock output as 
   - **Pilot Bakeoff (`docs/interactive_bakeoff.md`)**: Executed automated bakeoff (`scripts/mcp_pilot_client.py`) on `briefs/brief_c4_demo.txt`. Batch mode delivered in 2.31s (0 gate failures); Interactive MCP designer completed 30 tool calls in 3.39s, painting a full-canvas `#070B19` background fill, aligning atmospheric scrims without slicing text, measuring pure-math gates in 0.4ms, iteratively wrapping headlines to resolve margin escapes, and achieving 0 gate failures with 100% vertical band coverage. Master renders, session files, and telemetry logged in `runs/mcp_bakeoff_20261103/`.
   - Full test suite: **155 passed**, 3 warnings on Windows.
 
+### Live Run Saga — 2026-11-03 (`noir_beats_v1..v8`)
+
+New brief written from scratch (`briefs/brief_noir_beats.txt`) and driven through the full live pipeline (Windows host, ComfyUI + Gemini live). Six halts, six committed fixes — every halt a *single-source-of-truth* violation, every fix collapsible into one measured authority:
+
+1. `18012b2` — `is_light_context` matched bare `"light"` in mood ("laser **light** cuts") and silently designed a dark poster for a white canvas (navy rows on dark art, CR 1.45:1 × 8 rows). Now only explicit "light background" phrase or palette luminance triggers light mode. Also: `pick_structural_text_color()` self-verifies ≥4.5:1 vs canvas base at selection time; `ideogram_v2` payload no longer says "prepared for typographic overlay" (solicitation that baked "Clomailioka"/"2030" into art).
+2. `1c733bc` — Gemini planning calls are flaky consumers (timeout → 503 across runs): added `--reuse-assets-from` (layer cache: retried runs skip nonzero diffusion tax) and 3× backoff on layout planning.
+3. `f47e28f` — Hero exclusion relocater must anchor multi-line blocks by full extent (first-line-only anchor left line 2s inside the hero rect; loop made zero progress).
+4. Unified row-block physics — exclusion pass now uses *exactly* the audit's per-line math (two geometries on one canvas stalled v5/v7); focal hero anchor adapts under the planned header stack (clamped 0.35H–0.48H); hero budget honors lowest planned below-slot.
+5. `707a0c1` — radial accent glow behind hero in `compose_slots` (dark subjects vanish on dark canvases).
+6. Measured hero tone enters the palette only if ≥4.5:1 vs bg (near-black silhouette measured #01020E produced a 1.05:1 prize row).
+
+**Final result `runs/noir_beats_v8/`: 6/6 Stage-6 gates, 0 repair ops, Stage-7 VLM 8/10 READY_FOR_PRINT, 18.08 s total.** Quality gaps deliberately left open (next phase, not bugs): no OCR gate on background art (tiny baked pseudo-text in some draws is unmeasured), no hero-integration/visibility gate (dark neon-noir heroes pass all gates while flattening the focal point).
+
 ### Pending / Next Up
 - **Phase E3 (Hybrid Routing Engine)**: Connect planner to route standard briefs ($\le 10$ fields) to Batch Pipeline and dense/complex briefs ($\ge 15$ fields) to Interactive MCP loop.
 - **Live Acceptance Run**: Run live production pipeline with real Gemini API on `briefs/brief_c4_demo.txt` and `briefs/brief_robotics_demoday.txt`.
