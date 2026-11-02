@@ -106,12 +106,15 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
     # 2. Ingest & Lock Brief
     call_tool(2, "load_brief", {"path": str(brief_path)})
 
-    # 3. Add Background Atmosphere
-    call_tool(3, "soft_scrim", {"x": 0, "y": 0, "width": 1080, "height": 550, "direction": "to_bottom"})
-    call_tool(4, "radial_light", {"cx": 900, "cy": 300, "radius": 350, "color": "#00F5D4", "opacity": 0.4})
+    # 3. Full-canvas background fill (matches batch composer palette fill #070B19)
+    call_tool(3, "add_shape_rectangle", {"x": 0, "y": 0, "width": 1080, "height": 1920, "fill": "#070B19"})
 
-    # 4. Eyebrow Header
-    call_tool(5, "add_text", {
+    # 4. Background Atmosphere & Aligned Scrim (height=750 encloses header zone without slicing text)
+    call_tool(4, "soft_scrim", {"x": 0, "y": 0, "width": 1080, "height": 750, "direction": "to_bottom"})
+    call_tool(5, "radial_light", {"cx": 900, "cy": 300, "radius": 350, "color": "#00F5D4", "opacity": 0.4})
+
+    # 5. Eyebrow Header
+    call_tool(6, "add_text", {
         "text": "LEARN / BUILD / GROW",
         "x": 60,
         "y": 90,
@@ -122,9 +125,9 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
         "role": "eyebrow",
     })
 
-    # 5. Master Display Headline (Iterative Placement)
+    # 6. Master Display Headline (Iterative Placement)
     # Attempt 1: Single line large size (illustrates interactive gate catching margin escape)
-    call_tool(6, "add_text", {
+    call_tool(7, "add_text", {
         "text": "We Are Recruiting",
         "x": 60,
         "y": 320,
@@ -135,18 +138,19 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
         "role": "headline_attempt1",
     })
 
-    # 6. First QA Check (Catches overflow and missing required content)
-    m1 = call_tool(7, "measure", {})
-    score_trail.append({"step": 7, "score": m1.get("score"), "failure_count": m1.get("failure_count")})
+    # 7. First QA Check (Catches overflow and missing required content)
+    m1 = call_tool(8, "measure", {})
+    score_trail.append({"step": 8, "score": m1.get("score"), "failure_count": m1.get("failure_count")})
 
     # Designer loop adjustment: replace oversized headline with wrapped, width-fit headline
-    # Clear and recreate document cleanly with corrected typographic hierarchy
-    call_tool(8, "create_doc", {"width": 1080, "height": 1920})
-    call_tool(9, "load_brief", {"path": str(brief_path)})
-    call_tool(10, "soft_scrim", {"x": 0, "y": 0, "width": 1080, "height": 550, "direction": "to_bottom"})
-    call_tool(11, "radial_light", {"cx": 900, "cy": 300, "radius": 350, "color": "#00F5D4", "opacity": 0.4})
+    # Clear and recreate document cleanly with full canvas background and aligned scrim
+    call_tool(9, "create_doc", {"width": 1080, "height": 1920})
+    call_tool(10, "load_brief", {"path": str(brief_path)})
+    call_tool(11, "add_shape_rectangle", {"x": 0, "y": 0, "width": 1080, "height": 1920, "fill": "#070B19"})
+    call_tool(12, "soft_scrim", {"x": 0, "y": 0, "width": 1080, "height": 750, "direction": "to_bottom"})
+    call_tool(13, "radial_light", {"cx": 900, "cy": 300, "radius": 350, "color": "#00F5D4", "opacity": 0.4})
 
-    call_tool(12, "add_text", {
+    call_tool(14, "add_text", {
         "text": "LEARN / BUILD / GROW",
         "x": 60,
         "y": 90,
@@ -158,7 +162,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
     })
 
     # Headline wrapped across 2 lines to fit safely within 1080w safe margin
-    call_tool(13, "add_text", {
+    call_tool(15, "add_text", {
         "text": "We Are\nRecruiting",
         "x": 60,
         "y": 280,
@@ -170,7 +174,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
     })
 
     # Subtitle scaled and wrapped to fit usable width
-    call_tool(14, "add_text", {
+    call_tool(16, "add_text", {
         "text": "Join GDG KCT On Campus and be a part of a community\nthat builds, learns and creates impact!",
         "x": 60,
         "y": 620,
@@ -182,7 +186,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
     })
 
     # 8. Open Positions Section
-    call_tool(15, "add_text", {
+    call_tool(17, "add_text", {
         "text": "OPEN POSITIONS",
         "x": 60,
         "y": 800,
@@ -192,7 +196,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
         "color": "#00F5D4",
         "role": "section",
     })
-    call_tool(16, "add_text", {
+    call_tool(18, "add_text", {
         "text": "Team Members",
         "x": 60,
         "y": 870,
@@ -202,7 +206,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
         "color": "#FFFFFF",
         "role": "position_1",
     })
-    call_tool(17, "add_text", {
+    call_tool(19, "add_text", {
         "text": "Bring your ideas, passion and energy!",
         "x": 60,
         "y": 920,
@@ -212,7 +216,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
         "color": "#94A3B8",
         "role": "position_1_tagline",
     })
-    call_tool(18, "add_text", {
+    call_tool(20, "add_text", {
         "text": "Leads",
         "x": 60,
         "y": 1000,
@@ -222,7 +226,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
         "color": "#FFFFFF",
         "role": "position_2",
     })
-    call_tool(19, "add_text", {
+    call_tool(21, "add_text", {
         "text": "Take initiative, drive events and make an impact!",
         "x": 60,
         "y": 1050,
@@ -234,11 +238,11 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
     })
 
     # 9. Second QA Check
-    m2 = call_tool(20, "measure", {})
-    score_trail.append({"step": 20, "score": m2.get("score"), "failure_count": m2.get("failure_count")})
+    m2 = call_tool(22, "measure", {})
+    score_trail.append({"step": 22, "score": m2.get("score"), "failure_count": m2.get("failure_count")})
 
     # 10. Date & Venue Logistics
-    call_tool(21, "add_text", {
+    call_tool(23, "add_text", {
         "text": "Wednesday, 12 November 2026, 10:00 AM",
         "x": 60,
         "y": 1300,
@@ -248,7 +252,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
         "color": "#FFFFFF",
         "role": "date",
     })
-    call_tool(22, "add_text", {
+    call_tool(24, "add_text", {
         "text": "GDG KCT Lounge, Kumaraguru College of Technology",
         "x": 60,
         "y": 1360,
@@ -260,7 +264,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
     })
 
     # 11. CTA & Closing
-    call_tool(23, "add_text", {
+    call_tool(25, "add_text", {
         "text": "Apply Online",
         "x": 60,
         "y": 1600,
@@ -270,7 +274,7 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
         "color": "#00F5D4",
         "role": "cta",
     })
-    call_tool(24, "add_text", {
+    call_tool(26, "add_text", {
         "text": "BE THE CHANGE. JOIN GDG KCT!",
         "x": 60,
         "y": 1780,
@@ -282,20 +286,20 @@ def run_interactive_mode(brief_path: Path, output_dir: Path) -> dict[str, Any]:
     })
 
     # 12. Final Pure-Math QA Measure
-    m3 = call_tool(25, "measure", {})
-    score_trail.append({"step": 25, "score": m3.get("score"), "failure_count": m3.get("failure_count")})
+    m3 = call_tool(27, "measure", {})
+    score_trail.append({"step": 27, "score": m3.get("score"), "failure_count": m3.get("failure_count")})
 
     # 13. Fast Preview
-    call_tool(26, "render_preview", {"scale": 0.5})
+    call_tool(28, "render_preview", {"scale": 0.5})
 
     # 14. Save VCS Session
     vcs_out = output_dir / "session.vcs"
-    call_tool(27, "save_session", {"path": str(vcs_out)})
+    call_tool(29, "save_session", {"path": str(vcs_out)})
 
     # 15. Final Export (now permitted since all gates green!)
     export_png = output_dir / "master_render_2x.png"
     export_pdf = output_dir / "master_print.pdf"
-    call_tool(28, "export", {"output_png": str(export_png), "output_pdf": str(export_pdf)})
+    call_tool(30, "export", {"output_png": str(export_png), "output_pdf": str(export_pdf)})
 
     t1 = time.perf_counter()
     duration = t1 - t0

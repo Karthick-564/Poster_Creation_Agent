@@ -7,12 +7,18 @@ and blocked-honest export controls.
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
 from typing import Any, Optional
 
+import numpy as np
+
 from poster_agent.ingestion.extractor import BriefExtractor, ExtractedBrief
 from poster_agent.qa.gates import (
+    GateFailure,
+    _get_bounds,
+    _rgb_to_relative_luminance,
     check_canvas_bounds,
     check_dedupe,
     check_hero_overlap,
@@ -22,6 +28,19 @@ from poster_agent.qa.gates import (
 )
 from poster_agent.renderer.composer import estimate_text_width
 from poster_agent.renderer.vectorcraft_renderer import VectorCraftRenderer
+
+
+def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
+    """Parse hex color string (#RGB, #RRGGBB) to (r, g, b) tuple."""
+    h = str(hex_str).strip().lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    if len(h) >= 6:
+        try:
+            return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        except ValueError:
+            pass
+    return (0, 0, 0)
 
 
 class VectorCraftMCPServer:
@@ -130,25 +149,38 @@ class VectorCraftMCPServer:
         if not text_clean:
             return {"error": "VerbatimValidationError: Empty text string is invalid"}
 
-        text_lower = text_clean.lower()
-        brief_raw_lower = self.raw_brief.lower()
-        norm_space_text = " ".join(text_lower.split())
+        brief_raw = self.raw_brief
+        fields = list(self.brief.fields.values())
+        unmapped = list(getattr(self.brief, "unmapped_lines", []))
 
-        # Check in verbatim fields, unmapped lines, or raw brief text
-        in_raw = (text_lower in brief_raw_lower) or (norm_space_text in brief_raw_lower)
-        in_fields = any((text_lower in f.text.lower()) or (norm_space_text in f.text.lower()) for f in self.brief.fields.values())
-        in_unmapped = any((text_lower in line.lower()) or (norm_space_text in line.lower()) for line in getattr(self.brief, "unmapped_lines", []))
+        def matches_whole_tokens(cand: str, target: str) -> bool:
+            cand_norm = " ".join(cand.strip().lower().split())
+            target_norm = " ".join(target.strip().lower().split())
+            if not cand_norm or not target_norm:
+                return False
+            if cand_norm == target_norm:
+                return True
+            pattern = r"(?<!\w)" + re.escape(cand_norm) + r"(?!\w)"
+            return bool(re.search(pattern, target_norm))
 
-        # If user wraps text across lines, verify each line exists in brief verbatim source
-        all_lines_in_brief = False
-        if "\n" in text_clean:
-            lines = [l.strip().lower() for l in text_clean.split("\n") if l.strip()]
-            all_lines_in_brief = bool(lines) and all(
-                (l in brief_raw_lower) or any(l in f.text.lower() for f in self.brief.fields.values())
-                for l in lines
-            )
+        def candidate_in_sources(cand: str) -> bool:
+            if matches_whole_tokens(cand, brief_raw):
+                return True
+            if any(matches_whole_tokens(cand, f.text) for f in fields):
+                return True
+            if any(matches_whole_tokens(cand, u) for u in unmapped):
+                return True
+            return False
 
-        if not (in_raw or in_fields or in_unmapped or all_lines_in_brief):
+        # If multi-line, each line must match whole tokens OR the space-normalized text must match
+        norm_space_text = " ".join(text_clean.split())
+        matched = candidate_in_sources(norm_space_text)
+
+        if not matched and "\n" in text_clean:
+            lines = [l.strip() for l in text_clean.split("\n") if l.strip()]
+            matched = bool(lines) and all(candidate_in_sources(l) for l in lines)
+
+        if not matched:
             return {
                 "error": f"VerbatimValidationError: '{text}' does not appear in loaded brief"
             }
@@ -203,6 +235,36 @@ class VectorCraftMCPServer:
             "status": "ok",
             "row_id": row_id,
             "bounds": row["bounds"],
+            "command_count": len(self.renderer.commands),
+        }
+
+    def add_shape_rectangle(
+        self,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        fill: Optional[str] = None,
+        stroke: Optional[str] = None,
+        stroke_width: float = 0.0,
+        radius: float = 0.0,
+    ) -> dict[str, Any]:
+        """Add rectangle shape with fill or stroke styling."""
+        self.renderer.add_shape_rectangle(
+            x=float(x),
+            y=float(y),
+            width=float(width),
+            height=float(height),
+            fill=fill,
+            stroke=stroke,
+            stroke_width=float(stroke_width),
+            radius=float(radius),
+        )
+        self.save_session()
+        return {
+            "status": "ok",
+            "rect": [float(x), float(y), float(width), float(height)],
+            "fill": fill,
             "command_count": len(self.renderer.commands),
         }
 
@@ -294,6 +356,40 @@ class VectorCraftMCPServer:
             "command_count": len(self.renderer.commands),
         }
 
+    def _get_local_background(self, row: dict[str, Any]) -> str:
+        """Find local background color covering text row from command buffer."""
+        rect_elements = []
+        curr_fill = None
+        for cmd in self.renderer.commands:
+            c_name = cmd.get("command")
+            params = cmd.get("params", {})
+            if c_name == "paint.setFill":
+                if "color" in params:
+                    curr_fill = params["color"]
+                elif "gradient" in params and "stops" in params["gradient"]:
+                    stops = params["gradient"]["stops"]
+                    if stops:
+                        curr_fill = stops[0].get("color")
+            elif c_name == "paint.none":
+                curr_fill = None
+            elif c_name == "shape.rectangle" and curr_fill:
+                rx = float(params.get("x", 0.0))
+                ry = float(params.get("y", 0.0))
+                rw = float(params.get("width", 0.0))
+                rh = float(params.get("height", 0.0))
+                rect_elements.append({"x": rx, "y": ry, "w": rw, "h": rh, "color": curr_fill})
+
+        # Text centroid
+        rx, ry, rw, rh = _get_bounds(row)
+        cx = rx + rw / 2.0
+        cy = ry + rh / 2.0
+
+        for r in reversed(rect_elements):
+            if (r["x"] <= cx <= (r["x"] + r["w"])) and (r["y"] <= cy <= (r["y"] + r["h"])):
+                return r["color"]
+
+        return "#FFFFFF"
+
     def measure(self) -> dict[str, Any]:
         """Evaluate Phase-D deterministic QA gates without raster rendering."""
         cw = self.doc_width or 1080.0
@@ -322,6 +418,45 @@ class VectorCraftMCPServer:
         # 6. Vertical Band Coverage
         _, cov_pct, _, cov_failures = check_v_band_coverage_gate(self.manifest_rows, canvas_h=ch, min_coverage=70.0)
         failures.extend(cov_failures)
+
+        # 7. Composition-time Contrast Gate (Pure Math on text_color vs local_bg)
+        contrast_failures = []
+        for r in self.manifest_rows:
+            target_id = str(r.get("id", r.get("role", "text")))
+            tc = str(r.get("color", "#000000"))
+            local_bg = self._get_local_background(r)
+
+            arr_fg = np.array([[[c for c in _hex_to_rgb(tc)]]], dtype=np.float32)
+            arr_bg = np.array([[[c for c in _hex_to_rgb(local_bg)]]], dtype=np.float32)
+            l_fg = float(_rgb_to_relative_luminance(arr_fg)[0, 0])
+            l_bg = float(_rgb_to_relative_luminance(arr_bg)[0, 0])
+
+            l_max = max(l_fg, l_bg)
+            l_min = min(l_fg, l_bg)
+            cr = (l_max + 0.05) / (l_min + 0.05)
+
+            sz = float(r.get("size", 16.0))
+            sty = str(r.get("style", "")).lower()
+            is_large = (sz >= 24.0) or (sz >= 18.0 and ("bold" in sty or "black" in sty))
+            threshold = 3.0 if is_large else 4.5
+
+            if cr < threshold:
+                contrast_failures.append(GateFailure(
+                    kind="contrast",
+                    target=target_id,
+                    detail=f"Low contrast for {'large' if is_large else 'body'} text '{str(r.get('text', ''))[:24]}': CR {cr:.2f}:1 < {threshold:.1f}:1 against background {local_bg}",
+                    measured={
+                        "contrast_ratio": round(cr, 2),
+                        "threshold": threshold,
+                        "is_large_text": is_large,
+                        "text_size": sz,
+                        "text_color": tc,
+                        "bg_color": local_bg,
+                        "L_fg": round(l_fg, 4),
+                        "L_bg": round(l_bg, 4),
+                    },
+                ))
+        failures.extend(contrast_failures)
 
         fail_dicts = [f.to_dict() if hasattr(f, "to_dict") else f for f in failures]
         score = round(max(0.0, 10.0 - (len(failures) * 1.5)), 2)
@@ -503,6 +638,24 @@ class VectorCraftMCPServer:
                         "path": {"type": "string", "description": "Path to brief file relative to project root"},
                     },
                     "required": ["path"],
+                },
+            },
+            {
+                "name": "add_shape_rectangle",
+                "description": "Add rectangle shape (e.g. background fill or card) with fill/stroke styling.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "x": {"type": "number"},
+                        "y": {"type": "number"},
+                        "width": {"type": "number"},
+                        "height": {"type": "number"},
+                        "fill": {"type": "string", "description": "Hex fill color string (e.g. #070B19)"},
+                        "stroke": {"type": "string", "description": "Hex stroke color string"},
+                        "stroke_width": {"type": "number", "default": 0.0},
+                        "radius": {"type": "number", "default": 0.0},
+                    },
+                    "required": ["x", "y", "width", "height"],
                 },
             },
             {

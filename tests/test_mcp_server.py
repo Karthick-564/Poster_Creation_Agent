@@ -24,6 +24,7 @@ def test_tool_definitions_list(mcp_server):
     expected = {
         "create_doc",
         "load_brief",
+        "add_shape_rectangle",
         "add_text",
         "place_image",
         "soft_scrim",
@@ -50,10 +51,16 @@ def test_verbatim_validation_rejects_hallucination(mcp_server):
     load_res = mcp_server.load_brief("briefs/brief_c4_demo.txt")
     assert load_res.get("status") == "ok"
 
+    # Completely fabricated copy
     res = mcp_server.add_text("FREE CRYPTO GIVEAWAY", 100, 100, 32)
     assert "error" in res
     assert "VerbatimValidationError" in res["error"]
     assert "FREE CRYPTO GIVEAWAY" in res["error"]
+
+    # Partial token boundary check (e.g. 'Recruit' against 'We Are Recruiting')
+    res_sub = mcp_server.add_text("Recruit", 100, 100, 32)
+    assert "error" in res_sub
+    assert "VerbatimValidationError" in res_sub["error"]
 
 
 def test_verbatim_validation_accepts_valid_content(mcp_server):
@@ -69,8 +76,8 @@ def test_verbatim_validation_accepts_valid_content(mcp_server):
 
 
 def test_place_image_security_and_path_validation(mcp_server):
-    # Path outside project root
-    outside_path = "C:/Windows/System32/notepad.exe"
+    # Path outside project root (platform-neutral /etc/passwd style)
+    outside_path = "/etc/passwd"
     res = mcp_server.place_image(outside_path)
     assert "error" in res
     assert "SecurityError" in res["error"]
@@ -80,6 +87,35 @@ def test_place_image_security_and_path_validation(mcp_server):
     res2 = mcp_server.place_image(missing_path)
     assert "error" in res2
     assert "FileNotFoundError" in res2["error"]
+
+
+def test_contrast_floor_catches_white_on_white_and_blocks_export(mcp_server, tmp_path):
+    mcp_server.create_doc(1080, 1920)
+    mcp_server.load_brief("briefs/brief_c4_demo.txt")
+
+    # Plant white text on default white canvas (#FFFFFF on #FFFFFF)
+    res = mcp_server.add_text("We Are Recruiting", 100, 400, 72, color="#FFFFFF", role="headline")
+    assert res.get("status") == "ok"
+
+    measure_res = mcp_server.measure()
+    assert measure_res["passed"] is False
+    failures = measure_res["failures"]
+    contrast_failures = [f for f in failures if f["kind"] == "contrast"]
+    assert len(contrast_failures) >= 1
+    assert "Low contrast" in contrast_failures[0]["detail"]
+    assert contrast_failures[0]["measured"]["contrast_ratio"] == 1.0
+
+    # Export MUST be blocked while contrast fails
+    out_png = tmp_path / "contrast_blocked.png"
+    export_res = mcp_server.export(str(out_png))
+    assert "error" in export_res
+    assert "ExportBlockedError" in export_res["error"]
+
+    # Remediate by adding dark background rectangle
+    mcp_server.add_shape_rectangle(0, 0, 1080, 1920, fill="#070B19")
+    rem_measure = mcp_server.measure()
+    rem_contrast_failures = [f for f in rem_measure["failures"] if f["kind"] == "contrast"]
+    assert len(rem_contrast_failures) == 0
 
 
 def test_measure_pure_coordinate_math_catches_defects(mcp_server):
