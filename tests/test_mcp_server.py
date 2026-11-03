@@ -75,6 +75,28 @@ def test_verbatim_validation_accepts_valid_content(mcp_server):
     assert mcp_server.manifest_rows[0]["text"] == "GDG KCT"
 
 
+def test_place_image_role_does_not_hijack_hero_rect(mcp_server):
+    """Only role='hero' may set hero_rect; background/logo must not overwrite it."""
+    mcp_server.create_doc(1080, 1350)
+    res_bg = mcp_server.place_image(
+        "assets/logo_kumaraguru.png", rect=[0, 0, 1080, 1350], role="background"
+    )
+    assert res_bg.get("status") == "ok"
+    assert mcp_server.hero_rect is None
+
+    res_hero = mcp_server.place_image(
+        "assets/logo_kumaraguru.png", rect=[60, 300, 960, 420], role="hero"
+    )
+    assert res_hero.get("status") == "ok"
+    assert mcp_server.hero_rect == (60.0, 300.0, 960.0, 420.0)
+
+    res_logo = mcp_server.place_image(
+        "assets/logo_kumaraguru.png", rect=[880, 55, 140, 47], role="logo"
+    )
+    assert res_logo.get("status") == "ok"
+    assert mcp_server.hero_rect == (60.0, 300.0, 960.0, 420.0)
+
+
 def test_place_image_security_and_path_validation(mcp_server):
     # Path outside project root (platform-neutral /etc/passwd style)
     outside_path = "/etc/passwd"

@@ -279,8 +279,14 @@ class VectorCraftMCPServer:
         rect: Optional[list[float]] = None,
         blend_mode: Optional[str] = None,
         feather_radius: Optional[float] = None,
+        role: str = "image",
     ) -> dict[str, Any]:
-        """Place image command and validate path is within project root."""
+        """Place image command and validate path is within project root.
+
+        ``role`` names the layer's compositional job. Only ``role="hero"``
+        updates ``hero_rect``; background art and logos must not overwrite the
+        hero region that collision and design metrics depend on.
+        """
         p = Path(path)
         if not p.is_absolute():
             p = self.project_root / p
@@ -300,7 +306,7 @@ class VectorCraftMCPServer:
         if feather_radius and float(feather_radius) > 0:
             self.renderer.add_effect(effect_name="stylize.feather", params={"radius": float(feather_radius)})
 
-        if rect and len(rect) == 4:
+        if rect and len(rect) == 4 and role == "hero":
             self.hero_rect = (float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3]))
 
         self.save_session()
@@ -310,6 +316,7 @@ class VectorCraftMCPServer:
             "rect": rect,
             "blend_mode": blend_mode,
             "feather_radius": feather_radius,
+            "role": role,
             "command_count": len(self.renderer.commands),
         }
 
@@ -798,6 +805,11 @@ class VectorCraftMCPServer:
                         "feather_radius": {
                             "type": "number",
                             "description": "Edge feathering radius in pixels to dissolve hard boundaries",
+                        },
+                        "role": {
+                            "type": "string",
+                            "description": "Layer role: hero (updates hero_rect), background, logo, or image",
+                            "default": "image",
                         },
                     },
                     "required": ["path"],

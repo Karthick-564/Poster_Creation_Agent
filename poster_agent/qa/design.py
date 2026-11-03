@@ -167,6 +167,8 @@ def hero_presence(
     image_input: Union[Path, str, Image.Image],
     hero_rect: Optional[Sequence[float]] = None,
     hero_asset: Optional[Union[Path, str]] = None,
+    hero_expected: bool = True,
+    type_hero: bool = False,
 ) -> dict[str, Any]:
     """Analyze the hero zone for presence, contrast, luminance, and edge feathering.
 
@@ -175,6 +177,11 @@ def hero_presence(
     unrelated glows make the destination region bright. Without this check the
     region metric is fooled by atmospheric lighting (noir_beats_designed_v3:
     hero_score 1.0 on a fully invisible hero).
+
+    A recipe may intentionally omit the raster hero and make typography the
+    hero. That is only credited when ``hero_expected=False`` and a genuinely
+    large type anchor exists (``type_hero=True``); an accidental missing hero
+    is still penalized.
     """
     asset_mean = None
     asset_void = False
@@ -195,6 +202,19 @@ def hero_presence(
                 asset_mean = None
 
     if not hero_rect or len(hero_rect) < 4:
+        if not hero_expected:
+            return {
+                "present": False,
+                "hero_rect": None,
+                "mean_luminance": 0.0,
+                "contrast_std": 0.0,
+                "is_void": False,
+                "feathered": False,
+                "hero_score": 1.0 if type_hero else 0.3,
+                "mode": "type_as_hero" if type_hero else "absent_no_type_hero",
+                "intentional_absent": True,
+                "asset_mean_luminance": round(asset_mean, 1) if asset_mean is not None else None,
+            }
         return {
             "present": False,
             "hero_rect": None,
@@ -203,6 +223,8 @@ def hero_presence(
             "is_void": True,
             "feathered": False,
             "hero_score": 0.0,
+            "mode": "missing_hero",
+            "intentional_absent": False,
             "asset_mean_luminance": round(asset_mean, 1) if asset_mean is not None else None,
         }
 
@@ -346,12 +368,20 @@ def evaluate_design_quality(
     canvas_h: float = 1350.0,
     hero_rect: Optional[Sequence[float]] = None,
     hero_asset: Optional[Union[Path, str]] = None,
+    hero_expected: bool = True,
 ) -> dict[str, Any]:
     """Run full compositional design quality suite and compute composite score."""
     p_cov = palette_coverage(image_input, palette_hexes)
     t_scale = type_scale_contrast(manifest_rows)
     asym = asymmetry_index(manifest_rows, canvas_w)
-    hero_info = hero_presence(image_input, hero_rect, hero_asset=hero_asset)
+    type_hero = any(float(r.get("size", 0)) >= 96.0 for r in manifest_rows)
+    hero_info = hero_presence(
+        image_input,
+        hero_rect,
+        hero_asset=hero_asset,
+        hero_expected=hero_expected,
+        type_hero=type_hero,
+    )
     ws = whitespace_balance(manifest_rows, hero_rect, canvas_w, canvas_h)
     focals = focal_count(manifest_rows, hero_rect, canvas_w, canvas_h)
 

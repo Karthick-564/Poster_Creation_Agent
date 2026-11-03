@@ -94,6 +94,40 @@ def test_hero_presence_and_void():
     assert rich_res["hero_score"] >= 0.7
 
 
+def test_hero_presence_intentional_type_as_hero():
+    """An intentionally hero-less recipe is credited only with a large type anchor."""
+    black_im = Image.new("RGB", (1000, 1000), (4, 4, 6))
+    res = hero_presence(
+        black_im, hero_rect=None, hero_expected=False, type_hero=True
+    )
+    assert res["present"] is False
+    assert res["intentional_absent"] is True
+    assert res["mode"] == "type_as_hero"
+    assert res["is_void"] is False
+    assert res["hero_score"] == 1.0
+
+
+def test_hero_presence_intentional_absent_without_type_hero():
+    """No raster hero and no oversized type anchor is still a design failure."""
+    black_im = Image.new("RGB", (1000, 1000), (4, 4, 6))
+    res = hero_presence(
+        black_im, hero_rect=None, hero_expected=False, type_hero=False
+    )
+    assert res["intentional_absent"] is True
+    assert res["mode"] == "absent_no_type_hero"
+    assert res["hero_score"] == 0.3
+
+
+def test_hero_presence_missing_expected_hero_is_void():
+    """A recipe that promised a hero but placed none must not be rescued."""
+    black_im = Image.new("RGB", (1000, 1000), (4, 4, 6))
+    res = hero_presence(black_im, hero_rect=None, hero_expected=True)
+    assert res["intentional_absent"] is False
+    assert res["mode"] == "missing_hero"
+    assert res["is_void"] is True
+    assert res["hero_score"] == 0.0
+
+
 def test_hero_presence_asset_void_overrides_bright_destination(tmp_path):
     """A near-black hero asset is void even when the destination region is bright.
 
