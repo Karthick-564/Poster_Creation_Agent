@@ -66,10 +66,10 @@ def test_ideogram_adapter_no_background_hero_conflict():
     elems = payload["compositional_deconstruction"]["elements"]
     assert len(elems) == 3
 
-    # Hero zone element is a soft ambient light pool, NOT a dense competing object
+    # Hero zone element is a refined architectural setting, NOT a dense competing object
     hero_elem = elems[0]
     assert hero_elem["bbox"] == spec.zones.hero
-    assert "soft" in hero_elem["desc"].lower() or "light pool" in hero_elem["desc"].lower() or "glow" in hero_elem["desc"].lower()
+    assert "architectural" in hero_elem["desc"].lower() or "soft" in hero_elem["desc"].lower() or "subtle" in hero_elem["desc"].lower()
 
     # Title zone is calm and flat
     title_elem = elems[1]

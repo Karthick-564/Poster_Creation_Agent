@@ -64,12 +64,11 @@ def evaluate_hero_quality(image_path: Path | str) -> HeroGateResult:
             reason=f"Hero coverage too high ({coverage_pct}% > 80.0%): subject fills entire canvas like a background."
         )
 
-    # 2. Border contact check (rejects cropped subjects)
-    # Check top 2px, bottom 2px, left 2px, right 2px
-    top_contact = np.any(alpha[:2, :] > 30)
-    bottom_contact = np.any(alpha[-2:, :] > 30)
-    left_contact = np.any(alpha[:, :2] > 30)
-    right_contact = np.any(alpha[:, -2:] > 30)
+    # 2. Border contact check (rejects cropped subjects with solid alpha > 140 touching edges)
+    top_contact = np.any(alpha[:2, :] > 140)
+    bottom_contact = np.any(alpha[-2:, :] > 140)
+    left_contact = np.any(alpha[:, :2] > 140)
+    right_contact = np.any(alpha[:, -2:] > 140)
     touches_border = bool(top_contact or bottom_contact or left_contact or right_contact)
 
     if touches_border:

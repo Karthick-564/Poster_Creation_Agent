@@ -1,8 +1,8 @@
 """Stage 2.5: Art Director Module.
 
 Orchestrates:
-1. LLM synthesis of a single model-neutral ArtDirectionSpec.
-2. Pydantic validation of the spec (rejects inconsistencies).
+1. LLM synthesis of a single model-neutral ArtDirectionSpec with dynamic composition planning.
+2. Pydantic validation of the spec (rejects inconsistencies and coordinate errors).
 3. Deterministic conversion via adapters to Ideogram 4.0 JSON, Flux 3 Klein prose,
    and Qwen-Image 2.1 positive/negative prompts.
 4. Seamless fallback to curated archetype recipes when offline or on validation error.
@@ -94,43 +94,53 @@ class ArtDirector:
         brief_fields: dict[str, Any],
         school_palette: list[str] | None,
     ) -> ArtDirectionSpec:
-        """Prompt LLM to output strictly the single model-neutral ArtDirectionSpec JSON."""
+        """Prompt LLM to dynamically plan composition, zones, and art direction."""
         system_prompt = (
-            "You are the Art Director for an institutional poster pipeline. "
-            "You produce a single model-neutral art-direction specification in JSON format. "
-            "Never write tool calls or image model prompts directly. Output valid JSON matching the schema."
+            "You are the Art Director and Spatial Planner for an institutional poster pipeline. "
+            "You analyze the event brief and produce a single model-neutral art-direction specification in JSON.\n\n"
+            "ACADEMIC & COMPOSITION PRINCIPLES:\n"
+            "1. DYNAMIC COMPOSITION: Do NOT always center the hero. Choose an intentional composition pattern: "
+            "'asymmetric_right' (type left, hero right), 'diagonal_dynamic' (title top-left, hero lower-right), "
+            "or 'split_columns'. Centered is reserved only for medals, trophies, or badges.\n"
+            "2. ACADEMIC & ATTRACTIVE (NOT GLOWY, NOT PLAIN): Background artwork must look attractive, textured, and graphic "
+            "(clean architectural perspective lines, blueprint grids, tactile museum paper grain, Swiss geometric relief), "
+            "strictly dignified and institutional. NEVER use sci-fi party rave glows, neon lasers, or psychedelic lighting.\n"
+            "3. NATURAL LIGHTING: Use clean directional studio daylight from upper-left, soft natural shadows, no neon glows.\n"
+            "4. SPATIAL ZONES: Plan non-overlapping [ymin, xmin, ymax, xmax] zones on a 0..1000 scale so the hero and typography harmonize.\n"
+            "Output strictly valid JSON matching the schema."
         )
 
-        palette_hint = ", ".join(school_palette[:5]) if school_palette else "#070B19, #00F5D4, #7B2FFF, #FF3D68, #F0F6FC"
+        palette_hint = ", ".join(school_palette[:5]) if school_palette else "#1E2842, #85CEBD, #705355, #C8C7CC, #FFFFFF"
         user_prompt = f"""Event Title: {brief_title}
 Brief Details:
 {chr(10).join(f"- {k}: {v}" for k, v in brief_fields.items())}
 
-Brand Palette: {palette_hint}
+Institutional Brand Palette: {palette_hint}
 
 Produce a single JSON object matching this schema:
 {{
   "archetype": "tech_hackathon | cultural_night | academic_symposium | sports_meet | recruitment",
-  "motif": "string describing subtle ambient background texture/geometry (e.g. faint perspective grid, fine particles)",
+  "composition_pattern": "asymmetric_right | diagonal_dynamic | split_columns | centered_focal",
+  "motif": "string describing subtle architectural/tactile background textures (e.g. clean isometric blueprint grid with tactile paper grain)",
   "palette": {{
-    "base": "{school_palette[0] if school_palette else '#070B19'}",
-    "primary": "{school_palette[1] if school_palette and len(school_palette)>1 else '#00F5D4'}",
-    "secondary": "{school_palette[2] if school_palette and len(school_palette)>2 else '#7B2FFF'}",
-    "accent": "{school_palette[3] if school_palette and len(school_palette)>3 else '#FF3D68'}",
-    "text": "#F0F6FC"
+    "base": "{school_palette[0] if school_palette else '#1E2842'}",
+    "primary": "{school_palette[1] if school_palette and len(school_palette)>1 else '#85CEBD'}",
+    "secondary": "{school_palette[2] if school_palette and len(school_palette)>2 else '#705355'}",
+    "accent": "{school_palette[3] if school_palette and len(school_palette)>3 else '#C8C7CC'}",
+    "text": "#FFFFFF"
   }},
   "light": {{
     "key_direction": "upper-left",
-    "key_color": "{school_palette[1] if school_palette and len(school_palette)>1 else '#00F5D4'}",
-    "rim": "cyan"
+    "key_color": "{school_palette[1] if school_palette and len(school_palette)>1 else '#85CEBD'}",
+    "rim": "soft daylight"
   }},
   "zones": {{
-    "title": [0, 0, 250, 1000],
-    "hero": [250, 150, 750, 850],
-    "details": [750, 0, 1000, 1000]
+    "title": [ymin, xmin, ymax, xmax],
+    "hero": [ymin, xmin, ymax, xmax],
+    "details": [ymin, xmin, ymax, xmax]
   }},
   "hero": {{
-    "object": "string describing a concrete physical sculptural object (e.g. holographic microprocessor with glowing circuit traces)",
+    "object": "string describing a concrete physical sculptural object suited for an academic institute",
     "materials": ["material 1", "material 2"],
     "perspective": "front three-quarter",
     "width_pct": 45.0
@@ -145,7 +155,6 @@ Return ONLY valid JSON.
         resp = self.backend.chat(messages=messages)
         text = resp.content.strip()
         if "```" in text:
-            # strip markdown fence
             parts = text.split("```")
             text = parts[1]
             if text.startswith("json"):

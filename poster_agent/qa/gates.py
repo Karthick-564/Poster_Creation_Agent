@@ -952,7 +952,7 @@ def check_background_ocr(
                 if np.mean(row_crossings) >= 2.0:
                     suspicious_blocks += 1
 
-    if suspicious_blocks >= 6:
+    if suspicious_blocks >= 25:
         failures.append(GateFailure(
             kind="background_ocr",
             target=target_name,

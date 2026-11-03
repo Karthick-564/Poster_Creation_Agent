@@ -135,9 +135,14 @@ class DesignerStage:
                 path=str(hero_layer),
                 rect=[hero_x, hero_y, hero_w, hero_h],
                 blend_mode="normal",
-                feather_radius=16.0,
+                feather_radius=0.0,
                 role="hero",
                 item_id="hero_layer",
+            )
+            # Soft natural ambient contact shadow to ground the hero into the scene
+            self.server.renderer.add_effect(
+                effect_name="stylize.dropShadow",
+                params={"x": 6.0, "y": 14.0, "blur": 22.0, "opacity": 0.40, "color": "#070B19"},
             )
 
         # Inspect initial free regions
@@ -338,13 +343,18 @@ class DesignerStage:
         band2_y = max(ch * 0.36, curr_y + 30.0)
         secondary_text = fields.get("subtitle") or fields.get("closing line") or fields.get("blurb") or fields.get("section")
         hero_intersects = False
+        avail_text_w = text_w
         if self.server.hero_rect:
             hx, hy, hw, hh = self.server.hero_rect
-            if hy <= band2_y + 40.0 <= hy + hh:
+            if hx > margin + 220.0:
+                # Asymmetric layout: hero is on right half, text column fits cleanly on left
+                avail_text_w = min(text_w, hx - margin - 24.0)
+                hero_intersects = False
+            elif hy <= band2_y + 40.0 <= hy + hh:
                 hero_intersects = True
 
-        if secondary_text and not hero_intersects and band2_y < (ch * 0.52):
-            sec_sz = _fit_size(secondary_text, 18.0, text_w, font="Inter")
+        if secondary_text and not hero_intersects and band2_y < (ch * 0.55):
+            sec_sz = _fit_size(secondary_text, 18.0, avail_text_w, font="Inter")
             safe_add_text(
                 t=secondary_text,
                 x=margin,
@@ -359,11 +369,16 @@ class DesignerStage:
 
         # 5. Band 3: Logistics (Date, Venue, CTA) (y in [0.55*ch, 0.80*ch])
         logistics_y = max(ch * 0.58, 760.0 if ch < 1500 else 1150.0)
+        logistics_w = text_w
         if self.server.hero_rect:
             hx, hy, hw, hh = self.server.hero_rect
-            logistics_y = max(logistics_y, hy + hh + 20.0)
+            if hx > margin + 220.0:
+                # Hero is on right side: logistics stay in left column without being pushed below hero
+                logistics_w = min(text_w, hx - margin - 24.0)
+            else:
+                logistics_y = max(logistics_y, hy + hh + 20.0)
         if date:
-            d_sz = _fit_size(date, 24.0, text_w, font="Inter")
+            d_sz = _fit_size(date, 24.0, logistics_w, font="Inter")
             if safe_add_text(
                 t=date,
                 x=margin,
@@ -378,7 +393,7 @@ class DesignerStage:
                 logistics_y += (d_sz * 1.3) + 12.0
 
         if venue:
-            v_sz = _fit_size(venue, 19.0, text_w, font="Inter")
+            v_sz = _fit_size(venue, 19.0, logistics_w, font="Inter")
             if safe_add_text(
                 t=venue,
                 x=margin,
@@ -393,7 +408,7 @@ class DesignerStage:
                 logistics_y += (v_sz * 1.3) + 12.0
 
         if cta and not any(it.get("id") == "locked_qr_label" for it in self.server.list_items().get("items", [])):
-            cta_sz = _fit_size(cta, 18.0, text_w * 0.5, font="Inter")
+            cta_sz = _fit_size(cta, 18.0, min(logistics_w, text_w * 0.5), font="Inter")
             safe_add_text(
                 t=cta,
                 x=margin,

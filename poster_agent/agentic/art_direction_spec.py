@@ -3,9 +3,11 @@
 Enforces:
 1. One model-neutral art-direction spec produced by LLM or offline archetype engine.
 2. Single source of truth for spatial zones across Ideogram, Qwen, and VectorCraft.
-3. Zero conflict between background and hero: hero zone in background is a soft glow / light pool,
-   never a competing dense graphic object.
-4. Deterministic adapters convert the spec to Ideogram 4.0 JSON, Flux 3 Klein prose,
+3. Zero conflict between background and hero: hero zone in background is a subtle architectural
+   backdrop plane with natural studio shadows, never a competing dense graphic object or neon glow.
+4. Professional academic & institutional tone: attractive, textured, and graphic (architectural
+   lines, isometric grids, tactile paper grain), strictly avoiding cheesy neon party glows.
+5. Deterministic adapters convert the spec to Ideogram 4.0 JSON, Flux 3 Klein prose,
    and Qwen-Image 2.1 positive/negative prompts.
 """
 from __future__ import annotations
@@ -35,16 +37,16 @@ class PaletteTokens(BaseModel):
 class LightingSpec(BaseModel):
     model_config = ConfigDict(extra="ignore")
     key_direction: str = Field("upper-left", description="upper-left, top, or upper-right")
-    key_color: str = Field("#00F5D4", description="Color of primary directional key light")
-    rim: str = Field("cyan", description="Color/hue of rim edge light")
+    key_color: str = Field("#85CEBD", description="Color of natural directional studio key light")
+    rim: str = Field("soft white", description="Color/hue of subtle rim edge light")
 
 
 class SpatialZones(BaseModel):
     """Normalized bounding boxes in [ymin, xmin, ymax, xmax] on 0..1000 scale."""
     model_config = ConfigDict(extra="ignore")
-    title: list[int] = Field(default_factory=lambda: [0, 0, 250, 1000])
-    hero: list[int] = Field(default_factory=lambda: [250, 150, 750, 850])
-    details: list[int] = Field(default_factory=lambda: [750, 0, 1000, 1000])
+    title: list[int] = Field(default_factory=lambda: [60, 50, 420, 520])
+    hero: list[int] = Field(default_factory=lambda: [180, 480, 780, 960])
+    details: list[int] = Field(default_factory=lambda: [780, 50, 980, 950])
 
     @field_validator("title", "hero", "details")
     @classmethod
@@ -66,10 +68,11 @@ class HeroSpec(BaseModel):
 
 
 class ArtDirectionSpec(BaseModel):
-    """Single model-neutral art direction contract."""
+    """Single model-neutral art direction contract planned by the LLM or archetype engine."""
     model_config = ConfigDict(extra="ignore")
     archetype: str = Field(..., description="e.g. tech_hackathon, cultural_night, academic_symposium, sports_meet, recruitment")
-    motif: str = Field("faint perspective grid, fine ambient particles", description="Subtle background textures/geometry")
+    composition_pattern: str = Field("asymmetric_right", description="asymmetric_right, diagonal_dynamic, split_columns, or centered_focal")
+    motif: str = Field("subtle architectural grid lines and tactile fine paper grain", description="Attractive non-plain background textures/geometry")
     palette: PaletteTokens
     light: LightingSpec = Field(default_factory=LightingSpec)
     zones: SpatialZones = Field(default_factory=SpatialZones)
@@ -77,13 +80,14 @@ class ArtDirectionSpec(BaseModel):
 
 
 # ==============================================================================
-# Curated Offline Archetype Library (Deterministic Fallback)
+# Curated Offline Archetype Library (Deterministic Fallback with Asymmetric Layouts)
 # ==============================================================================
 
 ARCHETYPE_RECIPES: dict[str, ArtDirectionSpec] = {
     "tech_hackathon": ArtDirectionSpec(
         archetype="tech_hackathon",
-        motif="faint digital grid lines and subtle ambient data particles",
+        composition_pattern="asymmetric_right",
+        motif="clean isometric blueprint grid with hairline circuit traces and tactile paper grain",
         palette=PaletteTokens(
             base="#070B19",
             primary="#00F5D4",
@@ -91,45 +95,47 @@ ARCHETYPE_RECIPES: dict[str, ArtDirectionSpec] = {
             accent="#FF3D68",
             text="#F0F6FC",
         ),
-        light=LightingSpec(key_direction="upper-left", key_color="#00F5D4", rim="cyan"),
+        light=LightingSpec(key_direction="upper-left", key_color="#00F5D4", rim="soft cyan"),
         zones=SpatialZones(
-            title=[0, 0, 250, 1000],
-            hero=[250, 150, 750, 850],
-            details=[750, 0, 1000, 1000],
+            title=[60, 50, 420, 520],
+            hero=[180, 480, 780, 960],
+            details=[780, 50, 980, 950],
         ),
         hero=HeroSpec(
-            object="sculptural crystalline microchip core with glowing holographic logic traces",
-            materials=["matte dark composite", "translucent cyan acrylic", "brushed titanium"],
+            object="sculptural geometric microprocessor core with brushed alloy heatsinks and discrete logic elements",
+            materials=["matte dark composite", "translucent polymer", "brushed titanium"],
             perspective="front three-quarter",
             width_pct=46.0,
         ),
     ),
     "cultural_night": ArtDirectionSpec(
         archetype="cultural_night",
-        motif="atmospheric stage haze and soft diagonal laser light ribbons",
+        composition_pattern="diagonal_dynamic",
+        motif="layered architectural paper-cut acoustic contours with subtle studio shadows",
         palette=PaletteTokens(
-            base="#0A0B14",
-            primary="#FF0055",
-            secondary="#7928CA",
-            accent="#00DFD8",
+            base="#1E2842",
+            primary="#85CEBD",
+            secondary="#705355",
+            accent="#C8C7CC",
             text="#FFFFFF",
         ),
-        light=LightingSpec(key_direction="upper-left", key_color="#FF0055", rim="magenta"),
+        light=LightingSpec(key_direction="upper-left", key_color="#85CEBD", rim="warm daylight"),
         zones=SpatialZones(
-            title=[0, 0, 250, 1000],
-            hero=[250, 150, 750, 850],
-            details=[750, 0, 1000, 1000],
+            title=[60, 50, 320, 950],
+            hero=[260, 280, 800, 960],
+            details=[800, 50, 980, 950],
         ),
         hero=HeroSpec(
-            object="sculptural modern turntable with glowing acrylic vinyl record and geometric tonearm",
-            materials=["matte obsidian polymer", "translucent neon acrylic", "brushed chrome"],
+            object="sculptural modern turntable with matte dark vinyl record and geometric chrome tonearm",
+            materials=["matte obsidian polymer", "brushed chrome", "subtle satin accents"],
             perspective="front three-quarter isometric",
             width_pct=48.0,
         ),
     ),
     "academic_symposium": ArtDirectionSpec(
         archetype="academic_symposium",
-        motif="minimal architectural shadow bands and clean structural grid",
+        composition_pattern="split_columns",
+        motif="refined architectural perspective lines, clean constructivist geometry, and museum paper texture",
         palette=PaletteTokens(
             base="#0D1B2A",
             primary="#415A77",
@@ -139,9 +145,9 @@ ARCHETYPE_RECIPES: dict[str, ArtDirectionSpec] = {
         ),
         light=LightingSpec(key_direction="top-left", key_color="#E0E1DD", rim="soft white"),
         zones=SpatialZones(
-            title=[0, 0, 250, 1000],
-            hero=[250, 150, 750, 850],
-            details=[750, 0, 1000, 1000],
+            title=[80, 50, 500, 520],
+            hero=[160, 520, 760, 960],
+            details=[760, 50, 980, 950],
         ),
         hero=HeroSpec(
             object="geometric kinetic gyroscope sculpture with nested brass and matte graphite rings",
@@ -152,7 +158,8 @@ ARCHETYPE_RECIPES: dict[str, ArtDirectionSpec] = {
     ),
     "sports_meet": ArtDirectionSpec(
         archetype="sports_meet",
-        motif="dynamic kinetic speed lines and subtle stadium beam reflections",
+        composition_pattern="diagonal_dynamic",
+        motif="dynamic architectural diagonal rules and crisp stadium relief grid",
         palette=PaletteTokens(
             base="#0B132B",
             primary="#FF5722",
@@ -160,22 +167,23 @@ ARCHETYPE_RECIPES: dict[str, ArtDirectionSpec] = {
             accent="#00F5D4",
             text="#FFFFFF",
         ),
-        light=LightingSpec(key_direction="upper-right", key_color="#FF5722", rim="warm amber"),
+        light=LightingSpec(key_direction="upper-right", key_color="#FF5722", rim="soft daylight"),
         zones=SpatialZones(
-            title=[0, 0, 250, 1000],
-            hero=[250, 150, 750, 850],
-            details=[750, 0, 1000, 1000],
+            title=[60, 50, 300, 900],
+            hero=[250, 320, 780, 960],
+            details=[780, 50, 980, 950],
         ),
         hero=HeroSpec(
             object="sculptural dynamic flame baton with stylized aerodynamic carbon-fiber fins",
-            materials=["brushed anodized alloy", "matte carbon fiber", "warm radiant core"],
+            materials=["brushed anodized alloy", "matte carbon fiber", "warm metal core"],
             perspective="front diagonal",
             width_pct=44.0,
         ),
     ),
     "recruitment": ArtDirectionSpec(
         archetype="recruitment",
-        motif="layered structural architectural panels with subtle soft ambient gradients",
+        composition_pattern="asymmetric_right",
+        motif="dimensional layered geometric panels with subtle institutional embossing and fine paper grain",
         palette=PaletteTokens(
             base="#070B19",
             primary="#00F5D4",
@@ -183,14 +191,14 @@ ARCHETYPE_RECIPES: dict[str, ArtDirectionSpec] = {
             accent="#FFBE0B",
             text="#FFFFFF",
         ),
-        light=LightingSpec(key_direction="upper-left", key_color="#00F5D4", rim="electric blue"),
+        light=LightingSpec(key_direction="upper-left", key_color="#00F5D4", rim="soft daylight"),
         zones=SpatialZones(
-            title=[0, 0, 250, 1000],
-            hero=[250, 150, 750, 850],
-            details=[750, 0, 1000, 1000],
+            title=[80, 50, 450, 520],
+            hero=[180, 480, 760, 960],
+            details=[780, 50, 980, 950],
         ),
         hero=HeroSpec(
-            object="interlocking geometric dimensional badge symbol with illuminated circuit facets",
+            object="interlocking geometric dimensional badge symbol with clean architectural facets",
             materials=["matte dark composite", "translucent polymer", "brushed aluminum"],
             perspective="front three-quarter",
             width_pct=45.0,
@@ -243,9 +251,9 @@ def spec_to_ideogram_payload(
     
     Guarantees:
     - Bbox format [ymin, xmin, ymax, xmax] on 0..1000 scale.
-    - Title and Details zones are calm and flat.
-    - Central hero zone is a soft ambient light pool / glow, NEVER a competing dense object.
-    - Thematic motif is positioned subtly near edges or at low contrast.
+    - Academic, dignified, attractive textures (architectural geometry, tactile paper grain).
+    - ZERO cheesy neon glows, zero high-intensity laser party lighting.
+    - Hero zone is a subtle architectural backdrop plane with natural soft studio shadows.
     """
     palette_hexes = [
         spec.palette.base,
@@ -256,57 +264,56 @@ def spec_to_ideogram_payload(
     ]
 
     hld = (
-        f"A contemporary poster background key visual featuring deep volumetric atmosphere, "
-        f"{spec.motif}, and directional illumination from the {spec.light.key_direction}. "
-        f"Engineered with calm negative space reserved at the upper and lower zones, smooth matte surfaces, quiet unbroken texture."
+        f"A sophisticated academic institutional poster background visual featuring clean architectural geometry, "
+        f"{spec.motif}, and refined natural ambient lighting from the {spec.light.key_direction}. "
+        f"Designed with elegant spatial balance, fine tactile paper texture, and structured negative space for high typographic contrast."
     )
 
     style_description = {
-        "aesthetics": f"Contemporary institutional poster art, abstract atmospheric field with {spec.motif}, smooth matte gradients.",
-        "lighting": f"Directional key light spill from the {spec.light.key_direction} in tones of {spec.light.key_color}, subtle {spec.light.rim} ambient rim falloff.",
-        "photo": "Clean architectural digital capture, smooth matte finish, zero grain noise, quiet unbroken surfaces.",
-        "medium": "Mixed-media digital art",
+        "aesthetics": f"Contemporary institutional graphic design, Swiss-style architectural geometry with {spec.motif}, clean tactile paper texture, dignified academic tone.",
+        "lighting": f"Soft natural studio daylight from the {spec.light.key_direction}, gentle diffuse shadows, natural ambient illumination without neon glows.",
+        "photo": "Clean architectural capture with fine tactile paper texture, subtle geometric depth, quiet matte finish, zero digital noise.",
+        "medium": "Mixed-media institutional design",
         "color_palette": palette_hexes,
     }
 
     comp_bg = (
-        f"Deep ambient textured background in tones of {spec.palette.base} with soft atmospheric light spill from the {spec.light.key_direction}, "
-        f"spacious calm negative space across the upper and lower canvas."
+        f"A deep, refined background in tones of {spec.palette.base} layered with subtle architectural geometric line work and fine paper texture, "
+        f"soft natural illumination from the {spec.light.key_direction}, clean and balanced."
     )
 
     # Single source of truth from spec.zones
-    # Point 3: Hero zone is a soft light pool / glow, not a competing object!
     hz = spec.zones.hero
     tz = spec.zones.title
     dz = spec.zones.details
 
     elements = [
-        # 1. Soft central ambient light pool behind where the hero cutout will sit
+        # 1. Hero Zone backdrop: subtle architectural geometric structure / paper-cut relief plane
         {
             "type": "obj",
             "bbox": hz,
             "desc": (
-                f"A soft, diffused ambient light pool and atmospheric glow in tones of {spec.palette.primary} and {spec.palette.secondary}, "
-                f"gentle radial falloff, no hard edges, smooth matte center serving as an illuminated backdrop."
+                f"A refined architectural backdrop plane with subtle geometric depth in tones of {spec.palette.base} and {spec.palette.primary}, "
+                f"gentle natural studio shadows, fine matte texture, serving as an attractive institutional setting for the hero."
             ),
-            "color_palette": [spec.palette.primary, spec.palette.secondary, spec.palette.base],
+            "color_palette": [spec.palette.base, spec.palette.primary, spec.palette.secondary],
         },
-        # 2. Title Zone: Flat unbroken calm negative space
+        # 2. Title Zone: Structured calm space with subtle hairline grid
         {
             "type": "obj",
             "bbox": tz,
             "desc": (
-                f"Completely calm, dark unbroken negative space in tone {spec.palette.base}, "
-                f"flat matte finish with minimal ambient falloff, quiet unbroken surface."
+                f"Clean, calm high-contrast negative space in tone {spec.palette.base} accented with faint hairline architectural grid lines, "
+                f"flat matte finish ensuring effortless typographic legibility."
             ),
             "color_palette": [spec.palette.base],
         },
-        # 3. Details/Logistics Zone: Smooth dark lower band
+        # 3. Details/Logistics Zone: Clean lower margin band
         {
             "type": "obj",
             "bbox": dz,
             "desc": (
-                f"Calm flat {spec.palette.base} lower zone with barely varied tone, smooth matte finish, blank unbroken surface."
+                f"Clean, grounded {spec.palette.base} lower band with subtle geometric border rule, smooth matte finish."
             ),
             "color_palette": [spec.palette.base],
         },
@@ -324,14 +331,14 @@ def spec_to_ideogram_payload(
 
 def spec_to_flux_prompt(spec: ArtDirectionSpec) -> str:
     """Convert ArtDirectionSpec to continuous photographic prose for Flux 3 Klein."""
-    materials_str = ", ".join(spec.hero.materials) if spec.hero.materials else "matte composite and acrylic"
     return (
-        f"A cinematic promotional poster background visual featuring deep volumetric atmosphere and {spec.motif}. "
-        f"The upper third ({spec.zones.title[0]} to {spec.zones.title[2]} units) is an expansive, calm dark field in tone {spec.palette.base} with quiet surfaces. "
-        f"The central midground contains a soft diffused ambient light glow in tones of {spec.palette.primary} and {spec.palette.secondary}. "
-        f"The lower section is a clean, flat dark matte floor zone. "
-        f"Illuminated with directional key lighting from the {spec.light.key_direction} in {spec.light.key_color} and subtle {spec.light.rim} rim falloff. "
-        f"High optical clarity, smooth matte finish, vast calm negative space, pure visual artwork with zero text, no letters, no typography, no watermarks."
+        f"A sophisticated academic promotional poster background visual featuring clean architectural geometry, "
+        f"subtle isometric grid structures, and {spec.motif}. "
+        f"The layout is structured with clear spatial zones for institutional typography. "
+        f"Illuminated with soft natural studio daylight from the {spec.light.key_direction} with gentle diffuse shadows, "
+        f"anchored in dignified tones of {spec.palette.base} with subtle accents of {spec.palette.primary} and {spec.palette.secondary}. "
+        f"High graphic clarity, tactile fine paper finish, elegant non-plain background with subtle geometric depth, "
+        f"pure visual artwork with zero text, no letters, no typography, no watermarks, no neon glows."
     )
 
 
@@ -340,7 +347,7 @@ def spec_to_qwen_hero_prompts(spec: ArtDirectionSpec) -> tuple[str, str]:
     
     Guarantees:
     - Concrete physical subject with materials.
-    - Matching lighting direction to the background.
+    - Soft natural studio lighting (dignified, not glowy).
     - Positive phrasing for alpha isolation (no negative trigger backfire in positive prompt).
     - True negative_prompt string cleanly separated for ComfyUI KSampler negative conditioning.
     """
@@ -349,15 +356,14 @@ def spec_to_qwen_hero_prompts(spec: ArtDirectionSpec) -> tuple[str, str]:
     positive_prompt = (
         f"A single iconic 3D {spec.hero.object}, crafted from {materials_str}, "
         f"{spec.hero.perspective} perspective, centered in frame with comfortable outer margins, "
-        f"directional key lighting from {spec.light.key_direction} in {spec.light.key_color} with {spec.light.rim} edge highlights, "
+        f"clean natural studio lighting from {spec.light.key_direction} with subtle {spec.light.rim} edge definition, "
         f"floating, fully isolated, clean sticker cutout, transparent background, empty alpha channel, 3D render, sharp edges, no cutoff edges"
     )
 
     negative_prompt = (
         "blurry, low quality, noise, solid background, white background, black background, "
         "text, watermark, hands, stand, base, pedestal, ground plane, floor shadow, cast shadow, "
-        "floating cards, app icons, web buttons, UI widgets, dashboard panels, frames, borders, cropped, cutoff edges"
+        "floating cards, app icons, web buttons, UI widgets, dashboard panels, frames, borders, cropped, cutoff edges, neon glow"
     )
 
     return positive_prompt, negative_prompt
-
