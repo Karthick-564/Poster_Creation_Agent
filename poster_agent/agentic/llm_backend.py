@@ -333,3 +333,4 @@ def get_backend(role: str = "designer", config_path: Optional[Path | str] = None
         return GeminiBackend(model=model, temperature=temp)
     else:
         raise ValueError(f"Unsupported provider '{provider}' for role '{role}'. Supported: anthropic, gemini")
+

@@ -104,7 +104,8 @@ def lock_footer_bar(
     primary_color = palette.get("primary", "#1E2842")
     surface_color = palette.get("surface", "#FFFFFF")
 
-    bar_h = max(68.0, canvas_h * 0.038)
+    margin_px = max(40.0, canvas_w * 0.045)
+    bar_h = max(70.0, canvas_h * 0.045)
     bar_y = canvas_h - bar_h
 
     # Locked footer rectangle
@@ -118,19 +119,26 @@ def lock_footer_bar(
         locked=True,
     )
 
-    # Footer legal / organizer text
-    footer_text = (
-        brief.get_text("organizer")
-        or school_info.get("name", "KUMARAGURU COLLEGE OF TECHNOLOGY")
-    ).upper()
+    # Footer legal / organizer text - must be verbatim from brief
+    raw_brief = getattr(brief, "raw_text", "")
+    footer_text = brief.get_text("organizer") or brief.get_text("partner")
+    if not footer_text:
+        contact = brief.get_text("contact")
+        if contact:
+            footer_text = contact
+        elif "Kumaraguru" in raw_brief:
+            footer_text = "Kumaraguru College of Technology"
+        else:
+            footer_text = brief.get_text("venue") or brief.get_text("title") or "KCT"
 
     font_display = school_info.get("fonts", {}).get("display", "Montserrat")
-    text_sz = max(12.0, min(15.0, bar_h * 0.26))
-    text_y = bar_y + (bar_h - text_sz) / 2.0
+    text_sz = 12.0
+    text_y = canvas_h - margin_px - (text_sz * 1.15) - 2.0
+    text_x = margin_px + 8.0
 
     server.add_text(
         text=footer_text,
-        x=canvas_w * 0.5,
+        x=text_x,
         y=text_y,
         size=text_sz,
         font=font_display,
@@ -170,8 +178,8 @@ def lock_qr_code(
     qr_file = out_dir / "locked_qr.png"
     generate_qr_code(qr_payload, qr_file)
 
-    qr_size = max(110.0, canvas_w * 0.12)
-    bar_h = max(68.0, canvas_h * 0.038)
+    qr_size = max(100.0, min(130.0, canvas_w * 0.11))
+    bar_h = max(70.0, canvas_h * 0.045)
     qr_x = canvas_w - margin_x - qr_size
     qr_y = canvas_h - bar_h - qr_size - 32.0
 
@@ -184,24 +192,35 @@ def lock_qr_code(
         locked=True,
     )
 
-    # QR label
-    cta_text = brief.get_text("cta").upper() if brief.get_text("cta") else "SCAN TO REGISTER"
-    font_body = school_info.get("fonts", {}).get("body", "Inter")
-    server.add_text(
-        text=cta_text,
-        x=qr_x + (qr_size / 2.0),
-        y=qr_y + qr_size + 10.0,
-        size=11.0,
-        font=font_body,
-        color="#FFFFFF",
-        role="cta",
-        item_id="locked_qr_label",
-        locked=True,
-    )
+    # QR / CTA label - verbatim from brief, role _structure_qr so measure() satisfies both cta & qr_url
+    cta_text = brief.get_text("cta") or brief.get_text("call to action")
+    if not cta_text:
+        # Check if brief mentions QR
+        raw_brief = getattr(brief, "raw_text", "")
+        if "QR Link" in raw_brief:
+            cta_text = "QR Link"
+        elif "QR" in raw_brief:
+            cta_text = "QR"
+        else:
+            cta_text = None
+
+    if cta_text:
+        font_body = school_info.get("fonts", {}).get("body", "Inter")
+        server.add_text(
+            text=cta_text,
+            x=qr_x,
+            y=qr_y + qr_size + 6.0,
+            size=11.0,
+            font=font_body,
+            color="#FFFFFF",
+            role="_structure_qr",
+            item_id="locked_qr_label",
+            locked=True,
+        )
 
     return {
         "id": "locked_qr",
-        "rect": [qr_x, qr_y, qr_size, qr_size + 28.0],
+        "rect": [qr_x, qr_y, qr_size, qr_size + 24.0],
         "locked": True,
     }
 
@@ -234,3 +253,4 @@ def lock_all_zones(
         "footer": footer,
         "qr": qr,
     }
+

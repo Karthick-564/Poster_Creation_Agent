@@ -208,3 +208,4 @@ def test_model_validation_fails_loudly_on_invalid_model():
 
     backend_gemini = GeminiBackend(model="gemini-2.5-flash")
     assert backend_gemini.model == "gemini-2.5-flash"
+

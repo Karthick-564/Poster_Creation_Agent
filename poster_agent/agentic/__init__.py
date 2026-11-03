@@ -15,3 +15,4 @@ __all__ = [
     "lock_footer_bar",
     "lock_qr_code",
 ]
+
