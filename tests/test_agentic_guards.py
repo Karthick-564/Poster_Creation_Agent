@@ -209,3 +209,100 @@ def test_model_validation_fails_loudly_on_invalid_model():
     backend_gemini = GeminiBackend(model="gemini-2.5-flash")
     assert backend_gemini.model == "gemini-2.5-flash"
 
+
+# ---------------------------------------------------------------------------
+# 7. Milestone 3: Critic Checklist & Router Guards
+# ---------------------------------------------------------------------------
+
+def test_critic_checklist_schema_and_evaluation():
+    """CriticStage must evaluate the 9-point design checklist and return structured proof."""
+    from poster_agent.agentic.critic import CriticStage, CRITIC_CHECKLIST_SCHEMA
+
+    critic = CriticStage(backend=None) # Offline deterministic mode
+    gate_res = {"passed": True, "failures": [], "v_band_coverage_pct": 85.0}
+    manifest = [{"role": "headline", "text": "BIG EVENT"}]
+
+    res = critic.run_checklist_review(
+        final_image_path=Path("nonexistent.png"),
+        brief_fields={"title": "BIG EVENT"},
+        palette=["#070B19", "#00F5D4"],
+        gate_results=gate_res,
+        manifest_rows=manifest,
+        has_hero=False,
+        ocr_passed=True,
+    )
+
+    assert "items" in res
+    assert res["passed"] is True
+    for key in CRITIC_CHECKLIST_SCHEMA:
+        assert key in res["items"]
+        assert "passed" in res["items"][key]
+        assert "evidence" in res["items"][key]
+        assert "target_stage" in res["items"][key]
+
+
+def test_router_routes_deterministic_failures_to_s4():
+    """Router must map gate collisions/bounds/contrast to S4 Designer."""
+    from poster_agent.agentic.router import Router
+
+    router = Router()
+    gate_res = {
+        "passed": False,
+        "failures": [{"kind": "row_overlap", "target": "headline,date", "detail": "Overlap detected"}],
+    }
+    decision = router.route(cycle=1, gate_results=gate_res, ocr_results={"passed": True})
+
+    assert decision.should_reroute is True
+    assert decision.target_stage == "S4"
+    assert "row_overlap" in decision.reroute_action.failing_check
+
+
+def test_router_routes_background_ocr_to_s3():
+    """Router must map baked pseudo-text in background to S3 Generation."""
+    from poster_agent.agentic.router import Router
+
+    router = Router()
+    ocr_res = {
+        "passed": False,
+        "bg_unmapped_tokens": ["pseudo123"],
+        "failures": [{"kind": "background_ocr", "target": "bg.png"}],
+    }
+    decision = router.route(cycle=1, gate_results={"passed": True}, ocr_results=ocr_res)
+
+    assert decision.should_reroute is True
+    assert decision.target_stage == "S3"
+    assert decision.reroute_action.target_stage == "S3"
+
+
+def test_router_halts_on_missing_logo():
+    """Router must halt honestly if institutional logo is obstructed or missing (never generate)."""
+    from poster_agent.agentic.router import Router
+
+    router = Router()
+    gate_res = {
+        "passed": False,
+        "failures": [{"kind": "bounds", "target": "locked_header_logo", "detail": "Logo obstructed"}],
+    }
+    decision = router.route(cycle=1, gate_results=gate_res, ocr_results={"passed": True})
+
+    assert decision.should_reroute is False
+    assert decision.target_stage == "HALT"
+    assert "logo" in decision.halt_reason.lower()
+
+
+def test_router_halts_honestly_when_cycle_limit_exceeded():
+    """Router must halt honestly when reaching the maximum 3 cycles limit."""
+    from poster_agent.agentic.router import Router
+
+    router = Router()
+    gate_res = {
+        "passed": False,
+        "failures": [{"kind": "contrast", "target": "venue", "detail": "Low contrast"}],
+    }
+    decision = router.route(cycle=3, gate_results=gate_res, ocr_results={"passed": True})
+
+    assert decision.should_reroute is False
+    assert decision.target_stage == "HALT"
+    assert "maximum review cycles" in decision.halt_reason.lower()
+
+

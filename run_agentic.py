@@ -43,6 +43,7 @@ def main():
 
     # Initialize backend
     designer_backend = None
+    critic_backend = None
     if not args.replay:
         try:
             designer_backend = get_backend(role=args.designer_role, config_path=args.config)
@@ -50,9 +51,16 @@ def main():
         except Exception as e:
             print(f"[Backend] Note: Could not load live backend '{args.designer_role}' ({e}). Running with structured creative designer.")
 
+        try:
+            critic_backend = get_backend(role="critic", config_path=args.config)
+            print(f"[Backend] Loaded critic: {critic_backend.__class__.__name__} ({critic_backend.model})")
+        except Exception as e:
+            print(f"[Backend] Note: Live critic backend not available ({e}). Using deterministic ground-truth critic.")
+
     pipeline = AgenticPosterPipeline(
         project_root=PROJECT_ROOT,
         designer_backend=designer_backend,
+        critic_backend=critic_backend,
         config_path=args.config,
     )
 
