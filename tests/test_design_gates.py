@@ -94,6 +94,38 @@ def test_hero_presence_and_void():
     assert rich_res["hero_score"] >= 0.7
 
 
+def test_hero_presence_asset_void_overrides_bright_destination(tmp_path):
+    """A near-black hero asset is void even when the destination region is bright.
+
+    Screen-blending black contributes nothing, so atmospheric glows in the
+    hero rect must not rescue an invisible asset.
+    """
+    bright_im = Image.fromarray(
+        np.random.randint(120, 220, (1000, 1000, 3), dtype=np.uint8)
+    )
+    # Asset is fully opaque near-black
+    asset = Image.new("RGBA", (400, 400), (3, 3, 5, 255))
+    asset_path = tmp_path / "near_black_hero.png"
+    asset.save(asset_path)
+
+    res = hero_presence(
+        bright_im, hero_rect=[100, 200, 600, 500], hero_asset=asset_path
+    )
+    assert res["is_void"] is True
+    assert res["asset_mean_luminance"] is not None
+    assert res["asset_mean_luminance"] < 12.0
+    assert res["hero_score"] < 0.5
+
+    # A normal illuminated asset must not be flagged
+    lit = Image.new("RGBA", (400, 400), (180, 170, 160, 255))
+    lit_path = tmp_path / "lit_hero.png"
+    lit.save(lit_path)
+    lit_res = hero_presence(
+        bright_im, hero_rect=[100, 200, 600, 500], hero_asset=lit_path
+    )
+    assert lit_res["is_void"] is False
+
+
 def test_whitespace_balance():
     """Evaluates canvas breathing room."""
     manifest = [{"x": 100, "y": 100, "width": 500, "height": 200}]

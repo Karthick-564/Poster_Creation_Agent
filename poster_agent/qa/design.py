@@ -166,8 +166,34 @@ def asymmetry_index(
 def hero_presence(
     image_input: Union[Path, str, Image.Image],
     hero_rect: Optional[Sequence[float]] = None,
+    hero_asset: Optional[Union[Path, str]] = None,
 ) -> dict[str, Any]:
-    """Analyze the hero zone for presence, contrast, luminance, and edge feathering."""
+    """Analyze the hero zone for presence, contrast, luminance, and edge feathering.
+
+    When ``hero_asset`` is supplied, its own opaque luminance is checked first:
+    a near-black asset blended with screen contributes nothing, even if
+    unrelated glows make the destination region bright. Without this check the
+    region metric is fooled by atmospheric lighting (noir_beats_designed_v3:
+    hero_score 1.0 on a fully invisible hero).
+    """
+    asset_mean = None
+    asset_void = False
+    if hero_asset:
+        ap = Path(hero_asset)
+        if ap.exists():
+            try:
+                aim = Image.open(ap).convert("RGBA")
+                aa = np.array(aim, dtype=np.float32)
+                alpha = aa[:, :, 3]
+                visible = aa[:, :, :3][alpha > 10]
+                if visible.size:
+                    asset_mean = float(np.mean(
+                        0.299 * visible[:, 0] + 0.587 * visible[:, 1] + 0.114 * visible[:, 2]
+                    ))
+                    asset_void = asset_mean < 12.0
+            except Exception:
+                asset_mean = None
+
     if not hero_rect or len(hero_rect) < 4:
         return {
             "present": False,
@@ -177,6 +203,7 @@ def hero_presence(
             "is_void": True,
             "feathered": False,
             "hero_score": 0.0,
+            "asset_mean_luminance": round(asset_mean, 1) if asset_mean is not None else None,
         }
 
     if isinstance(image_input, (str, Path)):
@@ -202,8 +229,10 @@ def hero_presence(
     mean_lum = float(np.mean(gray))
     std_lum = float(np.std(gray))
 
-    # A near-black void has mean_lum < 15 and std < 10
-    is_void = mean_lum < 15.0 and std_lum < 12.0
+    # A near-black void has mean_lum < 15 and std < 10.
+    # An asset that is itself near-black is void regardless of destination
+    # lighting (screen blend of black = nothing).
+    is_void = (mean_lum < 15.0 and std_lum < 12.0) or asset_void
 
     # Edge feathering check: sample 4-pixel border strip vs interior
     feathered = False
@@ -234,6 +263,7 @@ def hero_presence(
         "hero_rect": [hx, hy, hw, hh],
         "mean_luminance": round(mean_lum, 1),
         "contrast_std": round(std_lum, 1),
+        "asset_mean_luminance": round(asset_mean, 1) if asset_mean is not None else None,
         "is_void": is_void,
         "feathered": feathered,
         "hero_score": round(hero_score, 2),
@@ -315,12 +345,13 @@ def evaluate_design_quality(
     canvas_w: float = 1080.0,
     canvas_h: float = 1350.0,
     hero_rect: Optional[Sequence[float]] = None,
+    hero_asset: Optional[Union[Path, str]] = None,
 ) -> dict[str, Any]:
     """Run full compositional design quality suite and compute composite score."""
     p_cov = palette_coverage(image_input, palette_hexes)
     t_scale = type_scale_contrast(manifest_rows)
     asym = asymmetry_index(manifest_rows, canvas_w)
-    hero_info = hero_presence(image_input, hero_rect)
+    hero_info = hero_presence(image_input, hero_rect, hero_asset=hero_asset)
     ws = whitespace_balance(manifest_rows, hero_rect, canvas_w, canvas_h)
     focals = focal_count(manifest_rows, hero_rect, canvas_w, canvas_h)
 
