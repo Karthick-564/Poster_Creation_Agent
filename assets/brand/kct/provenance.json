@@ -1,0 +1,139 @@
+{
+  "school": "KCT",
+  "school_name": "Kumaraguru College of Technology",
+  "source": {
+    "document": "Examples/extracted/Brand Guidelines/KCT.pdf",
+    "title": "Kumaraguru College of Technology \u2014 The Brand Style Guide 2020, V1.00",
+    "sha256": "3e6f4dfd4d325b420bc7a7b2127aa00c10f6a695e00e6b87bf190560303cd86a"
+  },
+  "canonical": "kct_logo.png",
+  "usage": {
+    "placement": "top-right",
+    "clear_space_mm": 10.0,
+    "preserve_aspect": true,
+    "solid_field_only": true,
+    "field_color": "#FFFFFF",
+    "do_not": [
+      "recolor",
+      "crop",
+      "stretch",
+      "add effects",
+      "place on gradients"
+    ]
+  },
+  "assets": [
+    {
+      "file": "kct_logo.png",
+      "description": "V1 secondary rectangle (KCT Blue, reversed)",
+      "source_page": 8,
+      "source_rect_pt": [
+        582.99,
+        330.32,
+        805.01,
+        403.07
+      ],
+      "render_zoom": 10,
+      "width": 2222,
+      "height": 728,
+      "aspect_ratio": 3.0522,
+      "mode": "RGBA",
+      "sha256": "99efa3aa0bc98d6c4b5f50b0a4119121a17e4809deb840ae1616049ded795ecd"
+    },
+    {
+      "file": "kct_logo_primary.png",
+      "description": "V1 primary quadrangle (KCT Blue, reversed)",
+      "source_page": 8,
+      "source_rect_pt": [
+        582.99,
+        172.25,
+        719.57,
+        308.84
+      ],
+      "render_zoom": 10,
+      "width": 1367,
+      "height": 1367,
+      "aspect_ratio": 1.0,
+      "mode": "RGBA",
+      "sha256": "c1b886c47e2368703c135b0028ecd206896d27b06b395d49f2130725ce080e50"
+    },
+    {
+      "file": "kct_logo_mono.png",
+      "description": "V1 secondary rectangle (monotone)",
+      "source_page": 8,
+      "source_rect_pt": [
+        899.39,
+        330.32,
+        1121.41,
+        403.07
+      ],
+      "render_zoom": 10,
+      "width": 2222,
+      "height": 728,
+      "aspect_ratio": 3.0522,
+      "mode": "RGBA",
+      "sha256": "cd3e81e8bf32ae5ed8534e39e4b9596e7412383ba51d619cdad2810ca67f76d0"
+    },
+    {
+      "file": "kct_logo_primary_mono.png",
+      "description": "V1 primary quadrangle (monotone)",
+      "source_page": 8,
+      "source_rect_pt": [
+        899.39,
+        172.25,
+        1035.97,
+        308.84
+      ],
+      "render_zoom": 10,
+      "width": 1367,
+      "height": 1367,
+      "aspect_ratio": 1.0,
+      "mode": "RGBA",
+      "sha256": "5bd56459c85a573edec602a6d1e1532370f0ac50cf3236d949dba1c152fa63e0"
+    },
+    {
+      "file": "kct_logo_v2_secondary.png",
+      "description": "V2 secondary rectangle (blue line art on transparent)",
+      "source_page": 7,
+      "source_rect_pt": [
+        835.6,
+        306.39,
+        1090.8,
+        390.32
+      ],
+      "render_zoom": 10,
+      "width": 2562,
+      "height": 846,
+      "aspect_ratio": 3.0284,
+      "mode": "RGBA",
+      "sha256": "d596ca061aa6d5e5ac29812bef350df83fa254d6ff4be365311c3c019a47293b"
+    },
+    {
+      "file": "kct_logo_v2_primary.png",
+      "description": "V2 primary quadrangle (blue line art on transparent)",
+      "source_page": 7,
+      "source_rect_pt": [
+        516.0,
+        288.58,
+        652.58,
+        425.16
+      ],
+      "render_zoom": 10,
+      "width": 1376,
+      "height": 1377,
+      "aspect_ratio": 0.9993,
+      "mode": "RGBA",
+      "sha256": "5c6fbc3e6906bb21b222e0d52724233ba90e7e6dbb640ccac2f49e458445122f"
+    },
+    {
+      "file": "kct_logo_web_header.png",
+      "description": "Website header lockup (blue-on-transparent); reference only, not for print",
+      "source_url": "https://kct.ac.in/wp-content/uploads/2024/05/KCT-N.png",
+      "width": 445,
+      "height": 119,
+      "aspect_ratio": 3.7395,
+      "mode": "RGBA",
+      "sha256": "9b57a6a1c44c6493a81ce3930afb8b21b9adfd68eace4029aa24cfcc70423501",
+      "print_ready": false
+    }
+  ]
+}

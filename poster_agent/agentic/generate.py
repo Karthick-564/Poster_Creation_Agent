@@ -33,10 +33,16 @@ class GenerationResult:
 class GenerationStage:
     """Manages layer generation and raster measurement."""
 
-    def __init__(self, endpoint: str = "http://127.0.0.1:8188", project_root: Optional[Path] = None):
+    def __init__(
+        self,
+        endpoint: str = "http://127.0.0.1:8188",
+        project_root: Optional[Path] = None,
+        bg_model: str = "ideogram",
+    ):
         self.project_root = Path(project_root or PROJECT_ROOT)
         self.client = ComfyUIClient(endpoint=endpoint)
         self.measurer = ArtMeasurer()
+        self.bg_model = bg_model
 
     def run(
         self,
@@ -61,13 +67,21 @@ class GenerationStage:
             out_bg = run_dir / f"layer0_bg_{bg_seed}.png"
 
             if self.client.is_alive():
-                self.client.generate_ideogram_background(
-                    description=f"Atmospheric background key visual for {brief_title}",
-                    palette=palette,
-                    output_path=out_bg,
-                    canvas_w=canvas_w,
-                    canvas_h=canvas_h,
-                )
+                if self.bg_model == "flux":
+                    self.client.generate_flux_background(
+                        prompt=f"Atmospheric background key visual for {brief_title}, color accents in {', '.join(palette[:3])}",
+                        output_path=out_bg,
+                        width=int(canvas_w) if canvas_w <= 1024 else 768,
+                        height=int(canvas_h) if canvas_h <= 1024 else 1024,
+                    )
+                else:
+                    self.client.generate_ideogram_background(
+                        description=f"Atmospheric background key visual for {brief_title}",
+                        palette=palette,
+                        output_path=out_bg,
+                        canvas_w=canvas_w,
+                        canvas_h=canvas_h,
+                    )
                 layers["background"] = str(out_bg)
                 refusal_fails = check_refusal_free(out_bg)
                 if refusal_fails:

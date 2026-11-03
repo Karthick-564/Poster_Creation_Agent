@@ -54,6 +54,7 @@ class AgenticPosterPipeline:
         format_name: Optional[str] = None,
         allow_generation: bool = False, # M2 first run uses supplied/native assets
         replay_run_id: Optional[str] = None,
+        bg_model: str = "ideogram",
     ) -> dict[str, Any]:
         """Execute one complete poster creation run."""
         start_time = time.time()
@@ -108,7 +109,7 @@ class AgenticPosterPipeline:
         # -------------------------------------------------------------
         # Stage 3: Layer Asset Generation & Measurement
         # -------------------------------------------------------------
-        gen_stage = GenerationStage(project_root=self.project_root)
+        gen_stage = GenerationStage(project_root=self.project_root, bg_model=bg_model)
         gen_res = gen_stage.run(
             asset_decisions=decisions,
             run_dir=run_dir,

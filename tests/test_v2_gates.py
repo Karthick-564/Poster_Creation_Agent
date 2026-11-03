@@ -52,17 +52,30 @@ def _small_spec():
     return brand, fmt, KCTPlanner().plan_candidates(brief, brand, fmt)[0]
 
 
-def test_mock_pipeline_passes_end_to_end(tmp_path):
+def _brand_with_logo(tmp_path, *, create: bool = True):
+    """Return the KCT contract pointed at a hermetic temp logo path."""
     brand = get_brand("KCT")
+    logo_path = tmp_path / "supplied_logo.png"
+    if create:
+        Image.new("RGBA", (600, 200), (30, 40, 66, 255)).save(logo_path)
+    return brand.model_copy(
+        update={"logo": brand.logo.model_copy(update={"asset": str(logo_path)})}
+    )
+
+
+def test_mock_pipeline_passes_end_to_end(tmp_path):
+    brand = _brand_with_logo(tmp_path)
     broker = MockAssetBroker(tmp_path / "assets", allow_placeholder_logo=True)
-    pipeline = Pipeline(broker=broker, renderer=MockRenderer())
+    pipeline = Pipeline(broker=broker, renderer=MockRenderer(), brand=brand)
     result = pipeline.run(BRIEF, output_dir=tmp_path / "run")
     assert result.success, result.message
     assert result.gates.passed
     assert Path(result.output_path).exists()
     assert result.spec.qr is not None
-    assert any(issue.code == "logo_placeholder" for issue in result.gates.warnings)
-    # The logo was rescaled from the actual placeholder asset.
+    assert result.assets.logo is not None
+    assert result.assets.logo.placeholder is False
+    assert not any(issue.code == "logo_placeholder" for issue in result.gates.warnings)
+    # The logo was rescaled from the supplied asset.
     # Compare pixel-space aspect ratios (box.w/h are normalised to 0-1000 on
     # independent axes, so they must be converted to pixels before dividing).
     fmt = result.spec.format
@@ -74,8 +87,14 @@ def test_mock_pipeline_passes_end_to_end(tmp_path):
 
 
 def test_missing_logo_blocks_delivery(tmp_path):
+    brand = _brand_with_logo(tmp_path, create=False)
     broker = MockAssetBroker(tmp_path / "assets", allow_placeholder_logo=False)
-    pipeline = Pipeline(broker=broker, renderer=MockRenderer(), max_asset_attempts=1)
+    pipeline = Pipeline(
+        broker=broker,
+        renderer=MockRenderer(),
+        brand=brand,
+        max_asset_attempts=1,
+    )
     result = pipeline.run(BRIEF, output_dir=tmp_path / "run", max_candidates=1)
     assert result.success is False
     assert any(issue.code == "logo_missing" for issue in result.gates.blocking)

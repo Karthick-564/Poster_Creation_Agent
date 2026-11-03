@@ -46,7 +46,7 @@ def test_vectorcraft_commands_cover_all_layers(tmp_path):
     placements = [c for c in vc.commands if c["command"] == "file.place"]
     assert len(placements) == 4
     assert placements[0]["params"]["rect"] == [0, 0, spec.format.width, spec.format.height]
-    assert placements[-1]["params"]["path"].endswith("logo_placeholder.png")
+    assert Path(placements[-1]["params"]["path"]).name == Path(assets.logo.path).name
 
     # The logo box keeps the asset's intrinsic aspect ratio.
     logo_rect = placements[-1]["params"]["rect"]

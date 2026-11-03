@@ -101,28 +101,27 @@ def build_ideogram_v2_payload(
     hld = re.sub(r",\s*\.", ".", hld)
     hld = re.sub(r"\s+", " ", hld).strip()
 
-    # 2. Style description: flat string with inline palette
-    style_description = (
-        f"Contemporary poster background art, architectural photography with smooth matte ambient lighting and subtle "
-        f"abstract architectural shadows. Color palette: {', '.join(palette_hexes)}."
-    )
+    # 2. Style description: structured dictionary adhering to canonical Ideogram schema
+    style_description = {
+        "aesthetics": f"Contemporary poster art, abstract geometric forms with smooth matte ambient gradients, {mood or 'cinematic lighting'}.",
+        "lighting": f"Volumetric ambient lighting with directional light spill from the {light_direction}, subtle rim highlights.",
+        "photo": "Clean architectural digital capture, smooth matte finish, zero grain noise, quiet surfaces.",
+        "medium": "Mixed-media digital art",
+        "color_palette": palette_hexes,
+    }
 
-    # 3. Compositional deconstruction: background + 1-2 non-empty elements
-    # NB: never mention "text"/"typography" ("prepared for a typographic overlay"
-    # reads as an instruction to render a wordmark — the failure seen in
-    # runs/noir_beats_live, where "Clomailioka" + "2030" were baked into art).
-    # Describe silence positively: blank, unbroken, quiet surfaces.
+    # 3. Compositional deconstruction: background + elements
     comp_bg = (
-        f"Deep ambient background in tones of {bg_color} with soft atmospheric light spill from the {light_direction}, "
-        f"spacious calm negative space, top zone and bottom zone completely dark, flat and matte, quiet unbroken surfaces."
+        f"Deep ambient textured background in tones of {bg_color} with soft atmospheric light spill from the {light_direction}, "
+        f"spacious calm negative space, top zone and bottom zone dark, flat and matte, quiet unbroken surfaces."
     )
 
-    # Elements: concrete bounding boxes (normalized 0..1000)
+    # Elements: concrete bounding boxes (normalized [ymin, xmin, ymax, xmax] in 0..1000)
     elements = [
         {
             "type": "obj",
-            "bbox": [108, 150, 650, 950],
-            "desc": f"Soft abstract ambient gradient ribbons of {bg_color} with subtle architectural shadows, smooth matte transitions, quiet surfaces.",
+            "bbox": [128, 149, 450, 850],
+            "desc": f"Soft abstract geometric light gradients and ambient ribbons in tones of {palette_hexes[1] if len(palette_hexes) > 1 else bg_color}, smooth matte transitions, quiet surfaces.",
             "color_palette": palette_hexes[:3],
         },
         {
@@ -140,6 +139,5 @@ def build_ideogram_v2_payload(
             "background": comp_bg,
             "elements": elements,
         },
-        "aspect_ratio": aspect_str,
     }
 

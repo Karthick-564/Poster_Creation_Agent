@@ -95,18 +95,21 @@ review.
 
 ## Current blockers
 
-1. **Official KCT logo is missing.** `assets/logo_kumaraguru.png` is an Apex
-   Institute of Technology demo mark and must not be used. The contract points
-   at `assets/brand/kct/kct_logo.png`; until that file exists, mock runs use a
-   clearly marked placeholder and emit `logo_placeholder` as a warning.
-2. **Helvetica Neue / Montserrat are not installed in `assets/fonts/`.** The
+1. **Helvetica Neue / Montserrat are not installed in `assets/fonts/`.** The
    live renderer falls back through the contract's `fallbacks` chain. Install
    the licensed fonts for brand-accurate output.
-3. **VectorCraft is Windows-only.** `VectorCraftComposer` builds and tests the
+2. **VectorCraft is Windows-only.** `VectorCraftComposer` builds and tests the
    command batch on any host, but executing the `.exe` requires Windows.
-4. **OCR engine is not installed in WSL.** The mock suite checks text from the
+3. **OCR engine is not installed in WSL.** The mock suite checks text from the
    render manifest. Install RapidOCR/PaddleOCR, or pass `ocr_lines`, to enable
    the pixel OCR gate.
+
+The official KCT logo is present at `assets/brand/kct/kct_logo.png`; the
+canonical file, approved variants, extraction source, dimensions and SHA-256
+hashes are documented in `assets/brand/kct/README.md` and
+`assets/brand/kct/provenance.json`. Mock runs no longer emit
+`logo_placeholder`. `assets/logo_kumaraguru.png` remains an Apex Institute demo
+mark and must never be used for KCT output.
 
 ## Deliberate non-goals for this slice
 

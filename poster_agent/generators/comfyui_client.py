@@ -214,3 +214,90 @@ class ComfyUIClient:
             dest_path=output_path,
         )
 
+    def generate_flux_background(
+        self,
+        prompt: str,
+        output_path: Path | str,
+        prefix: str = "auto_flux_bg",
+        width: int = 768,
+        height: int = 1024,
+        steps: int = 16,
+    ) -> Path:
+        """Generate atmospheric poster background via Flux 3 Klein."""
+        clean_prompt = prompt
+        if "no text" not in clean_prompt.lower():
+            clean_prompt += ", vast calm negative space, blank quiet surfaces, smooth gradients, no text, no letters"
+
+        workflow = {
+            "1": {
+                "inputs": {"unet_name": "flux3-image-klein-int8-convrot.safetensors", "weight_dtype": "default"},
+                "class_type": "UNETLoader",
+            },
+            "2": {
+                "inputs": {"clip_name": "qwen3vl_4b_int8_convrot.safetensors", "type": "flux3"},
+                "class_type": "CLIPLoader",
+            },
+            "3": {
+                "inputs": {"vae_name": "flux2-vae.safetensors"},
+                "class_type": "VAELoader",
+            },
+            "4": {
+                "inputs": {"text": clean_prompt, "clip": ["2", 0]},
+                "class_type": "CLIPTextEncode",
+            },
+            "5": {
+                "inputs": {"text": "", "clip": ["2", 0]},
+                "class_type": "CLIPTextEncode",
+            },
+            "6": {
+                "inputs": {"width": width, "height": height, "batch_size": 1},
+                "class_type": "EmptyFlux2LatentImage",
+            },
+            "7": {
+                "inputs": {
+                    "seed": int(time.time() * 1000) % 1000000,
+                    "steps": steps,
+                    "cfg": 1.0,
+                    "sampler_name": "euler",
+                    "scheduler": "simple",
+                    "denoise": 1.0,
+                    "model": ["1", 0],
+                    "positive": ["4", 0],
+                    "negative": ["5", 0],
+                    "latent_image": ["6", 0],
+                },
+                "class_type": "KSampler",
+            },
+            "8": {
+                "inputs": {"samples": ["7", 0], "vae": ["3", 0]},
+                "class_type": "VAEDecode",
+            },
+            "9": {
+                "inputs": {"filename_prefix": prefix, "images": ["8", 0]},
+                "class_type": "SaveImage",
+            },
+        }
+
+        payload = json.dumps({"prompt": workflow}).encode("utf-8")
+        req = urllib.request.Request(f"{self.endpoint}/prompt", data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req) as resp:
+            res = json.loads(resp.read().decode("utf-8"))
+            prompt_id = res.get("prompt_id")
+
+        hist = self.wait_for_completion(prompt_id)
+        if not hist or "outputs" not in hist:
+            raise RuntimeError(f"Flux background generation failed or timed out for {prompt_id}")
+
+        out_node = hist["outputs"].get("9", {})
+        imgs = out_node.get("images", [])
+        if not imgs:
+            raise RuntimeError("No image output from Flux node 9")
+
+        img_info = imgs[0]
+        return self.download_output_image(
+            filename=img_info["filename"],
+            subfolder=img_info.get("subfolder", ""),
+            folder_type=img_info.get("type", "output"),
+            dest_path=output_path,
+        )
+

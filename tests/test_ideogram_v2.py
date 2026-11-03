@@ -65,12 +65,18 @@ def test_build_ideogram_v2_payload_schema():
     assert "no text" not in hld.lower()
     assert not re.search(r",\s*,", hld)
 
-    # 2. Style description: flat string with inline palette hexes
+    # 2. Style description: structured dictionary adhering to canonical Ideogram schema
     assert "style_description" in payload
     sd = payload["style_description"]
-    assert isinstance(sd, str)
+    assert isinstance(sd, dict)
+    assert "aesthetics" in sd
+    assert "lighting" in sd
+    assert "photo" in sd
+    assert "medium" in sd
+    assert "color_palette" in sd
+    assert isinstance(sd["color_palette"], list)
     for hex_code in palette[:3]:
-        assert hex_code.upper() in sd
+        assert hex_code.upper() in sd["color_palette"]
 
     # 3. Compositional deconstruction
     assert "compositional_deconstruction" in payload
@@ -90,6 +96,5 @@ def test_build_ideogram_v2_payload_schema():
         assert "desc" in elem
         assert "color_palette" in elem
 
-    # 4. Aspect ratio
-    assert payload["aspect_ratio"] == "9:16"
+    # 4. Aspect ratio resolution helper is tested separately in test_resolve_aspect_ratio_and_resolution
 

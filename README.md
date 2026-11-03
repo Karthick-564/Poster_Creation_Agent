@@ -197,8 +197,10 @@ python -m poster_agent.mcp.v2_server
 ```
 It exposes `run_poster`, `plan_poster`, `get_brand_contract`, and
 `list_schools` over the same core. See `poster_agent/v2/README.md` for stage
-routing, contract details, and current blockers (official KCT logo and licensed
-fonts are still required for production).
+routing, contract details, and current blockers (licensed fonts are still
+required for production). The official KCT logo set lives in
+`assets/brand/kct/`; `assets/brand/kct/README.md` documents the extraction
+source and placement rules.
 
 ### 5. Running the Test Suite
 Run the full test suite across all subsystems:
