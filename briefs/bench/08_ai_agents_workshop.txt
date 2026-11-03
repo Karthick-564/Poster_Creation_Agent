@@ -1,0 +1,15 @@
+POSTER BRIEF: AGENTIC AI BOOTCAMP 2026
+Format: 1080 x 1920 px (9:16 story)
+Title: AGENTIC AI BOOTCAMP
+Eyebrow: HANDS-ON DEVELOPER MASTERCLASS
+Tagline: FROM CODE COMPLETION TO AUTONOMOUS AGENTS.
+Subtitle: Build and deploy production-grade multi-agent reasoning loops and tool-calling systems in 48 intensive hours.
+Date: Saturday, 28 November 2026, 09:00 AM
+Venue: Centre for Data Science, Kumaraguru College of Technology
+Call to action: Claim Your Seat
+Closing line: BUILD THE FUTURE OF SOFTWARE.
+Contact: ai-bootcamp@kct.ac.in | +91 97890 12345
+Organizer: Department of Artificial Intelligence & Data Science, KCT
+QR Link: https://kct.ac.in/ai-bootcamp
+Palette: #0B0F19 #6366F1 #8B5CF6 #EC4899 #F9FAFB
+

@@ -297,3 +297,4 @@ class CriticStage:
             "trend_score": score,
             "summary": f"{passed_count}/{len(items)} design checklist items verified.",
         }
+

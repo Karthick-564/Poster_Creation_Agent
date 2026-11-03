@@ -16,9 +16,17 @@ import time
 from typing import Any, Optional
 
 from poster_agent.agentic.llm_backend import LLMBackend, LLMResponse, ToolCall
-from poster_agent.mcp.vectorcraft_server import VectorCraftMCPServer, estimate_text_width
+from poster_agent.mcp.vectorcraft_server import VectorCraftMCPServer, estimate_text_width, _hex_to_rgb, _rgb_to_relative_luminance
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+def _is_light_color(hex_str: str) -> bool:
+    try:
+        arr = np.array([[[c for c in _hex_to_rgb(hex_str)]]], dtype=np.float32)
+        return float(_rgb_to_relative_luminance(arr)[0, 0]) > 0.45
+    except Exception:
+        return False
 
 def _fit_size(text: str, target_size: float, max_w: float, font: str = "Inter") -> float:
     sz = float(target_size)
@@ -233,6 +241,20 @@ class DesignerStage:
 
         # 1. Base canvas background & atmospheric radial glow
         primary_bg = palette[0] if palette else "#0B1021"
+        is_light = _is_light_color(primary_bg)
+        text_primary = "#111827" if is_light else "#FFFFFF"
+        text_secondary = "#374151" if is_light else "#C8C7CC"
+        text_sub = "#1F2937" if is_light else "#E2E8F0"
+
+        # Determine high-contrast accent
+        accent_cand = palette[1] if len(palette) > 1 else ("#0F766E" if is_light else "#00F5D4")
+        if is_light and _is_light_color(accent_cand):
+            accent = palette[-1] if not _is_light_color(palette[-1]) else "#0F766E"
+        elif not is_light and not _is_light_color(accent_cand):
+            accent = palette[-1] if _is_light_color(palette[-1]) else "#00F5D4"
+        else:
+            accent = accent_cand
+
         self.server.add_shape_rectangle(
             x=0.0,
             y=0.0,
@@ -241,7 +263,7 @@ class DesignerStage:
             fill=primary_bg,
             item_id="base_canvas_bg",
         )
-        glow_col = palette[1] if len(palette) > 1 else "#00F5D4"
+        glow_col = accent
         self.server.radial_light(cx=cw * 0.3, cy=ch * 0.25, radius=380.0, color=glow_col, opacity=0.35)
 
         # 2. Band 0: Eyebrow (if provided and not duplicate)
@@ -256,7 +278,7 @@ class DesignerStage:
                 sz=eye_sz,
                 font="Inter",
                 style="Bold",
-                col=palette[1] if len(palette) > 1 else "#00F5D4",
+                col=accent,
                 r="eyebrow",
                 i_id="creative_eyebrow",
             )
@@ -272,7 +294,7 @@ class DesignerStage:
             sz=head_size,
             font="Montserrat",
             style="Bold",
-            col="#FFFFFF",
+            col=text_primary,
             r="headline",
             i_id="creative_headline",
         )
@@ -287,7 +309,7 @@ class DesignerStage:
                 sz=tag_sz,
                 font="Inter",
                 style="Regular",
-                col=palette[1] if len(palette) > 1 else "#85CEBD",
+                col=accent,
                 r="tagline",
                 i_id="creative_tagline",
             ):
@@ -311,7 +333,7 @@ class DesignerStage:
                 sz=sec_sz,
                 font="Inter",
                 style="Regular",
-                col="#E2E8F0",
+                col=text_sub,
                 r="body",
                 i_id="creative_secondary_hook",
             )
@@ -327,7 +349,7 @@ class DesignerStage:
                 sz=d_sz,
                 font="Inter",
                 style="Bold",
-                col="#FFFFFF",
+                col=text_primary,
                 r="date",
                 i_id="creative_date",
             ):
@@ -342,7 +364,7 @@ class DesignerStage:
                 sz=v_sz,
                 font="Inter",
                 style="Regular",
-                col="#C8C7CC",
+                col=text_secondary,
                 r="venue",
                 i_id="creative_venue",
             ):
@@ -357,7 +379,7 @@ class DesignerStage:
                 sz=cta_sz,
                 font="Inter",
                 style="Bold",
-                col=palette[1] if len(palette) > 1 else "#00F5D4",
+                col=accent,
                 r="cta",
                 i_id="creative_cta",
             )

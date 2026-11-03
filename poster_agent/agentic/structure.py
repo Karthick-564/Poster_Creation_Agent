@@ -136,13 +136,25 @@ def lock_footer_bar(
     text_y = canvas_h - margin_px - (text_sz * 1.15) - 2.0
     text_x = margin_px + 8.0
 
+    import numpy as np
+    from poster_agent.mcp.vectorcraft_server import _hex_to_rgb, _rgb_to_relative_luminance
+    try:
+        arr_fg = np.array([[[c for c in _hex_to_rgb(surface_color)]]], dtype=np.float32)
+        arr_bg = np.array([[[c for c in _hex_to_rgb(primary_color)]]], dtype=np.float32)
+        l_fg = float(_rgb_to_relative_luminance(arr_fg)[0, 0])
+        l_bg = float(_rgb_to_relative_luminance(arr_bg)[0, 0])
+        cr = (max(l_fg, l_bg) + 0.05) / (min(l_fg, l_bg) + 0.05)
+        footer_text_color = surface_color if cr >= 4.5 else ("#FFFFFF" if l_bg < 0.5 else "#111827")
+    except Exception:
+        footer_text_color = surface_color
+
     server.add_text(
         text=footer_text,
         x=text_x,
         y=text_y,
         size=text_sz,
         font=font_display,
-        color=surface_color,
+        color=footer_text_color,
         role="footer",
         item_id="locked_footer_text",
         locked=True,
@@ -206,13 +218,21 @@ def lock_qr_code(
 
     if cta_text:
         font_body = school_info.get("fonts", {}).get("body", "Inter")
+        qr_local_bg = server._get_local_background({"bounds": {"x": qr_x, "y": qr_y + qr_size + 6.0, "width": qr_size, "height": 14.0}})
+        try:
+            arr_bg = np.array([[[c for c in _hex_to_rgb(qr_local_bg)]]], dtype=np.float32)
+            is_qr_bg_light = float(_rgb_to_relative_luminance(arr_bg)[0, 0]) > 0.45
+            qr_label_color = "#111827" if is_qr_bg_light else "#FFFFFF"
+        except Exception:
+            qr_label_color = "#FFFFFF"
+
         server.add_text(
             text=cta_text,
             x=qr_x,
             y=qr_y + qr_size + 6.0,
             size=11.0,
             font=font_body,
-            color="#FFFFFF",
+            color=qr_label_color,
             role="_structure_qr",
             item_id="locked_qr_label",
             locked=True,

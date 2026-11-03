@@ -1,0 +1,15 @@
+POSTER BRIEF: AURORA 2027
+Format: 1080 x 1350 px (4:5)
+Title: AURORA 2027
+Tagline: Where code meets culture.
+Subtitle: INTER-COLLEGE TECH & CULTURE FEST
+Date: 12-14 FEBRUARY 2027
+Time: 10:00 AM - 6:00 PM DAILY
+Venue: Central Auditorium, Kumaraguru College of Technology
+Events: BATTLE OF BANDS / HACKATHON / DANCE / DIGITAL ART
+Prize: PRIZES WORTH ₹2,00,000
+CTA: Passes at aurora.example
+Organizer: Student Council, KCT
+Mood: cosmic dusk, ethereal aurora ribbons, floating lanterns, midnight violet
+Palette: #0E0728 #7AE7C7 #FF4D6D #FFB703 #FFF8EE
+

@@ -1,0 +1,16 @@
+POSTER BRIEF: NOVA CTF 2026
+Format: 1080 x 1350 px (4:5)
+Title: NOVA CTF 2026
+Tagline: Capture the flag. Break it. Fix it.
+Subtitle: 24-HOUR CYBERSECURITY TOURNAMENT
+Date: 15-16 NOVEMBER 2026
+Time: 9:00 AM ONWARDS
+Venue: Main Computer Lab, Block C, Kumaraguru College of Technology
+Events: Web | Crypto | Forensics | Reversing
+Prize: ₹50,000 Total Prize Pool
+CTA: Register free at nova-ctf.example
+Organizer: NOVA Security Club
+Partner: Department of Information Technology, KCT
+Mood: tactical cyber, HUD wireframe, dark terminal, neon accents
+Palette: #0A0E17 #00FF9C #00D1FF #FF0055 #F0F6FC
+
