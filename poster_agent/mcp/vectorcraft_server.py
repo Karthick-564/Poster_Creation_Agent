@@ -63,6 +63,7 @@ class VectorCraftMCPServer:
         self.doc_height: Optional[float] = None
         self.hero_rect: Optional[tuple[float, float, float, float]] = None
         self.manifest_rows: list[dict[str, Any]] = []
+        self.items: dict[str, dict[str, Any]] = {}
         self.last_measure_result: Optional[dict[str, Any]] = None
         self.tool_call_history: list[dict[str, Any]] = []
 
@@ -82,6 +83,7 @@ class VectorCraftMCPServer:
         self.doc_width = float(width)
         self.doc_height = float(height)
         self.manifest_rows.clear()
+        self.items.clear()
         self.last_measure_result = None
         self.hero_rect = None
 
@@ -128,18 +130,8 @@ class VectorCraftMCPServer:
             "fields": sorted(list(self.brief.fields.keys())),
         }
 
-    def add_text(
-        self,
-        text: str,
-        x: float,
-        y: float,
-        size: float,
-        font: str = "Arial",
-        style: str = "",
-        color: str = "#000000",
-        role: str = "text",
-    ) -> dict[str, Any]:
-        """Add text command with strict verbatim brief validation."""
+    def _validate_verbatim(self, text: str) -> Optional[dict[str, Any]]:
+        """Validate text string against loaded brief whole-tokens. Returns error dict if invalid, None if valid."""
         if self.brief is None:
             return {
                 "error": f"VerbatimValidationError: '{text}' does not appear in loaded brief (no brief loaded)"
@@ -172,7 +164,6 @@ class VectorCraftMCPServer:
                 return True
             return False
 
-        # If multi-line, each line must match whole tokens OR the space-normalized text must match
         norm_space_text = " ".join(text_clean.split())
         matched = candidate_in_sources(norm_space_text)
 
@@ -184,25 +175,136 @@ class VectorCraftMCPServer:
             return {
                 "error": f"VerbatimValidationError: '{text}' does not appear in loaded brief"
             }
+        return None
 
-        # In layout systems y represents the top-left of the text bounding box.
-        # VectorCraft CLI engine text.create places text by baseline.
-        # Translating y (top) -> baseline_y ensures raster glyphs sit exactly within geometric bounds.
-        baseline_y = float(y) + float(size) * 0.78
+    def _rebuild_commands(self) -> None:
+        """Synchronize the command buffer and manifest from the single source of truth (self.items)."""
+        self.renderer.clear()
+        self.renderer.new_document(width=self.doc_width or 1080.0, height=self.doc_height or 1920.0)
+        self.manifest_rows.clear()
+        self.hero_rect = None
 
-        # Append command to VectorCraft renderer
-        self.renderer.add_text(
-            text=text_clean,
-            x=float(x),
-            y=baseline_y,
-            size=float(size),
-            font=font,
-            style=style,
-            color=color,
-            role=role,
-        )
+        for idx, (item_id, item) in enumerate(self.items.items()):
+            item["z_order"] = idx
+            itype = item.get("type")
+            p = item.get("params", {})
+            if itype == "text":
+                baseline_y = float(p["y"]) + float(p["size"]) * 0.78
+                self.renderer.add_text(
+                    text=p["text"],
+                    x=float(p["x"]),
+                    y=baseline_y,
+                    size=float(p["size"]),
+                    font=p.get("font", "Arial"),
+                    style=p.get("style", ""),
+                    color=p.get("color", "#000000"),
+                    role=p.get("role", "text"),
+                )
+                self.manifest_rows.append({
+                    "id": item_id,
+                    "role": p.get("role", "text"),
+                    "text": p["text"],
+                    "x": float(item["rect"][0]),
+                    "y": float(item["rect"][1]),
+                    "width": float(item["rect"][2]),
+                    "height": float(item["rect"][3]),
+                    "bounds": {
+                        "x": float(item["rect"][0]),
+                        "y": float(item["rect"][1]),
+                        "width": float(item["rect"][2]),
+                        "height": float(item["rect"][3]),
+                    },
+                    "size": float(p["size"]),
+                    "font": p.get("font", "Arial"),
+                    "style": p.get("style", ""),
+                    "color": p.get("color", "#000000"),
+                    "locked": bool(item.get("locked", False)),
+                })
+            elif itype == "rectangle":
+                self.renderer.add_shape_rectangle(
+                    x=float(p["x"]),
+                    y=float(p["y"]),
+                    width=float(p["width"]),
+                    height=float(p["height"]),
+                    fill=p.get("fill"),
+                    stroke=p.get("stroke"),
+                    stroke_width=float(p.get("stroke_width", 0.0)),
+                    radius=float(p.get("radius", 0.0)),
+                )
+            elif itype == "ellipse":
+                self.renderer.add_shape_ellipse(
+                    x=float(p["x"]),
+                    y=float(p["y"]),
+                    width=float(p["width"]),
+                    height=float(p["height"]),
+                    fill=p.get("fill"),
+                    stroke=p.get("stroke"),
+                    stroke_width=float(p.get("stroke_width", 0.0)),
+                    rotation=float(p.get("rotation", 0.0)),
+                )
+            elif itype == "image":
+                rect = p.get("rect")
+                self.renderer.place_image(
+                    path=p["path"],
+                    rect=rect,
+                )
+                if p.get("blend_mode"):
+                    self.renderer.commands.append({"command": "transparency.set", "params": {"blend": p["blend_mode"]}})
+                if p.get("feather_radius") and float(p["feather_radius"]) > 0:
+                    self.renderer.add_effect(effect_name="stylize.feather", params={"radius": float(p["feather_radius"])})
+                if p.get("role") == "hero" and rect and len(rect) == 4:
+                    self.hero_rect = (float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3]))
+            elif itype == "scrim":
+                self.renderer.soft_scrim(
+                    x=float(p["x"]),
+                    y=float(p["y"]),
+                    width=float(p["width"]),
+                    height=float(p["height"]),
+                    stops=p.get("stops"),
+                    direction=p.get("direction", "to_bottom"),
+                )
+            elif itype == "radial_light":
+                eff_radius = float(p.get("radius", 200.0))
+                self.renderer.radial_light(
+                    cx=float(p["cx"]),
+                    cy=float(p["cy"]),
+                    radius=eff_radius,
+                    color=p.get("color", "#00F5D4"),
+                    alpha_stop_inner=float(p.get("opacity", 0.8)),
+                    alpha_stop_outer=0.0,
+                )
+            elif itype == "path":
+                self.renderer.add_path(
+                    d=p["d"],
+                    fill=p.get("fill"),
+                    stroke=p.get("stroke"),
+                    stroke_width=float(p.get("stroke_width", 0.0)),
+                    closed=p.get("closed", True),
+                )
 
-        # Estimate text bounds
+        self.save_session()
+
+    def add_text(
+        self,
+        text: str,
+        x: float,
+        y: float,
+        size: float,
+        font: str = "Arial",
+        style: str = "",
+        color: str = "#000000",
+        role: str = "text",
+        item_id: Optional[str] = None,
+        locked: bool = False,
+    ) -> dict[str, Any]:
+        """Add text command with strict verbatim brief validation."""
+        val_err = self._validate_verbatim(text)
+        if val_err:
+            return val_err
+
+        text_clean = text.strip()
+        actual_id = item_id or f"{role}_{len(self.items) + 1}"
+
         if "\n" in text_clean:
             lines = [l for l in text_clean.split("\n") if l.strip()]
             est_w = max((estimate_text_width(l, size, font=font) for l in lines), default=0.0)
@@ -211,36 +313,42 @@ class VectorCraftMCPServer:
             est_w = estimate_text_width(text_clean, size, font=font)
             est_h = float(size) * 1.15
 
-        row_id = f"{role}_{len(self.manifest_rows) + 1}"
-        row = {
-            "id": row_id,
-            "role": role,
+        rect = [float(x), float(y), float(est_w), float(est_h)]
+
+        self.items[actual_id] = {
+            "id": actual_id,
+            "type": "text",
+            "rect": rect,
             "text": text_clean,
-            "x": float(x),
-            "y": float(y),
-            "width": float(est_w),
-            "height": float(est_h),
-            "bounds": {
+            "z_order": len(self.items),
+            "locked": bool(locked),
+            "role": role,
+            "params": {
+                "text": text_clean,
                 "x": float(x),
                 "y": float(y),
-                "width": float(est_w),
-                "height": float(est_h),
+                "size": float(size),
+                "font": font,
+                "style": style,
+                "color": color,
+                "role": role,
             },
-            "size": float(size),
-            "font": font,
-            "style": style,
-            "color": color,
         }
-        self.manifest_rows.append(row)
 
-        # Persist updated session
-        self.save_session()
+        self._rebuild_commands()
+
+        row = next((r for r in self.manifest_rows if r["id"] == actual_id), {
+            "id": actual_id,
+            "bounds": {"x": float(x), "y": float(y), "width": float(est_w), "height": float(est_h)},
+        })
 
         return {
             "status": "ok",
-            "row_id": row_id,
-            "bounds": row["bounds"],
+            "item_id": actual_id,
+            "row_id": actual_id,
+            "bounds": row.get("bounds", {"x": float(x), "y": float(y), "width": float(est_w), "height": float(est_h)}),
             "command_count": len(self.renderer.commands),
+            "locked": bool(locked),
         }
 
     def add_shape_rectangle(
@@ -253,23 +361,40 @@ class VectorCraftMCPServer:
         stroke: Optional[str] = None,
         stroke_width: float = 0.0,
         radius: float = 0.0,
+        item_id: Optional[str] = None,
+        locked: bool = False,
     ) -> dict[str, Any]:
         """Add rectangle shape with fill or stroke styling."""
-        self.renderer.add_shape_rectangle(
-            x=float(x),
-            y=float(y),
-            width=float(width),
-            height=float(height),
-            fill=fill,
-            stroke=stroke,
-            stroke_width=float(stroke_width),
-            radius=float(radius),
-        )
-        self.save_session()
+        actual_id = item_id or f"rect_{len(self.items) + 1}"
+        rect = [float(x), float(y), float(width), float(height)]
+
+        self.items[actual_id] = {
+            "id": actual_id,
+            "type": "rectangle",
+            "rect": rect,
+            "text": None,
+            "z_order": len(self.items),
+            "locked": bool(locked),
+            "params": {
+                "x": float(x),
+                "y": float(y),
+                "width": float(width),
+                "height": float(height),
+                "fill": fill,
+                "stroke": stroke,
+                "stroke_width": float(stroke_width),
+                "radius": float(radius),
+            },
+        }
+
+        self._rebuild_commands()
+
         return {
             "status": "ok",
-            "rect": [float(x), float(y), float(width), float(height)],
+            "item_id": actual_id,
+            "rect": rect,
             "fill": fill,
+            "locked": bool(locked),
             "command_count": len(self.renderer.commands),
         }
 
@@ -280,13 +405,10 @@ class VectorCraftMCPServer:
         blend_mode: Optional[str] = None,
         feather_radius: Optional[float] = None,
         role: str = "image",
+        item_id: Optional[str] = None,
+        locked: bool = False,
     ) -> dict[str, Any]:
-        """Place image command and validate path is within project root.
-
-        ``role`` names the layer's compositional job. Only ``role="hero"``
-        updates ``hero_rect``; background art and logos must not overwrite the
-        hero region that collision and design metrics depend on.
-        """
+        """Place image command and validate path is within project root."""
         p = Path(path)
         if not p.is_absolute():
             p = self.project_root / p
@@ -300,23 +422,37 @@ class VectorCraftMCPServer:
         if not p.exists():
             return {"error": f"FileNotFoundError: Image file not found at '{path}'"}
 
-        self.renderer.place_image(path=str(p), rect=rect)
-        if blend_mode:
-            self.renderer.commands.append({"command": "transparency.set", "params": {"blend": blend_mode}})
-        if feather_radius and float(feather_radius) > 0:
-            self.renderer.add_effect(effect_name="stylize.feather", params={"radius": float(feather_radius)})
+        actual_id = item_id or (role if role in ("hero", "logo", "background") and role not in self.items else f"image_{len(self.items) + 1}")
+        actual_rect = [float(c) for c in rect] if (rect and len(rect) == 4) else [0.0, 0.0, self.doc_width or 1080.0, self.doc_height or 1920.0]
 
-        if rect and len(rect) == 4 and role == "hero":
-            self.hero_rect = (float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3]))
+        self.items[actual_id] = {
+            "id": actual_id,
+            "type": "image",
+            "rect": actual_rect,
+            "text": None,
+            "z_order": len(self.items),
+            "locked": bool(locked),
+            "role": role,
+            "params": {
+                "path": str(p),
+                "rect": actual_rect,
+                "blend_mode": blend_mode,
+                "feather_radius": feather_radius,
+                "role": role,
+            },
+        }
 
-        self.save_session()
+        self._rebuild_commands()
+
         return {
             "status": "ok",
+            "item_id": actual_id,
             "image_path": self._rel(p),
-            "rect": rect,
+            "rect": actual_rect,
             "blend_mode": blend_mode,
             "feather_radius": feather_radius,
             "role": role,
+            "locked": bool(locked),
             "command_count": len(self.renderer.commands),
         }
 
@@ -330,23 +466,40 @@ class VectorCraftMCPServer:
         stroke: Optional[str] = None,
         stroke_width: float = 0.0,
         rotation: float = 0.0,
+        item_id: Optional[str] = None,
+        locked: bool = False,
     ) -> dict[str, Any]:
         """Add ellipse or circle shape with fill/stroke styling."""
-        self.renderer.add_shape_ellipse(
-            x=float(x),
-            y=float(y),
-            width=float(width),
-            height=float(height),
-            fill=fill,
-            stroke=stroke,
-            stroke_width=float(stroke_width),
-            rotation=float(rotation),
-        )
-        self.save_session()
+        actual_id = item_id or f"ellipse_{len(self.items) + 1}"
+        rect = [float(x), float(y), float(width), float(height)]
+
+        self.items[actual_id] = {
+            "id": actual_id,
+            "type": "ellipse",
+            "rect": rect,
+            "text": None,
+            "z_order": len(self.items),
+            "locked": bool(locked),
+            "params": {
+                "x": float(x),
+                "y": float(y),
+                "width": float(width),
+                "height": float(height),
+                "fill": fill,
+                "stroke": stroke,
+                "stroke_width": float(stroke_width),
+                "rotation": float(rotation),
+            },
+        }
+
+        self._rebuild_commands()
+
         return {
             "status": "ok",
-            "ellipse": [float(x), float(y), float(width), float(height)],
+            "item_id": actual_id,
+            "ellipse": rect,
             "fill": fill,
+            "locked": bool(locked),
             "command_count": len(self.renderer.commands),
         }
 
@@ -357,20 +510,37 @@ class VectorCraftMCPServer:
         stroke: Optional[str] = None,
         stroke_width: float = 0.0,
         closed: bool = True,
+        item_id: Optional[str] = None,
+        locked: bool = False,
     ) -> dict[str, Any]:
         """Add custom vector path via SVG path data."""
-        self.renderer.add_path(
-            d=d,
-            fill=fill,
-            stroke=stroke,
-            stroke_width=float(stroke_width),
-            closed=closed,
-        )
-        self.save_session()
+        actual_id = item_id or f"path_{len(self.items) + 1}"
+        rect = [0.0, 0.0, self.doc_width or 1080.0, self.doc_height or 1920.0]
+
+        self.items[actual_id] = {
+            "id": actual_id,
+            "type": "path",
+            "rect": rect,
+            "text": None,
+            "z_order": len(self.items),
+            "locked": bool(locked),
+            "params": {
+                "d": d,
+                "fill": fill,
+                "stroke": stroke,
+                "stroke_width": float(stroke_width),
+                "closed": closed,
+            },
+        }
+
+        self._rebuild_commands()
+
         return {
             "status": "ok",
+            "item_id": actual_id,
             "d": d,
             "fill": fill,
+            "locked": bool(locked),
             "command_count": len(self.renderer.commands),
         }
 
@@ -417,6 +587,8 @@ class VectorCraftMCPServer:
         height: float,
         stops: Optional[list[Any]] = None,
         direction: str = "to_bottom",
+        item_id: Optional[str] = None,
+        locked: bool = False,
     ) -> dict[str, Any]:
         """Append atmospheric gradient scrim command."""
         parsed_stops = []
@@ -424,18 +596,34 @@ class VectorCraftMCPServer:
             for s in stops:
                 if isinstance(s, (list, tuple)) and len(s) == 3:
                     parsed_stops.append((float(s[0]), str(s[1]), float(s[2])))
-        self.renderer.soft_scrim(
-            x=float(x),
-            y=float(y),
-            width=float(width),
-            height=float(height),
-            stops=parsed_stops or None,
-            direction=direction,
-        )
-        self.save_session()
+
+        actual_id = item_id or f"scrim_{len(self.items) + 1}"
+        rect = [float(x), float(y), float(width), float(height)]
+
+        self.items[actual_id] = {
+            "id": actual_id,
+            "type": "scrim",
+            "rect": rect,
+            "text": None,
+            "z_order": len(self.items),
+            "locked": bool(locked),
+            "params": {
+                "x": float(x),
+                "y": float(y),
+                "width": float(width),
+                "height": float(height),
+                "stops": parsed_stops or None,
+                "direction": direction,
+            },
+        }
+
+        self._rebuild_commands()
+
         return {
             "status": "ok",
+            "item_id": actual_id,
             "scrim": {"x": x, "y": y, "width": width, "height": height, "direction": direction},
+            "locked": bool(locked),
             "command_count": len(self.renderer.commands),
         }
 
@@ -448,22 +636,248 @@ class VectorCraftMCPServer:
         radius: Optional[float] = None,
         color: str = "#00F5D4",
         opacity: float = 0.8,
+        item_id: Optional[str] = None,
+        locked: bool = False,
     ) -> dict[str, Any]:
         """Append radial light glow command."""
         eff_radius = float(radius) if radius is not None else max(float(rx or 200.0), float(ry or 200.0))
-        self.renderer.radial_light(
-            cx=float(cx),
-            cy=float(cy),
-            radius=eff_radius,
-            color=color,
-            alpha_stop_inner=float(opacity),
-            alpha_stop_outer=0.0,
-        )
-        self.save_session()
+        actual_id = item_id or f"light_{len(self.items) + 1}"
+        rect = [float(cx - eff_radius), float(cy - eff_radius), float(2 * eff_radius), float(2 * eff_radius)]
+
+        self.items[actual_id] = {
+            "id": actual_id,
+            "type": "radial_light",
+            "rect": rect,
+            "text": None,
+            "z_order": len(self.items),
+            "locked": bool(locked),
+            "params": {
+                "cx": float(cx),
+                "cy": float(cy),
+                "radius": eff_radius,
+                "color": color,
+                "opacity": float(opacity),
+            },
+        }
+
+        self._rebuild_commands()
+
         return {
             "status": "ok",
+            "item_id": actual_id,
             "radial_light": {"cx": cx, "cy": cy, "radius": eff_radius, "color": color},
+            "locked": bool(locked),
             "command_count": len(self.renderer.commands),
+        }
+
+    # -------------------------------------------------------------------------
+    # Item Management & Space Inspection (Agentic Designer)
+    # -------------------------------------------------------------------------
+
+    def list_items(self) -> dict[str, Any]:
+        """Return every placed element on the artboard with id, type, rect, text, z_order, and locked status."""
+        items_list = []
+        for it in self.items.values():
+            entry = {
+                "id": it["id"],
+                "type": it["type"],
+                "rect": it["rect"],
+                "text": it.get("text"),
+                "z_order": it.get("z_order", 0),
+                "locked": bool(it.get("locked", False)),
+            }
+            if it.get("role"):
+                entry["role"] = it["role"]
+            items_list.append(entry)
+        return {
+            "status": "ok",
+            "count": len(items_list),
+            "items": items_list,
+        }
+
+    def update_item(self, id: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """Move, resize, restyle, or edit an existing item. Refuses locked items. Verbatim check applies if text changes."""
+        if id not in self.items:
+            return {"error": f"ItemNotFoundError: Item '{id}' does not exist"}
+        item = self.items[id]
+        if item.get("locked"):
+            return {"error": f"LockedItemError: Item '{id}' is locked and cannot be modified"}
+
+        itype = item["type"]
+        params = item["params"]
+
+        # Verbatim brief check if text is changing
+        if "text" in fields and itype == "text":
+            new_text = str(fields["text"])
+            val_res = self._validate_verbatim(new_text)
+            if val_res is not None:
+                return val_res
+            params["text"] = new_text
+            item["text"] = new_text
+
+        # Update properties
+        for k in (
+            "x", "y", "size", "font", "style", "color", "role",
+            "width", "height", "fill", "stroke", "stroke_width",
+            "radius", "rotation", "blend_mode", "rect", "stops", "direction"
+        ):
+            if k in fields:
+                params[k] = fields[k]
+
+        # Recalculate item bounding box rect
+        if itype == "text":
+            cur_text = params["text"]
+            cur_size = float(params.get("size", 16.0))
+            cur_font = params.get("font", "Arial")
+            cur_x = float(params.get("x", 0.0))
+            cur_y = float(params.get("y", 0.0))
+            if "\n" in cur_text:
+                lines = [l.strip() for l in cur_text.split("\n") if l.strip()]
+                est_w = max((estimate_text_width(l, cur_size, font=cur_font) for l in lines), default=0.0)
+                est_h = len(lines) * cur_size * 1.15
+            else:
+                est_w = estimate_text_width(cur_text, cur_size, font=cur_font)
+                est_h = cur_size * 1.15
+            item["rect"] = [cur_x, cur_y, float(est_w), float(est_h)]
+        elif itype in ("rectangle", "scrim"):
+            item["rect"] = [float(params["x"]), float(params["y"]), float(params["width"]), float(params["height"])]
+        elif itype == "image" and "rect" in params and params["rect"]:
+            item["rect"] = [float(c) for c in params["rect"]]
+        elif itype == "radial_light":
+            cx = float(params["cx"])
+            cy = float(params["cy"])
+            r = float(params.get("radius", 200.0))
+            item["rect"] = [cx - r, cy - r, 2 * r, 2 * r]
+
+        self._rebuild_commands()
+        return {
+            "status": "ok",
+            "item": {
+                "id": item["id"],
+                "type": item["type"],
+                "rect": item["rect"],
+                "text": item.get("text"),
+                "z_order": item.get("z_order", 0),
+                "locked": item.get("locked", False),
+            },
+        }
+
+    def delete_item(self, id: str) -> dict[str, Any]:
+        """Delete an item from canvas. Refuses locked items."""
+        if id not in self.items:
+            return {"error": f"ItemNotFoundError: Item '{id}' does not exist"}
+        item = self.items[id]
+        if item.get("locked"):
+            return {"error": f"LockedItemError: Item '{id}' is locked and cannot be deleted"}
+        del self.items[id]
+        self._rebuild_commands()
+        return {"status": "ok", "deleted_id": id}
+
+    def get_free_regions(self, min_width: float = 160.0, min_height: float = 40.0) -> dict[str, Any]:
+        """Calculate calm/unoccupied rectangular regions within safe margins, treating locked zones and placed items as obstacles."""
+        cw = self.doc_width or 1080.0
+        ch = self.doc_height or 1920.0
+        margin_px = max(40.0, cw * 0.045)
+        safe_left = margin_px
+        safe_right = cw - margin_px
+        safe_top = margin_px
+        safe_bottom = ch - margin_px
+
+        # Collect obstacles: locked zones, text rows, hero image, and placed shape cards
+        obstacles = []
+        for it in self.items.values():
+            r = it.get("rect")
+            if not r or len(r) != 4:
+                continue
+            rx, ry, rw, rh = float(r[0]), float(r[1]), float(r[2]), float(r[3])
+            # Full-bleed canvas background or ambient soft scrims are background atmosphere, not physical obstacles
+            if rw >= cw * 0.95 and rh >= ch * 0.95 and it["type"] in ("image", "rectangle", "scrim") and not it.get("locked"):
+                continue
+            if rw <= 0 or rh <= 0:
+                continue
+            obstacles.append((rx, ry, rw, rh))
+
+        # Y slice boundaries
+        y_cuts = {safe_top, safe_bottom}
+        for ox, oy, ow, oh in obstacles:
+            top = max(safe_top, oy)
+            bottom = min(safe_bottom, oy + oh)
+            if safe_top <= top <= safe_bottom:
+                y_cuts.add(top)
+            if safe_top <= bottom <= safe_bottom:
+                y_cuts.add(bottom)
+        sorted_y = sorted(list(y_cuts))
+
+        free_rects = []
+        for i in range(len(sorted_y) - 1):
+            y0 = sorted_y[i]
+            y1 = sorted_y[i + 1]
+            band_h = y1 - y0
+            if band_h < min_height:
+                continue
+
+            # X blocked intervals in this band
+            x_blocked = []
+            for ox, oy, ow, oh in obstacles:
+                if not (y1 <= oy or y0 >= oy + oh):
+                    x_start = max(safe_left, ox)
+                    x_end = min(safe_right, ox + ow)
+                    if x_start < x_end:
+                        x_blocked.append((x_start, x_end))
+
+            if not x_blocked:
+                free_rects.append((safe_left, y0, safe_right - safe_left, band_h))
+            else:
+                x_blocked.sort(key=lambda b: b[0])
+                merged = []
+                curr_s, curr_e = x_blocked[0]
+                for s, e in x_blocked[1:]:
+                    if s <= curr_e:
+                        curr_e = max(curr_e, e)
+                    else:
+                        merged.append((curr_s, curr_e))
+                        curr_s, curr_e = s, e
+                merged.append((curr_s, curr_e))
+
+                last_x = safe_left
+                for s, e in merged:
+                    if s - last_x >= min_width:
+                        free_rects.append((last_x, y0, s - last_x, band_h))
+                    last_x = max(last_x, e)
+                if safe_right - last_x >= min_width:
+                    free_rects.append((last_x, y0, safe_right - last_x, band_h))
+
+        # Merge vertically adjacent free rectangles with identical horizontal footprint
+        merged_rects = []
+        free_rects.sort(key=lambda r: (round(r[0], 1), round(r[2], 1), round(r[1], 1)))
+        for r in free_rects:
+            if merged_rects:
+                prev_x, prev_y, prev_w, prev_h = merged_rects[-1]
+                if abs(prev_x - r[0]) < 1.0 and abs(prev_w - r[2]) < 1.0 and abs((prev_y + prev_h) - r[1]) < 1.0:
+                    merged_rects[-1] = (prev_x, prev_y, prev_w, prev_h + r[3])
+                    continue
+            merged_rects.append(r)
+
+        regions = [
+            {
+                "x": round(r[0], 1),
+                "y": round(r[1], 1),
+                "width": round(r[2], 1),
+                "height": round(r[3], 1),
+                "area": round(r[2] * r[3], 1),
+            }
+            for r in merged_rects
+            if r[2] >= min_width and r[3] >= min_height
+        ]
+        regions.sort(key=lambda rg: rg["area"], reverse=True)
+
+        return {
+            "status": "ok",
+            "free_region_count": len(regions),
+            "canvas_size": [cw, ch],
+            "safe_margin": margin_px,
+            "obstacle_count": len(obstacles),
+            "free_regions": regions,
         }
 
     def _get_local_background(self, row: dict[str, Any]) -> str:
@@ -584,6 +998,12 @@ class VectorCraftMCPServer:
     def render_preview(self, scale: float = 0.5) -> dict[str, Any]:
         """Render fast raster preview image via VectorCraft CLI."""
         preview_path = self.session_dir / "preview.png"
+        if not self.renderer.cli_path.exists():
+            return {
+                "status": "skipped",
+                "preview_path": None,
+                "reason": f"VectorCraft CLI binary not present at {self.renderer.cli_path}",
+            }
         res = self.renderer.execute(output_png=preview_path, scale=float(scale))
         if not res.success:
             return {"error": f"VectorCraftPreviewFailed: {res.error_message or 'Unknown preview render error'}"}
@@ -611,6 +1031,7 @@ class VectorCraftMCPServer:
             "doc_width": self.doc_width,
             "doc_height": self.doc_height,
             "manifest_rows": self.manifest_rows,
+            "items": self.items,
             "hero_rect": self.hero_rect,
         }
         self.renderer.hero_rect = self.hero_rect
@@ -637,14 +1058,18 @@ class VectorCraftMCPServer:
         self.doc_height = loaded.doc_height
         self.hero_rect = loaded.hero_rect
 
-        # Reconstruct manifest_rows from loaded session data or queued texts
+        # Reconstruct manifest_rows and items from loaded session metadata
         self.manifest_rows.clear()
+        self.items.clear()
         try:
             with open(p, "r", encoding="utf-8") as f:
                 data = json.load(f)
             saved_manifest = data.get("metadata", {}).get("manifest_rows", [])
             if saved_manifest:
                 self.manifest_rows = list(saved_manifest)
+            saved_items = data.get("metadata", {}).get("items", {})
+            if saved_items:
+                self.items = dict(saved_items)
         except Exception:
             pass
 
@@ -915,6 +1340,48 @@ class VectorCraftMCPServer:
                 "inputSchema": {
                     "type": "object",
                     "properties": {},
+                },
+            },
+            {
+                "name": "list_items",
+                "description": "List every placed element on the artboard with its id, type, rect, text, z_order, and locked status.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
+            {
+                "name": "update_item",
+                "description": "Move, resize, restyle, or edit an existing item. Refuses locked items. Verbatim check applies if text is changed.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "description": "ID of item to update"},
+                        "fields": {"type": "object", "description": "Key-value dictionary of updated properties (e.g. x, y, size, color, fill, text)"},
+                    },
+                    "required": ["id", "fields"],
+                },
+            },
+            {
+                "name": "delete_item",
+                "description": "Delete an item from the canvas. Refuses locked items.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "description": "ID of item to delete"},
+                    },
+                    "required": ["id"],
+                },
+            },
+            {
+                "name": "get_free_regions",
+                "description": "Calculate calm and unoccupied rectangular regions within safe margins, treating locked zones and placed items as obstacles.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "min_width": {"type": "number", "default": 160.0, "description": "Minimum region width in points"},
+                        "min_height": {"type": "number", "default": 40.0, "description": "Minimum region height in points"},
+                    },
                 },
             },
             {
