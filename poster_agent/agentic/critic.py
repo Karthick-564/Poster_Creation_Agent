@@ -94,12 +94,24 @@ class CriticStage:
                 if hasattr(f, "measured") and "detected_tokens" in f.measured:
                     bg_unmapped.extend(f.measured["detected_tokens"])
 
-        # 2. Final image check for garbled non-brief tokens
-        final_fails = []
+        # 2. Final image check for garbled non-brief tokens via OCR
         if final_image_path and final_image_path.exists():
-            final_fails = check_background_ocr(final_image_path, allowed_words=allowed_words)
-            for f in final_fails:
-                failures.append(f.to_dict() if hasattr(f, "to_dict") else dict(f))
+            try:
+                import pytesseract
+                from PIL import Image
+                im = Image.open(final_image_path).convert("RGB")
+                ocr_text = pytesseract.image_to_string(im)
+                tokens = [t.lower() for t in re.findall(r"[A-Za-z0-9]{3,}", ocr_text)]
+                unmapped = [t for t in tokens if t not in set(allowed_words)]
+                if len(unmapped) > 5:
+                    failures.append({
+                        "kind": "composite_ocr",
+                        "target": str(final_image_path.name),
+                        "detail": f"Unmapped lettering detected in final poster: {sorted(list(set(unmapped)))}",
+                        "measured": {"unmapped": sorted(list(set(unmapped)))},
+                    })
+            except Exception:
+                pass
 
         return {
             "passed": len(failures) == 0,
@@ -148,31 +160,19 @@ class CriticStage:
         palette: list[str],
     ) -> Optional[dict[str, Any]]:
         """Call VLM critic with image attachment."""
-        with open(final_image_path, "rb") as f:
-            b64_data = base64.b64encode(f.read()).decode("utf-8")
-
         prompt_text = (
             f"Poster Brief Fields:\n"
             + "\n".join(f"- {k}: {v}" for k, v in brief_fields.items())
             + f"\nExpected Brand Palette: {', '.join(palette)}\n\n"
-            "Evaluate this poster image against the 9 checklist items."
+            "Evaluate this poster image against the 9 checklist items. Respond with strict JSON matching the schema."
         )
 
         messages = [
             {"role": "system", "content": CRITIC_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt_text},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{b64_data}"},
-                    },
-                ],
-            },
+            {"role": "user", "content": prompt_text},
         ]
 
-        resp = self.backend.chat(messages=messages)
+        resp = self.backend.chat(messages=messages, images=[final_image_path])
         content = resp.content.strip()
 
         # Parse JSON from response

@@ -110,7 +110,7 @@ class DesignerStage:
                 item_id="bg_image",
             )
 
-        # If hero layer exists, place it in mid-canvas
+        # If hero layer exists, place it in mid-canvas with soft edge feathering
         if hero_layer and Path(hero_layer).exists():
             hero_w = min(cw * 0.85, 960.0)
             hero_h = min(ch * 0.32, 550.0)
@@ -119,6 +119,8 @@ class DesignerStage:
             self.server.place_image(
                 path=str(hero_layer),
                 rect=[hero_x, hero_y, hero_w, hero_h],
+                blend_mode="normal",
+                feather_radius=16.0,
                 role="hero",
                 item_id="hero_layer",
             )
@@ -240,6 +242,7 @@ class DesignerStage:
             return False
 
         # 1. Base canvas background & atmospheric radial glow
+        items = self.server.list_items().get("items", [])
         primary_bg = palette[0] if palette else "#0B1021"
         is_light = _is_light_color(primary_bg)
         text_primary = "#111827" if is_light else "#FFFFFF"
@@ -255,21 +258,22 @@ class DesignerStage:
         else:
             accent = accent_cand
 
-        self.server.add_shape_rectangle(
-            x=0.0,
-            y=0.0,
-            width=cw,
-            height=ch,
-            fill=primary_bg,
-            item_id="base_canvas_bg",
-        )
+        if not any(it.get("id") in ("bg_substrate", "base_canvas_bg", "bg_image") for it in items):
+            self.server.add_shape_rectangle(
+                x=0.0,
+                y=0.0,
+                width=cw,
+                height=ch,
+                fill=primary_bg,
+                item_id="base_canvas_bg",
+            )
         glow_col = accent
         self.server.radial_light(cx=cw * 0.3, cy=ch * 0.25, radius=380.0, color=glow_col, opacity=0.35)
 
-        # 2. Band 0: Eyebrow (if provided and not duplicate)
-        eyebrow = fields.get("eyebrow", "")
+        # 2. Band 0: Eyebrow (if provided and not duplicate, fallback to short subtitle)
+        eyebrow = fields.get("eyebrow") or (fields.get("subtitle") if len(fields.get("subtitle", "")) < 40 else "")
         if eyebrow and eyebrow.strip().lower() not in placed_texts:
-            eye_sz = _fit_size(eyebrow, 16.0, text_w, font="Inter")
+            eye_sz = _fit_size(eyebrow, 15.0, text_w, font="Inter")
             eye_y = max(52.0, ch * 0.08)
             safe_add_text(
                 t=eyebrow,
@@ -340,6 +344,9 @@ class DesignerStage:
 
         # 5. Band 3: Logistics (Date, Venue, CTA) (y in [0.55*ch, 0.80*ch])
         logistics_y = max(ch * 0.58, 760.0 if ch < 1500 else 1150.0)
+        if self.server.hero_rect:
+            hx, hy, hw, hh = self.server.hero_rect
+            logistics_y = max(logistics_y, hy + hh + 20.0)
         if date:
             d_sz = _fit_size(date, 24.0, text_w, font="Inter")
             if safe_add_text(

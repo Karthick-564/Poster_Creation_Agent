@@ -69,13 +69,13 @@ class GenerationStage:
                     canvas_h=canvas_h,
                 )
                 layers["background"] = str(out_bg)
-                refusal_ok = check_refusal_free(out_bg)
-                if not refusal_ok:
+                refusal_fails = check_refusal_free(out_bg)
+                if refusal_fails:
                     return GenerationResult(
                         layers=layers,
                         seeds=seeds,
                         refusal_clean=False,
-                        refusal_reason="Safety filter / refusal artifact detected in generated background.",
+                        refusal_reason=f"Safety filter / refusal artifact detected in generated background: {refusal_fails[0].detail if hasattr(refusal_fails[0], 'detail') else 'refusal artifact'}",
                     )
             else:
                 # ComfyUI offline fallback to native
@@ -98,13 +98,13 @@ class GenerationStage:
                     height=768,
                 )
                 layers["hero"] = str(out_hero)
-                refusal_ok = check_refusal_free(out_hero)
-                if not refusal_ok:
+                refusal_fails = check_refusal_free(out_hero)
+                if refusal_fails:
                     return GenerationResult(
                         layers=layers,
                         seeds=seeds,
                         refusal_clean=False,
-                        refusal_reason="Safety filter / refusal artifact detected in generated hero.",
+                        refusal_reason=f"Safety filter / refusal artifact detected in generated hero: {refusal_fails[0].detail if hasattr(refusal_fails[0], 'detail') else 'refusal artifact'}",
                     )
                 # Measure hero alpha cutout
                 try:

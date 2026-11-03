@@ -15,6 +15,9 @@ from typing import Any, Optional
 import urllib.error
 import urllib.request
 import yaml
+from dotenv import load_dotenv
+
+load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -233,12 +236,15 @@ class GeminiBackend(LLMBackend):
         headers = {"content-type": "application/json"}
 
         contents = []
+        system_text = ""
         for m in messages:
             role = m.get("role", "user")
-            # Gemini expects 'user' or 'model'
-            gemini_role = "model" if role in ("assistant", "model") else "user"
-            parts: list[dict[str, Any]] = [{"text": m.get("content", "")}]
-            contents.append({"role": gemini_role, "parts": parts})
+            content = m.get("content", "")
+            if role == "system":
+                system_text += str(content) + "\n"
+            else:
+                gemini_role = "model" if role in ("assistant", "model") else "user"
+                contents.append({"role": gemini_role, "parts": [{"text": str(content)}]})
 
         # Attach images to the last user turn if provided
         if images and contents:
@@ -261,6 +267,8 @@ class GeminiBackend(LLMBackend):
                 "temperature": temperature if temperature is not None else self.temperature,
             },
         }
+        if system_text:
+            payload["system_instruction"] = {"parts": [{"text": system_text.strip()}]}
 
         # Convert tool definitions to Gemini function declarations if given
         if tools:
