@@ -1,0 +1,68 @@
+# v2 brand contracts. Each record is a deterministic gate authority.
+# Add a school only after its official logo and typefaces are present on disk.
+brands:
+  KCT:
+    name: "Kumaraguru College of Technology"
+    palette:
+      primary: "#1E2842"
+      secondary: "#85CEBD"
+      tertiary: "#705355"
+      neutral: "#C8C7CC"
+      surface: "#FFFFFF"
+    fonts:
+      display: "Helvetica Neue"
+      body: "Montserrat"
+      mono: "DejaVu Sans Mono"
+      tamil: "Noto Sans Tamil"
+      fallbacks: ["Helvetica", "Arial", "Montserrat", "DejaVu Sans", "Liberation Sans"]
+    logo:
+      asset: "assets/brand/kct/kct_logo.png"
+      required: true
+      placement: "top-right"
+      clear_space_mm: 10.0
+      preserve_aspect: true
+      solid_field_only: true
+      allow_gradient_behind: false
+      max_width_pct: 22.0
+      min_width_px: 120
+      field_color: "#FFFFFF"
+    formats:
+      story:
+        width: 1080
+        height: 1920
+        dpi: 300
+      fourfive:
+        width: 1080
+        height: 1350
+        dpi: 300
+      square:
+        width: 1080
+        height: 1080
+        dpi: 300
+      A3:
+        width: 3508
+        height: 4961
+        dpi: 300
+      A4:
+        width: 2480
+        height: 3508
+        dpi: 300
+    qr:
+      enabled: true
+      min_size_px: 180
+      quiet_zone_modules: 4
+      label: "SCAN TO REGISTER"
+    mandatory_elements: ["title", "date", "venue", "logo", "organizer"]
+    safe_margin_pct: 4.0
+    min_text_contrast: 4.5
+    review_threshold: 7.5
+    background_rules:
+      - "Logo must sit on a solid field; never place it on a gradient or photographic texture."
+      - "Primary #1E2842 is the dominant field; secondary #85CEBD is an accent, not a background."
+      - "Do not recolor, crop, stretch, or add effects to the institutional logo."
+      - "Keep a 10 mm clear space around the logo on every side."
+    forbidden:
+      - "gradient behind logo"
+      - "logo recoloring"
+      - "logo cropping"
+      - "non-brand decorative marks"

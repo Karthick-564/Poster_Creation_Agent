@@ -1,0 +1,16 @@
+POSTER BRIEF: KCT AI DESIGN SUMMIT 2026
+Format: story
+Eyebrow: KUMARAGURU COLLEGE OF TECHNOLOGY
+Title: AI Design Summit 2026
+Tagline: HUMAN JUDGEMENT IN THE AGE OF GENERATIVE SYSTEMS
+Subtitle: A one-day campus summit on design, automation and creative practice.
+Date: 14 November 2026
+Time: 09:30 AM IST
+Venue: Sir M. Visvesvaraya Hall, KCT Campus, Coimbatore
+CTA: Scan to register
+QR link: https://events.kct.ac.in/ai-design-summit
+Closing: DESIGN WITH INTENT. BUILD WITH EVIDENCE.
+Organizer: Department of Computer Science and Engineering
+Mood: editorial, confident, institutional, warm technical
+Art: one sculptural abstract form suggesting a human hand and a geometric grid, no text, no logos, transparent background
+Palette use: navy field, mint accent, warm grey support
