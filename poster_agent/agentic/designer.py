@@ -88,6 +88,7 @@ class DesignerStage:
         run_dir: Path,
         background_layer: Optional[str] = None,
         hero_layer: Optional[str] = None,
+        zones: Optional[Any] = None,
     ) -> dict[str, Any]:
         """Execute the interactive designer loop."""
         cw = self.server.doc_width or 1080.0
@@ -101,8 +102,8 @@ class DesignerStage:
                 x=0, y=0, width=cw, height=ch, fill=bg_col, item_id="bg_substrate"
             )
 
-        # If background layer image exists, place it behind creative typography
-        if background_layer and Path(background_layer).exists():
+        # If background layer image exists, place it behind creative typography (if not already placed)
+        if background_layer and Path(background_layer).exists() and not any(it["id"] == "bg_image" for it in items):
             self.server.place_image(
                 path=str(background_layer),
                 rect=[0, 0, cw, ch],
@@ -110,12 +111,26 @@ class DesignerStage:
                 item_id="bg_image",
             )
 
-        # If hero layer exists, place it in mid-canvas with soft edge feathering
+        # If hero layer exists, place it strictly according to single-source-of-truth zones
         if hero_layer and Path(hero_layer).exists():
-            hero_w = min(cw * 0.85, 960.0)
-            hero_h = min(ch * 0.32, 550.0)
-            hero_x = (cw - hero_w) / 2.0
-            hero_y = ch * 0.38
+            zh = None
+            if zones and hasattr(zones, "hero"):
+                zh = getattr(zones, "hero")
+            elif isinstance(zones, dict) and "hero" in zones:
+                zh = zones["hero"]
+
+            if zh and len(zh) == 4:
+                # [ymin, xmin, ymax, xmax] in 0..1000
+                hero_x = (zh[1] / 1000.0) * cw
+                hero_y = (zh[0] / 1000.0) * ch
+                hero_w = ((zh[3] - zh[1]) / 1000.0) * cw
+                hero_h = ((zh[2] - zh[0]) / 1000.0) * ch
+            else:
+                hero_w = min(cw * 0.85, 960.0)
+                hero_h = min(ch * 0.32, 550.0)
+                hero_x = (cw - hero_w) / 2.0
+                hero_y = ch * 0.38
+
             self.server.place_image(
                 path=str(hero_layer),
                 rect=[hero_x, hero_y, hero_w, hero_h],

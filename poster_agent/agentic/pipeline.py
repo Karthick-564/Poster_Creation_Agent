@@ -117,6 +117,7 @@ class AgenticPosterPipeline:
             canvas_w=cw,
             canvas_h=ch,
             brief_title=intake_res.fields.get("title", "Event"),
+            brief_fields=intake_res.fields,
         )
         if not gen_res.refusal_clean:
             plan_refusal = {
@@ -125,6 +126,8 @@ class AgenticPosterPipeline:
                 "halt_stage": "S3_generation",
                 "reason": gen_res.refusal_reason,
                 "seeds": gen_res.seeds,
+                "art_spec": gen_res.art_spec,
+                "hero_quality": gen_res.hero_quality,
             }
             self._write_plan(run_dir, plan_refusal)
             return plan_refusal
@@ -152,13 +155,29 @@ class AgenticPosterPipeline:
         locked_report: dict[str, Any] = {}
 
         while cycle <= max_cycles:
-            # 1. Initialize MCP Server session & locked zones
+            # 1. Initialize MCP Server session
             server = VectorCraftMCPServer(session_id=f"{actual_run_id}_c{cycle}", base_dir=self.project_root)
             server.create_doc(width=cw, height=ch)
             server.load_brief(str(brief_file))
+
+            # 2. Base canvas substrate and background layer image (Layer 0 & 1)
+            bg_col = palette_list[0] if palette_list else "#070B19"
+            server.add_shape_rectangle(
+                x=0, y=0, width=cw, height=ch, fill=bg_col, item_id="bg_substrate"
+            )
+            bg_img_path = gen_res.layers.get("background")
+            if bg_img_path and Path(bg_img_path).exists():
+                server.place_image(
+                    path=str(bg_img_path),
+                    rect=[0, 0, cw, ch],
+                    role="background",
+                    item_id="bg_image",
+                )
+
+            # 3. Locked institutional zones (Logo, legal footer, QR) sit on top of background
             locked_report = lock_all_zones(server, intake_res.brief, school_id=school)
 
-            # 2. Stage 4: Designer Loop
+            # 4. Stage 4: Designer Loop (using zones from single source of truth ArtDirectionSpec)
             designer = DesignerStage(server=server, backend=self.designer_backend)
             designer_res = designer.run(
                 brief_fields=intake_res.fields,
@@ -166,6 +185,7 @@ class AgenticPosterPipeline:
                 run_dir=run_dir,
                 background_layer=gen_res.layers.get("background"),
                 hero_layer=gen_res.layers.get("hero"),
+                zones=gen_res.art_spec.get("zones") if gen_res.art_spec else None,
             )
             total_designer_calls += designer_res.get("total_tool_calls", 0)
             last_transcript_path = designer_res.get("transcript_path")
@@ -232,6 +252,7 @@ class AgenticPosterPipeline:
                     canvas_w=cw,
                     canvas_h=ch,
                     brief_title=intake_res.fields.get("title", "Event"),
+                    brief_fields=intake_res.fields,
                 )
 
             cycle += 1
@@ -249,6 +270,8 @@ class AgenticPosterPipeline:
             "brief": intake_res.summary(),
             "asset_provenance": decisions.provenance,
             "seeds": gen_res.seeds,
+            "art_spec": gen_res.art_spec,
+            "hero_quality": gen_res.hero_quality,
             "locked_zones": locked_report,
             "cycles_used": min(cycle, max_cycles),
             "reroutes": reroutes,

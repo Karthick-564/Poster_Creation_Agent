@@ -132,11 +132,21 @@ class ComfyUIClient:
         prefix: str = "auto_qwen_rgba",
         width: int = 1024,
         height: int = 1024,
+        negative_prompt: Optional[str] = None,
+        seed: Optional[int] = None,
     ) -> Path:
         """Generate true transparent RGBA cutout via Qwen-Image 2.1 native alpha."""
         clean_prompt = prompt
         if "isolated on empty alpha channel" not in clean_prompt.lower():
-            clean_prompt += ", isolated on empty alpha channel, transparent background, clean sticker cutout, 3D render, sharp edges, no background"
+            clean_prompt += ", isolated on empty alpha channel, transparent background, clean sticker cutout, 3D render, sharp edges"
+
+        neg_text = negative_prompt or (
+            "blurry, low quality, noise, solid background, white background, black background, "
+            "text, watermark, hands, stand, base, ground plane, floor shadow, cast shadow, "
+            "floating cards, app icons, web buttons, UI widgets, dashboard panels, floating screens, frames, borders, cropped"
+        )
+
+        actual_seed = seed if seed is not None else (int(time.time() * 1000) % 1000000)
 
         workflow = {
             "1": {
@@ -157,7 +167,7 @@ class ComfyUIClient:
             },
             "5": {
                 "inputs": {
-                    "text": "blurry, low quality, noise, solid background, white background, black background, text, watermark, hands, stand, base, floating cards, app icons, web buttons, UI widgets, dashboard panels, floating screens, frames, borders",
+                    "text": neg_text,
                     "clip": ["2", 0],
                 },
                 "class_type": "CLIPTextEncode",
@@ -168,7 +178,7 @@ class ComfyUIClient:
             },
             "7": {
                 "inputs": {
-                    "seed": int(time.time() * 1000) % 1000000,
+                    "seed": actual_seed,
                     "steps": 20,
                     "cfg": 4.5,
                     "sampler_name": "euler",
