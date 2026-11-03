@@ -91,6 +91,7 @@ project/
 ├── configs/                      # Configuration YAMLs
 │   ├── asset_sources.yaml        # Archive roots, tag-to-keyword maps, extensions
 │   ├── default.yaml              # Pipeline runtime defaults
+│   ├── brand_contracts.yaml      # v2 deterministic brand contracts (KCT)
 │   ├── house_style.yaml          # School palettes, typography & genre policies
 │   └── palette_policy.yaml       # Palette extraction rules
 ├── docs/                         # Engine facts & architecture audits
@@ -101,11 +102,15 @@ project/
 │   ├── generators/               # ComfyUI client & model workflow adapters
 │   ├── house_style.py            # School lookup, genre policies & exemplar injection
 │   ├── ingestion/                # Zero-drop brief extractor
+│   ├── mcp/                      # Interactive JSON-RPC frontends
+│   │   ├── vectorcraft_server.py # Direct VectorCraft authoring tools
+│   │   └── v2_server.py          # v2 pipeline tools (run/plan/brand)
 │   ├── qa/                       # Deterministic QA gates (bounds, overlaps, contrast)
 │   ├── renderer/                 # Native VectorCraft composer
 │   │   ├── composer.py           # Master archetype composer, width-fit & rhythm
 │   │   └── vectorcraft_renderer.py # VectorCraft CLI bridge & text manifest parser
 │   ├── unified_pipeline.py       # Strict 8-stage unified pipeline coordinator
+│   ├── v2/                       # Contract-first KCT pipeline (planner/gates/review)
 │   └── vision/                   # ArtMeasurer: alpha bbox, centroid & calm regions
 ├── runs/                         # Output run directories (gitignored)
 │   └── poster_run_<id>/          # Per-run master PNG, PDF, plan.json & report.md
@@ -164,7 +169,38 @@ Configure in OpenCode `mcpServers` (see `docs/mcp_opencode.json.example`):
 4. **Preview When Close**: Call `render_preview(scale=0.5)` only when geometric gates are passing to verify typography visual weight and balance.
 5. **Export When Green**: Calling `export(output_png, output_pdf)` is strictly gated. If `measure()` reports any failing gates, export is blocked with `ExportBlockedError`.
 
-### 4. Running the Test Suite
+### 4. v2 Contract-First Pipeline (KCT vertical slice)
+The additive `poster_agent/v2` core proves one school/format slice before
+migrating the legacy pipeline. It uses Ideogram 4.0 backgrounds, Qwen-Image 2.1
+transparent heroes, VectorCraft composition, and a single deterministic referee
+(brand contract gates). A VLM critic may add a second opinion but cannot waive
+a gate failure.
+
+Offline mock run (no GPU, no Windows binary):
+```powershell
+python -m poster_agent.v2.cli --brief-file briefs/brief_kct_v2_demo.txt --mode mock --out runs/v2_demo
+```
+
+Live Windows run (ComfyUI + VectorCraft):
+```powershell
+python -m poster_agent.v2.cli --brief-file briefs/brief_kct_v2_demo.txt --mode live --out runs/v2_live
+```
+
+Optional VLM review:
+```powershell
+python -m poster_agent.v2.cli --brief-file briefs/brief_kct_v2_demo.txt --mode mock --vlm-review --out runs/v2_review
+```
+
+Interactive v2 MCP frontend:
+```powershell
+python -m poster_agent.mcp.v2_server
+```
+It exposes `run_poster`, `plan_poster`, `get_brand_contract`, and
+`list_schools` over the same core. See `poster_agent/v2/README.md` for stage
+routing, contract details, and current blockers (official KCT logo and licensed
+fonts are still required for production).
+
+### 5. Running the Test Suite
 Run the full test suite across all subsystems:
 ```powershell
 python -m pytest tests/ -q
@@ -175,6 +211,7 @@ python -m pytest tests/test_mcp_server.py -v
 python -m pytest tests/test_render_polish.py -v
 python -m pytest tests/test_composer.py -v
 python -m pytest tests/test_house_style.py -v
+python -m pytest tests/test_v2_*.py -v
 ```
 
 ---
